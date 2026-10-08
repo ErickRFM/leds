@@ -4,6 +4,19 @@ param([switch]$SkipTests)
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $tools = Join-Path $root ".tools"
+
+# Android Studio commonly installs the SDK here without setting ANDROID_HOME globally.
+if (-not $env:ANDROID_HOME -and -not $env:ANDROID_SDK_ROOT) {
+    $defaultSdk = Join-Path $env:LOCALAPPDATA "Android\Sdk"
+    if (Test-Path $defaultSdk) { $env:ANDROID_HOME = $defaultSdk }
+}
+$sdk = if ($env:ANDROID_HOME) { $env:ANDROID_HOME } else { $env:ANDROID_SDK_ROOT }
+if (-not $sdk -or -not (Test-Path $sdk)) {
+    throw "Android SDK not found. Install SDK 34 using Android Studio or configure ANDROID_HOME."
+}
+if (-not (Get-Command java -ErrorAction SilentlyContinue)) {
+    throw "Java not found. Install JDK 17 and ensure java is in PATH."
+}
 $version = "8.7"
 $gradle = Join-Path $tools "gradle-$version\bin\gradle.bat"
 $archive = Join-Path $tools "gradle-$version-bin.zip"
