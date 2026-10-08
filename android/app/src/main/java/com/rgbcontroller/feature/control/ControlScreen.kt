@@ -36,24 +36,54 @@ fun ControlScreen(bleManager: BleManager) {
     var blue by remember { mutableFloatStateOf(0f) }
     var brightness by remember { mutableFloatStateOf(255f) }
     var dirty by remember { mutableStateOf(false) }
+    var awaitingState by remember { mutableStateOf<ColorUtils.RgbColor?>(null) }
 
-    LaunchedEffect(actual) {
-        if (!dirty && actual != null) {
-            val state = actual ?: return@LaunchedEffect
+    // Never replace an in-progress local edit with an older BLE notification.
+    // Only accept the device state once the last submitted RGB command is acknowledged.
+    LaunchedEffect(actual, awaitingState, dirty) {
+        val state = actual ?: return@LaunchedEffect
+        val expected = awaitingState
+        if (expected != null &&
+            (state.red != expected.r || state.green != expected.g ||
+                state.blue != expected.b || state.brightness != expected.brightness)) {
+            return@LaunchedEffect
+        }
+        if (!dirty) {
             red = state.red.toFloat()
             green = state.green.toFloat()
             blue = state.blue.toFloat()
             brightness = state.brightness.toFloat()
+            if (expected != null) awaitingState = null
         }
     }
 
-    // Debounce UI changes; BleManager also serializes/coalesces SET commands.
+    // At most one command after a quiet 60 ms drag interval.
+    // BleManager serializes GATT WRITE and coalesces superseded SET commands.
     LaunchedEffect(red, green, blue, brightness, dirty, ready) {
         if (dirty && ready) {
             delay(60)
-            bleManager.writeCommand(ColorUtils.serializeSetCommand(
+            val sent = ColorUtils.RgbColor(
                 red.toInt(), green.toInt(), blue.toInt(), brightness.toInt()
-            ))
+            )
+            awaitingState = sent
+            bleManager.writeCommand(
+                ColorUtils.serializeSetCommand(sent.r, sent.g, sent.b, sent.brightness)
+            )
+            dirty = false
+        }
+    }
+
+    // A dropped acknowledgement must not lock the display to stale optimistic data.
+    LaunchedEffect(awaitingState) {
+        val pending = awaitingState
+        if (pending != null) {
+            delay(3000)
+            if (awaitingState == pending) awaitingState = null
+        }
+    }
+    LaunchedEffect(ready) {
+        if (!ready) {
+            awaitingState = null
             dirty = false
         }
     }
