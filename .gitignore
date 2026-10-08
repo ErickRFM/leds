@@ -1,0 +1,25 @@
+# Android/Gradle
+.gradle/
+build/
+**/build/
+local.properties
+.idea/
+*.iml
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# ESP32/PlatformIO
+.pio/
+*.bin
+*.elf
+*.map
+
+# OS, editors and secrets
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example
+*.log
