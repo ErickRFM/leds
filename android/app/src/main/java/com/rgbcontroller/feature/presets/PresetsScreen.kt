@@ -11,66 +11,93 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.rgbcontroller.core.ble.BleConnectionState
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.model.ColorUtils
+import kotlinx.coroutines.launch
 
-data class PresetColor(val name: String, val r: Int, val g: Int, val b: Int, val color: Color)
+private data class NamedColor(
+    val title: String, val hex: String, val favorite: Boolean = false
+)
 
 @Composable
 fun PresetsScreen(bleManager: BleManager, preferencesRepository: PreferencesRepository) {
+    val connected by bleManager.connectionState.collectAsState()
+    val current by bleManager.rgbState.collectAsState()
+    val stored by preferencesRepository.favoriteColors.collectAsState(initial = "")
+    val scope = rememberCoroutineScope()
+    val ready = connected == BleConnectionState.Ready
+    val favorites = stored.split(',').map { it.trim() }
+        .filter { ColorUtils.hexToRgb(it) != null }.distinct()
     val presets = listOf(
-        PresetColor("Rojo Puro", 255, 0, 0, Color.Red),
-        PresetColor("Verde Puro", 0, 255, 0, Color.Green),
-        PresetColor("Azul Puro", 0, 0, 255, Color.Blue),
-        PresetColor("Blanco Cálido", 255, 200, 150, Color(255, 200, 150)),
-        PresetColor("Amarillo", 255, 255, 0, Color.Yellow),
-        PresetColor("Cian", 0, 255, 255, Color.Cyan),
-        PresetColor("Magenta", 255, 0, 255, Color.Magenta),
-        PresetColor("Morado", 128, 0, 128, Color(128, 0, 128)),
-        PresetColor("Naranja", 255, 128, 0, Color(255, 128, 0))
+        NamedColor("Rojo", "#FF0000"), NamedColor("Verde", "#00FF00"),
+        NamedColor("Azul", "#0000FF"), NamedColor("Blanco", "#FFFFFF"),
+        NamedColor("Amarillo", "#FFFF00"), NamedColor("Cian", "#00FFFF"),
+        NamedColor("Magenta", "#FF00FF"), NamedColor("Morado", "#800080"),
+        NamedColor("Naranja", "#FF8000")
     )
+    val cards = presets + favorites.map { NamedColor("Favorito", it, favorite = true) }
+    fun apply(hex: String) {
+        if (!ready) return
+        val rgb = ColorUtils.hexToRgb(hex) ?: return
+        bleManager.writeCommand(
+            ColorUtils.serializeSetCommand(rgb.r, rgb.g, rgb.b, current?.brightness ?: 255)
+        )
+    }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Text("Colores Predefinidos", style = MaterialTheme.typography.headlineMedium)
-        Spacer(modifier = Modifier.height(16.dp))
-
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
+        Text("Paleta de colores", style = MaterialTheme.typography.headlineMedium)
+        Text(
+            if (ready) "Elige un color para aplicarlo al ESP32"
+            else "Conecta el ESP32 antes de enviar colores",
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Spacer(Modifier.height(12.dp))
+        Button(
+            modifier = Modifier.fillMaxWidth(),
+            enabled = ready && current != null,
+            onClick = {
+                val s = current ?: return@Button
+                val hex = ColorUtils.rgbToHex(s.red, s.green, s.blue)
+                scope.launch {
+                    preferencesRepository.saveFavoriteColors((favorites + hex).distinct().joinToString(","))
+                }
+            }
+        ) { Text("Guardar color actual en favoritos") }
+        Spacer(Modifier.height(14.dp))
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(bottom = 16.dp)
         ) {
-            items(presets) { preset ->
+            items(cards) { preset ->
+                val rgb = ColorUtils.hexToRgb(preset.hex) ?: return@items
+                val uiColor = Color(rgb.r, rgb.g, rgb.b)
                 Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(90.dp)
-                        .clickable {
-                            bleManager.writeCommand(ColorUtils.serializeSetCommand(preset.r, preset.g, preset.b, 255))
-                        }
+                    Modifier.fillMaxWidth().clickable(enabled = ready) { apply(preset.hex) }
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
+                    Column(Modifier.fillMaxWidth().padding(12.dp)) {
                         Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(preset.color)
+                            Modifier.fillMaxWidth().height(48.dp)
+                                .background(uiColor, RoundedCornerShape(10.dp))
                         )
-                        Text(preset.name, style = MaterialTheme.typography.bodyLarge)
+                        Spacer(Modifier.height(8.dp))
+                        Text(preset.title, style = MaterialTheme.typography.titleSmall)
+                        Text(preset.hex, style = MaterialTheme.typography.labelSmall)
+                        if (preset.favorite) {
+                            TextButton(onClick = {
+                                scope.launch {
+                                    preferencesRepository.saveFavoriteColors(
+                                        favorites.filterNot { it == preset.hex }.joinToString(",")
+                                    )
+                                }
+                            }) { Text("Quitar favorito") }
+                        }
                     }
                 }
             }

@@ -7,6 +7,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -15,16 +16,9 @@ import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.WbSunny
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -41,81 +35,63 @@ import com.rgbcontroller.feature.presets.PresetsScreen
 import com.rgbcontroller.feature.settings.SettingsScreen
 
 class MainActivity : ComponentActivity() {
-    private val bleManager by lazy { BleManager(applicationContext) }
-    private val preferencesRepository by lazy { PreferencesRepository(applicationContext) }
-
+    private val model by viewModels<RgbControllerViewModel>()
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { _ -> }
+    ) { /* A new scan is explicitly requested by the user after permission grant. */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        checkPermissions()
-
+        requestBluetoothPermissionsIfNeeded()
         setContent {
             MaterialTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainAppNavHost(bleManager, preferencesRepository)
+                    MainAppNavHost(model.bleManager, model.preferencesRepository)
                 }
             }
         }
     }
 
-    private fun checkPermissions() {
+    private fun requestBluetoothPermissionsIfNeeded() {
         val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            arrayOf(
-                Manifest.permission.BLUETOOTH_SCAN,
-                Manifest.permission.BLUETOOTH_CONNECT
-            )
-        } else {
-            arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION
-            )
-        }
-
-        val missing = permissions.any {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-        if (missing) {
-            requestPermissionLauncher.launch(permissions)
-        }
+            arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
+        } else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        if (permissions.any {
+                ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+            }) requestPermissionLauncher.launch(permissions)
     }
 }
 
-sealed class Screen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    object Devices : Screen("devices", "Dispositivos", Icons.Default.Bluetooth)
-    object Control : Screen("control", "Control RGB", Icons.Default.ColorLens)
-    object Presets : Screen("presets", "Presets", Icons.Default.Palette)
-    object Effects : Screen("effects", "Efectos", Icons.Default.WbSunny)
-    object Settings : Screen("settings", "Ajustes", Icons.Default.Settings)
+private sealed class Screen(
+    val route: String, val title: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    data object Devices : Screen("devices", "Dispositivos", Icons.Default.Bluetooth)
+    data object Control : Screen("control", "RGB", Icons.Default.ColorLens)
+    data object Presets : Screen("presets", "Colores", Icons.Default.Palette)
+    data object Effects : Screen("effects", "Efectos", Icons.Default.WbSunny)
+    data object Settings : Screen("settings", "Ajustes", Icons.Default.Settings)
 }
 
 @Composable
 fun MainAppNavHost(bleManager: BleManager, preferencesRepository: PreferencesRepository) {
     val navController = rememberNavController()
-    val items = listOf(
-        Screen.Devices,
-        Screen.Control,
-        Screen.Presets,
-        Screen.Effects,
-        Screen.Settings
-    )
-
+    val items = listOf(Screen.Devices, Screen.Control, Screen.Presets, Screen.Effects, Screen.Settings)
     Scaffold(
         bottomBar = {
             NavigationBar {
-                val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentRoute = navBackStackEntry?.destination?.route
+                val entry by navController.currentBackStackEntryAsState()
+                val route = entry?.destination?.route
                 items.forEach { screen ->
                     NavigationBarItem(
                         icon = { Icon(screen.icon, contentDescription = screen.title) },
                         label = { Text(screen.title) },
-                        selected = currentRoute == screen.route,
+                        selected = route == screen.route,
                         onClick = {
-                            if (currentRoute != screen.route) {
+                            if (route != screen.route) {
                                 navController.navigate(screen.route) {
                                     popUpTo(navController.graph.findStartDestination().id) {
                                         saveState = true
@@ -129,11 +105,11 @@ fun MainAppNavHost(bleManager: BleManager, preferencesRepository: PreferencesRep
                 }
             }
         }
-    ) { innerPadding ->
+    ) { padding ->
         NavHost(
             navController = navController,
             startDestination = Screen.Devices.route,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(padding)
         ) {
             composable(Screen.Devices.route) { DevicesScreen(bleManager) }
             composable(Screen.Control.route) { ControlScreen(bleManager) }
