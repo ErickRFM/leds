@@ -1,6 +1,7 @@
 <resources>
-    <style name="Theme.RGBController" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.RGBController" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>
