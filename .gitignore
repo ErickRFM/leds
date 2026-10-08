@@ -23,3 +23,6 @@ Thumbs.db
 .env.*
 !.env.example
 *.log
+
+# local Windows build distribution
+android/.tools/

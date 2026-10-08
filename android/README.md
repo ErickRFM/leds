@@ -1,20 +1,11 @@
-# RGB Controller Android (Kotlin + Jetpack Compose)
+# Android Kotlin
 
-Aplicación Android nativa bajo `android/`. Servidor BLE en el ESP32, no requiere internet.
+Ver [README principal](../README.md). Abre esta carpeta en Android Studio, selecciona JDK 17 y SDK 34.
 
-## Requisitos
-- Android Studio con SDK Platform 34, Build Tools 34 y JDK 17.
-- Gradle 8.7. Los scripts `gradlew` y `gradlew.bat` se incluyen; el JAR binario se añadirá cuando se pueda distribuir de forma verificable.
-- En ausencia de `gradle-wrapper.jar`, instala Gradle 8.7 y utiliza directamente `gradle` (como CI). No confundir scripts con wrapper completo.
+En Windows, desde la raíz, ejecuta `powershell -ExecutionPolicy Bypass -File .\android\build-debug.ps1`. El script descarga Gradle 8.7 de su distribución oficial, verifica el hash, ejecuta tests, lint y build.
 
-## Compilar
-```powershell
-cd android
-gradle testDebugUnitTest
-gradle lintDebug
-gradle assembleDebug
-```
-Salida: `android/app/build/outputs/apk/debug/app-debug.apk`. Alternativa: GitHub Actions -> ejecutar Android + ESP32 CI -> descargar artefacto `rgb-controller-debug` tras resultado `success`.
+No confundas resultados de compilación de GitHub Actions con pruebas físicas BLE: primero flashea el ESP32, después instala el APK y verifica la conexión.
 
-## BLE
-Android 12+ solicita SCAN/CONNECT; en 11 e inferiores el escaneo necesita permiso de ubicación y servicios de ubicación según el dispositivo. Para prueba física: conectar LED RGB con resistencias a GPIO 27, 25, 26 y cargar `firmware/esp32_rgb/esp32_rgb.ino`.
+Pines del ESP32: GPIO 27 rojo, 25 verde y 26 azul; resistencias 220–330 Ω individuales. Firmware en `../firmware/esp32_rgb/esp32_rgb.ino`.
+
+**Seguridad:** el firmware de laboratorio no autentica teléfonos cercanos.
