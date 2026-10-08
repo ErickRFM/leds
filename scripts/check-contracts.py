@@ -17,7 +17,7 @@ assert uuids <= set(re.findall(uuid_pattern, android.lower())), "UUID mismatch w
 assert uuids <= set(re.findall(uuid_pattern, protocol.lower())), "UUID mismatch with protocol docs"
 
 for name, pin in (("LED_R", 27), ("LED_G", 25), ("LED_B", 26)):
-    assert re.search(rf"\\b{name}\\s*=\\s*{pin}\\b", firmware), f"Wrong PWM pin: {name}"
+    assert re.search(rf"\b{name}\s*=\s*{pin}\b", firmware), f"Wrong PWM pin: {name}"
 for mode in ("RAINBOW", "BREATHE", "FADE"):
     assert f"FX,{mode}," in effects, f"Missing {mode} Android action"
     assert f'"{mode}"' in firmware, f"Missing {mode} ESP32 parser"
