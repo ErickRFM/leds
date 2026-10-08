@@ -136,23 +136,10 @@ fun ControlScreen(bleManager: BleManager) {
             )
         }
         Spacer(Modifier.height(8.dp))
-        @Composable
-        fun ColorSlider(label: String, value: Float, color: Color, onChange: (Float)->Unit) {
-            Text("$label: ${value.toInt()}")
-            Slider(
-                value = value,
-                onValueChange = onChange,
-                valueRange = 0f..255f,
-                enabled = ready,
-                colors = SliderDefaults.colors(
-                    thumbColor = color, activeTrackColor = color
-                )
-            )
-        }
-        ColorSlider("Rojo", red, Color.Red) { red = it; dirty = true }
-        ColorSlider("Verde", green, Color.Green) { green = it; dirty = true }
-        ColorSlider("Azul", blue, Color.Blue) { blue = it; dirty = true }
-        ColorSlider("Brillo", brightness, MaterialTheme.colorScheme.primary) {
+        ColorSlider("Rojo", red, Color.Red, ready) { red = it; dirty = true }
+        ColorSlider("Verde", green, Color.Green, ready) { green = it; dirty = true }
+        ColorSlider("Azul", blue, Color.Blue, ready) { blue = it; dirty = true }
+        ColorSlider("Brillo", brightness, MaterialTheme.colorScheme.primary, ready) {
             brightness = it
             dirty = true
         }
@@ -160,4 +147,19 @@ fun ControlScreen(bleManager: BleManager) {
             Text("Efecto activo: ${actual?.effect}")
         }
     }
+}
+
+@Composable
+private fun ColorSlider(
+    label: String, value: Float, color: Color, enabled: Boolean,
+    onChange: (Float) -> Unit
+) {
+    Text("$label: ${value.toInt()}")
+    Slider(
+        value = value,
+        onValueChange = onChange,
+        valueRange = 0f..255f,
+        enabled = enabled,
+        colors = SliderDefaults.colors(thumbColor = color, activeTrackColor = color)
+    )
 }
