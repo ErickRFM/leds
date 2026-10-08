@@ -6,4 +6,4 @@
 - `[x]` Harden ESP32 Firmware (`firmware/esp32_rgb/esp32_rgb.ino`) for Arduino-ESP32 3.x compatibility `[id: 4]`
 - `[x]` Configure Unit Tests & CI GitHub Actions Workflow `[id: 5]`
 - `[x]` Run Gradle Build, Unit Tests & Lint (`testDebugUnitTest`, `lintDebug`, `assembleDebug`) `[id: 6]`
-- `[/]` Git commit, push, PRs and final audit walkthrough `[id: 7]`
+- `[x]` Git commit, push, PRs and final audit walkthrough `[id: 7]`
