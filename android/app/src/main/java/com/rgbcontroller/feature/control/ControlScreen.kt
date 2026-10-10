@@ -63,19 +63,22 @@ fun ControlScreen(bleManager: BleManager) {
         }
     }
 
-    // At most one command after a quiet 60 ms drag interval.
-    // BleManager serializes GATT WRITE and coalesces superseded SET commands.
-    LaunchedEffect(red, green, blue, brightness, dirty, ready) {
-        if (dirty && ready) {
+    // Sample the latest input every 60 ms, including during continuous drags.
+    // A debounce-only effect would wait until the user stopped dragging.
+    // BleManager serializes GATT writes and coalesces superseded SET commands.
+    LaunchedEffect(ready) {
+        while (ready) {
             delay(60)
-            val sent = ColorUtils.RgbColor(
-                red.toInt(), green.toInt(), blue.toInt(), brightness.toInt()
-            )
-            awaitingState = sent
-            bleManager.writeCommand(
-                ColorUtils.serializeSetCommand(sent.r, sent.g, sent.b, sent.brightness)
-            )
-            dirty = false
+            if (dirty) {
+                val sent = ColorUtils.RgbColor(
+                    red.toInt(), green.toInt(), blue.toInt(), brightness.toInt()
+                )
+                awaitingState = sent
+                bleManager.writeCommand(
+                    ColorUtils.serializeSetCommand(sent.r, sent.g, sent.b, sent.brightness)
+                )
+                dirty = false
+            }
         }
     }
 

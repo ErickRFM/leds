@@ -8,7 +8,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
@@ -19,7 +18,6 @@ import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -74,7 +72,7 @@ private sealed class Screen(
 fun MainAppNavHost(bleManager: BleManager, preferencesRepository: PreferencesRepository) {
     val theme by preferencesRepository.themeMode.collectAsState(initial = "SYSTEM")
     RgbTheme(theme) {
-    val navController = rememberNavController()
+        val navController = rememberNavController()
     val items = listOf(Screen.Devices, Screen.Control, Screen.Presets, Screen.Effects, Screen.Settings)
     Scaffold(
         bottomBar = {

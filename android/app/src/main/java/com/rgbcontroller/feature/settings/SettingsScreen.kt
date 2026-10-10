@@ -14,6 +14,7 @@ import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.ui.SectionHeader
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(bleManager: BleManager, preferencesRepository: PreferencesRepository) {
     val connection by bleManager.connectionState.collectAsState()

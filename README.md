@@ -34,3 +34,6 @@ El ESP32 **es el servidor de aplicación embebido**: expone características GAT
 El prototipo BLE permite conexiones sin enrolamiento seguro. **Solo usar en pruebas supervisadas**, hasta implementar emparejamiento/bonding/autorización. Una compilación sin errores tampoco sustituye la prueba de Bluetooth y LED físicos.
 
 Ver `docs/PLAN_MAESTRO.md` y `docs/CRITERIOS_DE_ACEPTACION.md`.
+
+## Actualización V1.1
+Tema oscuro mate/tema claro seleccionable, navegación compacta, conexión con estados explícitos, muestreo RGB continuo cada 60 ms, interfaz refinada de presets/efectos, MTU BLE 128 y validación del estado antes de READY. Auditoría, riesgos y verificaciones físicas pendientes: `docs/AUDITORIA_V1_1.md`.
