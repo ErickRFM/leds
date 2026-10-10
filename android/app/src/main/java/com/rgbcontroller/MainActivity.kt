@@ -8,7 +8,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
@@ -19,7 +18,7 @@ import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -34,6 +33,8 @@ import com.rgbcontroller.feature.devices.DevicesScreen
 import com.rgbcontroller.feature.effects.EffectsScreen
 import com.rgbcontroller.feature.presets.PresetsScreen
 import com.rgbcontroller.feature.settings.SettingsScreen
+import com.rgbcontroller.core.ui.RgbTheme
+import androidx.compose.ui.unit.dp
 
 class MainActivity : ComponentActivity() {
     private val model by viewModels<RgbControllerViewModel>()
@@ -44,16 +45,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestBluetoothPermissionsIfNeeded()
-        setContent {
-            MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    MainAppNavHost(model.bleManager, model.preferencesRepository)
-                }
-            }
-        }
+        setContent { MainAppNavHost(model.bleManager, model.preferencesRepository) }
     }
 
     private fun requestBluetoothPermissionsIfNeeded() {
@@ -79,17 +71,23 @@ private sealed class Screen(
 
 @Composable
 fun MainAppNavHost(bleManager: BleManager, preferencesRepository: PreferencesRepository) {
-    val navController = rememberNavController()
+    val theme by preferencesRepository.themeMode.collectAsState(initial = "SYSTEM")
+    RgbTheme(theme) {
+        val navController = rememberNavController()
     val items = listOf(Screen.Devices, Screen.Control, Screen.Presets, Screen.Effects, Screen.Settings)
     Scaffold(
         bottomBar = {
-            NavigationBar {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
                 val entry by navController.currentBackStackEntryAsState()
                 val route = entry?.destination?.route
                 items.forEach { screen ->
                     NavigationBarItem(
                         icon = { Icon(screen.icon, contentDescription = screen.title) },
-                        label = { Text(screen.title) },
+                        label = { Text(if (screen == Screen.Devices) "Equipos" else screen.title) },
+                        alwaysShowLabel = false,
+                        colors = NavigationBarItemDefaults.colors(
+                            indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                        ),
                         selected = route == screen.route,
                         onClick = {
                             if (route != screen.route) {
@@ -116,7 +114,8 @@ fun MainAppNavHost(bleManager: BleManager, preferencesRepository: PreferencesRep
             composable(Screen.Control.route) { ControlScreen(bleManager) }
             composable(Screen.Presets.route) { PresetsScreen(bleManager, preferencesRepository) }
             composable(Screen.Effects.route) { EffectsScreen(bleManager) }
-            composable(Screen.Settings.route) { SettingsScreen(bleManager) }
+            composable(Screen.Settings.route) { SettingsScreen(bleManager, preferencesRepository) }
         }
+    }
     }
 }

@@ -68,6 +68,16 @@ class BleManager(private val context: Context) {
     private var manualDisconnect = false
     private var retries = 0
     private val scanTimeout = Runnable { stopScan() }
+    private val connectionTimeout = Runnable {
+        if (_connectionState.value == BleConnectionState.Connecting ||
+            _connectionState.value == BleConnectionState.Discovering) {
+            lostLink("Tiempo de espera de conexión agotado")
+        }
+    }
+    private fun armConnectionTimeout() {
+        handler.removeCallbacks(connectionTimeout)
+        handler.postDelayed(connectionTimeout, 15000)
+    }
     private val reconnect = Runnable {
         val device = activeDevice
         if (!manualDisconnect && device != null) connectInternal(device)
@@ -154,6 +164,7 @@ class BleManager(private val context: Context) {
             return
         }
         closeConnection()
+        armConnectionTimeout()
         _rgbState.value = null
         _deviceState.value = "Esperando estado del ESP32"
         _connectionState.value = BleConnectionState.Connecting
@@ -167,6 +178,7 @@ class BleManager(private val context: Context) {
     }
 
     private fun lostLink(message: String) {
+        handler.removeCallbacks(connectionTimeout)
         closeConnection()
         _rgbState.value = null
         if (manualDisconnect) {
@@ -189,9 +201,23 @@ class BleManager(private val context: Context) {
             if (remote !== gatt) return
             if (status == BluetoothGatt.GATT_SUCCESS && newState == BluetoothProfile.STATE_CONNECTED) {
                 _connectionState.value = BleConnectionState.Discovering
-                if (!remote.discoverServices()) lostLink("No se pudieron descubrir servicios")
+                // STATE notifications exceed the default 20-byte ATT payload; negotiate MTU first.
+                if (!remote.requestMtu(128) && !remote.discoverServices()) {
+                    lostLink("No se pudieron descubrir servicios")
+                }
             } else {
                 lostLink("ESP32 desconectado (GATT $status)")
+            }
+        }
+
+        override fun onMtuChanged(remote: BluetoothGatt, mtu: Int, status: Int) {
+            if (remote !== gatt) return
+            // A failed MTU request may still permit a full initial READ, but notifications
+            // will be unreliable; surface a recoverable error rather than show stale RGB.
+            if (status != BluetoothGatt.GATT_SUCCESS || mtu < 64) {
+                lostLink("No se pudo negociar MTU BLE suficiente (64 bytes)")
+            } else if (!remote.discoverServices()) {
+                lostLink("No se pudieron descubrir servicios")
             }
         }
 
@@ -242,10 +268,7 @@ class BleManager(private val context: Context) {
                 return
             }
             @Suppress("DEPRECATION")
-            acceptState(characteristic.value)
-            retries = 0
-            _connectionState.value = BleConnectionState.Ready
-            drainQueue()
+            completeInitialRead(characteristic.value)
         }
 
         override fun onCharacteristicRead(
@@ -257,10 +280,7 @@ class BleManager(private val context: Context) {
                 lostLink("Error al leer estado inicial")
                 return
             }
-            acceptState(value)
-            retries = 0
-            _connectionState.value = BleConnectionState.Ready
-            drainQueue()
+            completeInitialRead(value)
         }
 
         override fun onCharacteristicChanged(remote: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
@@ -279,16 +299,28 @@ class BleManager(private val context: Context) {
             remote: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int
         ) {
             if (remote !== gatt) return
-            synchronized(pending) {
-                writeInFlight = false
-                if (status != BluetoothGatt.GATT_SUCCESS) {
-                    _connectionState.value = BleConnectionState.Error("Falló escritura GATT: $status")
-                    pending.clear()
-                    return
-                }
+            synchronized(pending) { writeInFlight = false }
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                lostLink("Falló escritura GATT: $status")
+            } else {
+                drainQueue()
             }
-            drainQueue()
         }
+    }
+
+    private fun completeInitialRead(bytes: ByteArray?) {
+        val frame = bytes?.toString(Charsets.UTF_8).orEmpty()
+        val parsed = RgbDeviceState.parse(frame)
+        if (parsed == null) {
+            lostLink("El ESP32 devolvió un estado RGB inválido")
+            return
+        }
+        handler.removeCallbacks(connectionTimeout)
+        retries = 0
+        _deviceState.value = frame
+        _rgbState.value = parsed
+        _connectionState.value = BleConnectionState.Ready
+        drainQueue()
     }
 
     private fun acceptState(bytes: ByteArray?) {
@@ -339,6 +371,7 @@ class BleManager(private val context: Context) {
     fun disconnect() {
         manualDisconnect = true
         handler.removeCallbacks(reconnect)
+        handler.removeCallbacks(connectionTimeout)
         stopScan()
         try { gatt?.disconnect() } catch (_: SecurityException) { }
         closeConnection()

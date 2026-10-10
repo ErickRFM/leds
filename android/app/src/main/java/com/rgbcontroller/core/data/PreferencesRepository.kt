@@ -15,6 +15,15 @@ class PreferencesRepository(private val context: Context) {
     companion object {
         val LAST_DEVICE_MAC = stringPreferencesKey("last_device_mac")
         val FAVORITE_COLORS = stringPreferencesKey("favorite_colors")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
+    }
+
+    val themeMode: Flow<String> = context.dataStore.data
+        .map { preferences -> preferences[THEME_MODE] ?: "SYSTEM" }
+
+    suspend fun saveThemeMode(mode: String) {
+        require(mode in setOf("SYSTEM", "DARK", "LIGHT"))
+        context.dataStore.edit { preferences -> preferences[THEME_MODE] = mode }
     }
 
     val lastDeviceMac: Flow<String?> = context.dataStore.data

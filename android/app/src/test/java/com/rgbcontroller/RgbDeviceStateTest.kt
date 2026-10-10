@@ -19,6 +19,14 @@ class RgbDeviceStateTest {
         assertEquals(120, state?.speed)
     }
 
+    @Test fun acceptsLongStateFramesAfterMtuNegotiation() {
+        val frame = "STATE,255,255,255,255,1,RAINBOW,1000"
+        assertTrue(frame.toByteArray(Charsets.UTF_8).size > 20)
+        val parsed = RgbDeviceState.parse(frame)
+        assertEquals(255, parsed?.brightness)
+        assertEquals(1000, parsed?.speed)
+    }
+
     @Test fun rejectsMalformedStates() {
         listOf("ERR,INVALID_COMMAND", "STATE,256,0,0,255,1",
                "STATE,1,2,3,4,9", "STATE,1,2,3,4,1,UNKNOWN,40",

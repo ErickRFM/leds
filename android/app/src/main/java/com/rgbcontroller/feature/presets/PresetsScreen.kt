@@ -7,6 +7,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.font.FontWeight
+import com.rgbcontroller.core.ui.SectionHeader
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,7 +41,10 @@ fun PresetsScreen(bleManager: BleManager, preferencesRepository: PreferencesRepo
         NamedColor("Magenta", "#FF00FF"), NamedColor("Morado", "#800080"),
         NamedColor("Naranja", "#FF8000")
     )
-    val cards = presets + favorites.map { NamedColor("Favorito", it, favorite = true) }
+    // Avoid showing the same color twice when a built-in preset is favorited.
+    val cards = presets.map { it.copy(favorite = it.hex in favorites) } +
+        favorites.filterNot { hex -> presets.any { it.hex == hex } }
+            .map { NamedColor("Personalizado", it, favorite = true) }
     fun apply(hex: String) {
         if (!ready) return
         val rgb = ColorUtils.hexToRgb(hex) ?: return
@@ -48,14 +53,10 @@ fun PresetsScreen(bleManager: BleManager, preferencesRepository: PreferencesRepo
         )
     }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Paleta de colores", style = MaterialTheme.typography.headlineMedium)
-        Text(
-            if (ready) "Elige un color para aplicarlo al ESP32"
-            else "Conecta el ESP32 antes de enviar colores",
-            style = MaterialTheme.typography.bodyMedium
-        )
-        Spacer(Modifier.height(12.dp))
+    Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 20.dp)) {
+        SectionHeader("Colores", if (ready) "Tu paleta personal"
+            else "Conecta el ESP32 para aplicar colores")
+        Spacer(Modifier.height(20.dp))
         Button(
             modifier = Modifier.fillMaxWidth(),
             enabled = ready && current != null,
@@ -69,7 +70,7 @@ fun PresetsScreen(bleManager: BleManager, preferencesRepository: PreferencesRepo
         ) { Text("Guardar color actual en favoritos") }
         Spacer(Modifier.height(14.dp))
         LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+            columns = GridCells.Adaptive(minSize = 144.dp),
             modifier = Modifier.weight(1f),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -81,13 +82,15 @@ fun PresetsScreen(bleManager: BleManager, preferencesRepository: PreferencesRepo
                 Card(
                     Modifier.fillMaxWidth().clickable(enabled = ready) { apply(preset.hex) }
                 ) {
-                    Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp)) {
                         Box(
                             Modifier.fillMaxWidth().height(48.dp)
-                                .background(uiColor, RoundedCornerShape(10.dp))
+                                .background(uiColor, RoundedCornerShape(14.dp))
                         )
                         Spacer(Modifier.height(8.dp))
-                        Text(preset.title, style = MaterialTheme.typography.titleSmall)
+                        Text(preset.title + if (preset.favorite) " ★" else "",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold)
                         Text(preset.hex, style = MaterialTheme.typography.labelSmall)
                         if (preset.favorite) {
                             TextButton(onClick = {

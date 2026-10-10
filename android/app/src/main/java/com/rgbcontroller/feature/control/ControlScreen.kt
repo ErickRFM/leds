@@ -1,5 +1,6 @@
 package com.rgbcontroller.feature.control
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -15,16 +16,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.model.ColorUtils
+import com.rgbcontroller.core.ui.SectionHeader
 import kotlinx.coroutines.delay
 import kotlin.math.atan2
 import kotlin.math.hypot
 import kotlin.math.PI
+import kotlin.math.sin
+import kotlin.math.cos
 
 @Composable
 fun ControlScreen(bleManager: BleManager) {
@@ -57,19 +63,22 @@ fun ControlScreen(bleManager: BleManager) {
         }
     }
 
-    // At most one command after a quiet 60 ms drag interval.
-    // BleManager serializes GATT WRITE and coalesces superseded SET commands.
-    LaunchedEffect(red, green, blue, brightness, dirty, ready) {
-        if (dirty && ready) {
+    // Sample the latest input every 60 ms, including during continuous drags.
+    // A debounce-only effect would wait until the user stopped dragging.
+    // BleManager serializes GATT writes and coalesces superseded SET commands.
+    LaunchedEffect(ready) {
+        while (ready) {
             delay(60)
-            val sent = ColorUtils.RgbColor(
-                red.toInt(), green.toInt(), blue.toInt(), brightness.toInt()
-            )
-            awaitingState = sent
-            bleManager.writeCommand(
-                ColorUtils.serializeSetCommand(sent.r, sent.g, sent.b, sent.brightness)
-            )
-            dirty = false
+            if (dirty) {
+                val sent = ColorUtils.RgbColor(
+                    red.toInt(), green.toInt(), blue.toInt(), brightness.toInt()
+                )
+                awaitingState = sent
+                bleManager.writeCommand(
+                    ColorUtils.serializeSetCommand(sent.r, sent.g, sent.b, sent.brightness)
+                )
+                dirty = false
+            }
         }
     }
 
@@ -92,18 +101,21 @@ fun ControlScreen(bleManager: BleManager) {
     val g = green.toInt().coerceIn(0, 255)
     val b = blue.toInt().coerceIn(0, 255)
     val light = if (actual?.power == true || dirty) brightness / 255f else 0f
-    val preview = Color((r / 255f) * light, (g / 255f) * light, (b / 255f) * light)
+    val targetPreview = Color((r / 255f) * light, (g / 255f) * light, (b / 255f) * light)
+    val preview by animateColorAsState(targetPreview, label = "RGB preview")
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Mezclador RGB", style = MaterialTheme.typography.headlineMedium)
+        SectionHeader("Control RGB", "Selecciona un color y ajústalo a tu gusto")
+        Spacer(Modifier.height(10.dp))
         Text(
-            if (ready) "ESP32 conectado" else "Conecta el ESP32 en Dispositivos",
-            color = if (ready) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+            if (ready) "●  ESP32 conectado" else "○  Conecta tu ESP32 en Dispositivos",
+            style = MaterialTheme.typography.labelLarge,
+            color = if (ready) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(22.dp))
 
         var diameter by remember { mutableFloatStateOf(1f) }
         fun selectWheel(point: Offset) {
@@ -138,23 +150,34 @@ fun ControlScreen(bleManager: BleManager) {
                            Color.Blue, Color.Magenta, Color.Red)
                 )
             )
-            drawCircle(
-                brush = Brush.radialGradient(listOf(Color.White, Color.Transparent))
+            drawCircle(brush = Brush.radialGradient(listOf(Color.White, Color.Transparent)))
+            // Mark the currently selected hue/saturation without changing the BLE protocol.
+            val hsv = FloatArray(3)
+            android.graphics.Color.RGBToHSV(r, g, b, hsv)
+            val angle = hsv[0] * PI.toFloat() / 180f
+            val distance = size.minDimension * 0.38f * hsv[1]
+            val marker = Offset(
+                center.x + cos(angle) * distance,
+                center.y + sin(angle) * distance
             )
+            drawCircle(color = Color(0xFF1B1920), radius = 13.dp.toPx(), center = marker)
+            drawCircle(color = Color.White, radius = 10.dp.toPx(), center = marker,
+                style = Stroke(width = 3.dp.toPx()))
         }
         Spacer(Modifier.height(14.dp))
-        Box(
-            modifier = Modifier.size(82.dp).background(preview, CircleShape)
-        )
+        Box(modifier = Modifier.size(82.dp).background(preview, CircleShape))
         Spacer(Modifier.height(8.dp))
-        Text(ColorUtils.rgbToHex(r, g, b), style = MaterialTheme.typography.titleLarge)
+        Text(ColorUtils.rgbToHex(r, g, b), style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold)
         Text(
             "R: $r   G: $g   B: $b",
             style = MaterialTheme.typography.labelLarge
         )
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(16.dp))
+        Card(Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Row(
-            Modifier.fillMaxWidth(),
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -165,7 +188,8 @@ fun ControlScreen(bleManager: BleManager) {
                 onCheckedChange = { bleManager.writeCommand(if (it) "ON" else "OFF") }
             )
         }
-        Spacer(Modifier.height(8.dp))
+        }
+        Spacer(Modifier.height(18.dp))
         ColorSlider("Rojo", red, Color.Red, ready) { red = it; dirty = true }
         ColorSlider("Verde", green, Color.Green, ready) { green = it; dirty = true }
         ColorSlider("Azul", blue, Color.Blue, ready) { blue = it; dirty = true }
@@ -184,7 +208,11 @@ private fun ColorSlider(
     label: String, value: Float, color: Color, enabled: Boolean,
     onChange: (Float) -> Unit
 ) {
-    Text("$label: ${value.toInt()}")
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Text(value.toInt().toString(), style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
     Slider(
         value = value,
         onValueChange = onChange,

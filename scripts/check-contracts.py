@@ -19,9 +19,12 @@ assert uuids <= set(re.findall(uuid_pattern, protocol.lower())), "UUID mismatch 
 for name, pin in (("LED_R", 27), ("LED_G", 25), ("LED_B", 26)):
     assert re.search(rf"\b{name}\s*=\s*{pin}\b", firmware), f"Wrong PWM pin: {name}"
 for mode in ("RAINBOW", "BREATHE", "FADE"):
-    assert f"FX,{mode}," in effects, f"Missing {mode} Android action"
+    assert f'EffectItem("{mode}"' in effects, f"Missing {mode} Android action"
     assert f'"{mode}"' in firmware, f"Missing {mode} ESP32 parser"
+assert 'writeCommand("FX,${effect.id},' in effects, "Dynamic FX action missing"
 assert "FX,STOP" in effects and "FX,STOP" in firmware
+assert "requestMtu(128)" in android and "BLEDevice::setMTU(128)" in firmware, "MTU negotiation missing"
+assert "completeInitialRead" in android and "connectionTimeout" in android, "BLE readiness checks missing"
 assert "PROPERTY_READ" in firmware and "PROPERTY_NOTIFY" in firmware
 assert "WRITE_TYPE_DEFAULT" in android
 assert "onDescriptorWrite" in android and "onCharacteristicRead" in android
