@@ -309,8 +309,8 @@ class BleManager(private val context: Context) {
     }
 
     private fun completeInitialRead(bytes: ByteArray?) {
-        val frame = bytes?.toString(Charsets.UTF_8)
-        val parsed = frame?.let(RgbDeviceState::parse)
+        val frame = bytes?.toString(Charsets.UTF_8).orEmpty()
+        val parsed = RgbDeviceState.parse(frame)
         if (parsed == null) {
             lostLink("El ESP32 devolvió un estado RGB inválido")
             return
