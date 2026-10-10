@@ -206,6 +206,9 @@ void setup() {
   renderStatic();  // boot OFF
 
   BLEDevice::init(DEVICE_NAME);
+  // STATE frames can be longer than the 20-byte default notification payload.
+  // Android requests 128 as well; peers must negotiate before subscribing.
+  BLEDevice::setMTU(128);
   BLEServer* server = BLEDevice::createServer();
   server->setCallbacks(new ServerCallbacks());
   BLEService* service = server->createService(SERVICE_UUID);
