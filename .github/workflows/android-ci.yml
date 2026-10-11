@@ -130,7 +130,7 @@ jobs:
           . ./config/esp32-board.env
           arduino-cli compile --fqbn "$ARDUINO_FQBN" --output-dir build/v4-probe firmware/v4_provisioning_probe
       - name: Verify V4 probe binary size
-        run: python3 scripts/check-firmware-budget.py build/v4-probe
+        run: python3 scripts/check-firmware-budget.py build/v4-probe --app-name v4_provisioning_probe.ino.bin
       - name: Check firmware fits dual OTA slot
         run: python3 scripts/check-firmware-budget.py build/firmware
       - name: Prepare firmware test manifest
