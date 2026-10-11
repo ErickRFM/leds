@@ -4,6 +4,9 @@ import android.content.Context
 import com.rgbcontroller.core.lab.LabExperimentLibrary
 import com.rgbcontroller.core.lab.LabProject
 import com.rgbcontroller.core.lab.LabProjects
+import com.rgbcontroller.core.programs.EditorProject
+import com.rgbcontroller.core.programs.EditorProjects
+import com.rgbcontroller.core.programs.ProgramLanguage
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -21,6 +24,7 @@ class PreferencesRepository(private val context: Context) {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val EXPERIMENT_DRAFT = stringPreferencesKey("experiment_draft")
         val EXPERIMENT_PROJECTS = stringPreferencesKey("experiment_projects_v3")
+        val EDITOR_PROJECTS = stringPreferencesKey("editor_projects_v5")
     }
 
     val themeMode: Flow<String> = context.dataStore.data
@@ -54,6 +58,27 @@ class PreferencesRepository(private val context: Context) {
         context.dataStore.edit { prefs ->
             val before = LabProjects.decode(prefs[EXPERIMENT_PROJECTS] ?: "")
             prefs[EXPERIMENT_PROJECTS] = LabProjects.encode(LabProjects.remove(before, name))
+        }
+    }
+
+    /** Local code editor projects only; never save device keys or network credentials. */
+    val editorProjects: Flow<List<EditorProject>> = context.dataStore.data.map { prefs ->
+        EditorProjects.decode(prefs[EDITOR_PROJECTS] ?: "")
+    }
+
+    suspend fun saveEditorProject(name: String, language: ProgramLanguage, source: String) {
+        context.dataStore.edit { prefs ->
+            val existing = EditorProjects.decode(prefs[EDITOR_PROJECTS] ?: "")
+            prefs[EDITOR_PROJECTS] = EditorProjects.encode(
+                EditorProjects.upsert(existing, name, language, source)
+            )
+        }
+    }
+
+    suspend fun deleteEditorProject(name: String) {
+        context.dataStore.edit { prefs ->
+            val existing = EditorProjects.decode(prefs[EDITOR_PROJECTS] ?: "")
+            prefs[EDITOR_PROJECTS] = EditorProjects.encode(EditorProjects.remove(existing, name))
         }
     }
 
