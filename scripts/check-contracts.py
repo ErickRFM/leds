@@ -38,4 +38,14 @@ assert "manager.acquire(pins_[i], id(), PinFunction::PwmOutput)" in led_module, 
 assert "manager.release(pin, id())" in led_module, "RGB does not release pins"
 assert "leasedCount()" in pin_manager, "Missing pin lease state"
 assert "startAll" in registry and "stopAll" in registry, "Missing module lifecycle"
-print("PASS: UUIDs, PWM pinout, BLE V1 compatibility and modular core contracts agree.")
+lab = (root / "firmware/esp32_rgb/core/LocalWifiControl.h").read_text(encoding="utf-8")
+runtime = (root / "firmware/esp32_rgb/core/ExperimentRuntime.h").read_text(encoding="utf-8")
+android_lab = (root / "android/app/src/main/java/com/rgbcontroller/core/wifi/LocalLabClient.kt").read_text(encoding="utf-8")
+assert 'server_.client().localIP() != WiFi.softAPIP()' in lab, "STA HTTP must be forbidden"
+assert 'server_.header("X-Device-Key") != accessKey_' in lab, "Lab key required"
+assert 'manager' not in runtime or 'experiment_' in lab
+assert 'pins_.acquire(pin, kManual, PinFunction::DigitalOutput)' in lab, "Pin ownership required"
+assert 'digitalWrite(pin, LOW)' in lab, "Safe GPIO reset missing"
+assert 'intervalMs < 100' in runtime and 'cycles > 20' in runtime, "Runtime limits missing"
+assert 'http://192.168.4.1' in android_lab, "Android must target local SoftAP"
+print("PASS: RGB V1 compatibility, core leases, local SoftAP endpoint and lab limits.")

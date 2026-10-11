@@ -75,4 +75,4 @@ jobs:
           arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
           arduino-cli core install esp32:esp32@3.0.7 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
       - name: Compile firmware
-        run: arduino-cli compile --fqbn esp32:esp32:esp32 firmware/esp32_rgb
+        run: arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=min_spiffs firmware/esp32_rgb

@@ -33,6 +33,7 @@ import com.rgbcontroller.feature.devices.DevicesScreen
 import com.rgbcontroller.feature.effects.EffectsScreen
 import com.rgbcontroller.feature.presets.PresetsScreen
 import com.rgbcontroller.feature.settings.SettingsScreen
+import com.rgbcontroller.feature.hub.LabHubScreen
 import com.rgbcontroller.core.ui.RgbTheme
 import androidx.compose.ui.unit.dp
 
@@ -67,6 +68,7 @@ private sealed class Screen(
     data object Presets : Screen("presets", "Colores", Icons.Default.Palette)
     data object Effects : Screen("effects", "Efectos", Icons.Default.WbSunny)
     data object Settings : Screen("settings", "Ajustes", Icons.Default.Settings)
+    data object Hub : Screen("hub", "Centro", Icons.Default.Settings)
 }
 
 @Composable
@@ -114,7 +116,11 @@ fun MainAppNavHost(bleManager: BleManager, preferencesRepository: PreferencesRep
             composable(Screen.Control.route) { ControlScreen(bleManager) }
             composable(Screen.Presets.route) { PresetsScreen(bleManager, preferencesRepository) }
             composable(Screen.Effects.route) { EffectsScreen(bleManager) }
-            composable(Screen.Settings.route) { SettingsScreen(bleManager, preferencesRepository) }
+            composable(Screen.Settings.route) {
+                SettingsScreen(bleManager, preferencesRepository,
+                    onOpenHub = { navController.navigate(Screen.Hub.route) })
+            }
+            composable(Screen.Hub.route) { LabHubScreen() }
         }
     }
     }

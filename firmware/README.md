@@ -18,3 +18,12 @@ Nota: el control se realiza por Bluetooth Low Energy, no por Wi-Fi ni potencióm
 
 ## Fundacion modular V2
 El sketch existente mantiene el protocolo BLE V1. El nucleo en `core/` gestiona las reservas de recursos y el ciclo de vida, y `modules/LedRgbModule.h` controla PWM y el tick. Restricciones ESP32 clasico; no usar este mapa GPIO en otra placa sin validacion. Ver `docs/V2_FOUNDATION.md`.
+
+## Perfil firmware Wi-Fi + BLE V2
+El firmware combinado ocupa alrededor de 1.76 MB; **no cabe en la partición OTA predeterminada** de 1.25 MB. Para una placa ESP32 clásica con **flash confirmada de 4 MB o más**, selecciona **Partition Scheme: Minimal SPIFFS (1.9MB APP with OTA)** en Arduino IDE. En Arduino CLI:
+
+```sh
+arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=min_spiffs firmware/esp32_rgb
+```
+
+**No flashees** este perfil en un ESP32 cuya flash real no hayas identificado. El perfil mantiene dos slots OTA en placas compatibles, pero **no implementa todavía actualizaciones OTA ni rollback de aplicación**. Si no dispones de 4 MB, hay que optimizar firmware o elegir otra variante de placa; no cambiar a No OTA sin evaluar la recuperación.
