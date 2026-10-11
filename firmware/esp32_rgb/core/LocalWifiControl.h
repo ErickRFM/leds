@@ -10,6 +10,7 @@
 #include "ExperimentRuntime.h"
 #include "RgbScriptRuntime.h"
 #include "CompiCapabilities.h"
+#include "RgbAutomationClock.h"
 
 namespace esp32core {
 
@@ -277,6 +278,35 @@ class LocalWifiControl final {
       experiment_.stop(pins_);
       server_.send(200, "application/json", "{\"status\":\"STOPPED\"}");
     });
+    // V6 lab automation: a bounded ON/OFF interval, not arbitrary code.
+    // Runs autonomously in the ESP32 loop while it is powered.
+    server_.on("/v2/automation/status", HTTP_GET, [this]() {
+      if (!authorized()) return;
+      String body = "{\"active\":" + String(automation_.active() ? "true" : "false");
+      body += ",\"intervalMs\":" + String(automation_.intervalMs()) + "}";
+      server_.send(200, "application/json", body);
+    });
+    server_.on("/v2/automation/start", HTTP_POST, [this]() {
+      if (!authorized()) return;
+      int seconds = 0, startOn = 0;
+      if (!parseInt("intervalSeconds", 1, 3600, seconds) ||
+          !parseInt("startOn", 0, 1, startOn)) {
+        jsonError(400, "invalid_automation"); return;
+      }
+      if (experiment_.active() || script_.active()) {
+        jsonError(409, "another_experiment_active"); return;
+      }
+      if (!automation_.configure(static_cast<uint32_t>(seconds) * 1000U,
+                                 millis(), startOn == 1)) {
+        jsonError(400, "invalid_automation"); return;
+      }
+      server_.send(202, "application/json", "{\"status\":\"RUNNING\"}");
+    });
+    server_.on("/v2/automation/stop", HTTP_POST, [this]() {
+      if (!authorized()) return;
+      automation_.stop();
+      server_.send(200, "application/json", "{\"status\":\"STOPPED\"}");
+    });
     // V4 bounded RGB scripts: no native code, direct GPIO or firmware writes.
     // Lab SoftAP only. A physical/manual RGB command interrupts the script.
     server_.on("/v2/script/status", HTTP_GET, [this]() {
@@ -288,7 +318,7 @@ class LocalWifiControl final {
     });
     server_.on("/v2/script/run", HTTP_POST, [this]() {
       if (!authorized()) return;
-      if (script_.active() || experiment_.active()) {
+      if (script_.active() || experiment_.active() || automation_.active()) {
         jsonError(409, "script_or_gpio_experiment_active"); return;
       }
       const String source = server_.arg("source");
@@ -314,6 +344,7 @@ class LocalWifiControl final {
         jsonError(400, "invalid_rgb_command"); return;
       }
       script_.stop(); // Manual Wi-Fi RGB commands take priority.
+      automation_.stop();
       if (!rgbCommand_(cmd)) {
         jsonError(400, "invalid_rgb_command"); return;
       }
@@ -334,13 +365,18 @@ class LocalWifiControl final {
     if (!active_) return;
     server_.handleClient();
     script_.tick(nowMs, sendScriptRgb, this);
+    const auto action = automation_.tick(nowMs);
+    if (action != RgbAutomationClock::Result::None) {
+      const char* command = action == RgbAutomationClock::Result::TurnOn ? "ON" : "OFF";
+      if (!rgbCommand_(String(command))) automation_.stop();
+    }
     experiment_.tick(pins_, nowMs);
     if (hasManual() && static_cast<uint32_t>(nowMs - manualTouched_) >= 30000U) {
       releaseManual();  // Fail-safe bench timeout for manually controlled pins.
     }
   }
 
-  void stopScriptFromBle() { script_.stop(); }
+  void stopScriptFromBle() { script_.stop(); automation_.stop(); }
 
  private:
   static constexpr const char* kManual = "gpio.manual";
@@ -357,6 +393,7 @@ class LocalWifiControl final {
   RgbState rgbState_;
   RgbCommand rgbCommand_;
   RgbScriptRuntime script_;
+  RgbAutomationClock automation_;
   DeviceId deviceId_;
   Preferences prefs_;
   WebServer server_{80};
