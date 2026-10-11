@@ -57,3 +57,7 @@ placa/partición correspondiente. Cambiar el esquema de particiones puede dejar
 inaccesibles los datos previos guardados en flash; respaldar antes de sobrescribir.
 
 **Estado: flash/modelo verificados; pruebas de carga, cableado, Wi-Fi, BLE, GPIO y OTA pendientes.**
+
+## Source of truth for automated builds
+
+The verified FQBN and pinned Arduino-ESP32 core live in [`config/esp32-board.env`](../config/esp32-board.env). The GitHub Actions workflow and `scripts/verify-local.ps1` use exactly this profile. The local verifier now rejects unsafe FQBN overrides; changing the flash/partition scheme requires a documented migration, partition backup and tested USB recovery. The check `python3 scripts/check-board-profile.py` runs in CI. Hardware flashing remains **opt-in only** with an explicit port.
