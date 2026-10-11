@@ -4,12 +4,15 @@
 - RGB V1.1: 5effcbccc8f49222120c6fb0bb8c2c51f7ddc874
 - Respaldo: baseline/rgb-controller-v1.1
 - GPIO RGB actuales: rojo 27, verde 25, azul 26.
-- Modelo ESP32, flash y polaridad: pendientes de confirmación física.
+- Chip verificado por esptool: **ESP32-D0WD-V3 (rev. 3.1), flash 4 MB**, cristal 40 MHz.
+- Voltaje flash: 3.3 V. El conversor USB CH9102 no determina la capacidad de flash.
+- Polaridad del LED, pinout real, conexión BLE/Wi-Fi y recuperación OTA: pendientes de prueba física.
+- Evidencia y guía: `docs/HARDWARE_ESP32.md`.
 
 ## Fases y criterios
 | Fase | Objetivo | Estado | Puerta de salida |
 | --- | --- | --- | --- |
-| F0 | Respaldo, mapa GPIO y auditoría | Parcial: falta placa física | Baseline y criterios documentados |
+| F0 | Respaldo, mapa GPIO y auditoría | Parcial: modelo/flash confirmados; falta QA físico | Baseline y criterios documentados |
 | F1 | Core de módulos, PinManager y LED | Integrada CI | CI firmware + Android + pruebas host |
 | F2 | Vinculación segura y aprovisionamiento Wi-Fi por BLE | Parcial: SoftAP WPA2 laboratorio; BLE seguro pendiente | Contraseñas protegidas y prueba física |
 | F3 | HTTP/WebSocket local y estado único | Parcial: HTTP SoftAP clave API; TLS/WebSocket LAN pendiente | Autenticación, reconexión e idempotencia |
@@ -26,7 +29,7 @@
 3. PinManager coordina módulos auditados, pero NO es aislamiento de memoria.
 4. No se añaden comandos GPIO ni Wi-Fi sobre BLE sin autenticar.
 5. Pines críticos y desconocidos se niegan por defecto; ADC2 no se usa con Wi-Fi.
-6. OTA depende del tamaño flash real y requiere recuperación probada.
+6. Flash 4MB verificada; OTA sigue necesitando autenticación y recuperación real probada.
 7. La compilación CI no equivale a control LED físico validado.
 
 ## Estrategia Git

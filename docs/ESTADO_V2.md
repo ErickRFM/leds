@@ -1,7 +1,9 @@
 # Estado verificable — ESP32 Control Center V2
 
-Base confirmada: main tras PR #18, commit fb596c824171b0e4a036c8a70f80fdb7b7229532.
-El firmware depende de placa ESP32 clásica con 4 MB o más de flash para esquema min_spiffs.
+Base de referencia: laboratorio V2 integrado a main (PR #11, #16–#19).
+**Verificación hardware aportada por el usuario (esptool 5.3.1, consulta de solo lectura):** microcontrolador ESP32-D0WD-V3 revisión 3.1, cristal 40 MHz, flash detectada de **4 MB** y voltaje de flash 3.3 V. Puerto USB serial CH9102; el puerto COM asignado por Windows puede cambiar. La dirección MAC no se almacena en el repositorio.
+
+Esta verificación confirma **modelo y tamaño de flash**, NO confirma que el firmware V2 se haya cargado, que la partición OTA se haya grabado o que BLE/Wi-Fi/GPIO funcionen físicamente. El esquema compilado es `PartitionScheme=min_spiffs`; antes de flashear hay que seleccionar ese mismo perfil. Ver `docs/HARDWARE_ESP32.md`.
 
 ## CI probado en PRs
 - Android: tests unitarios, lint y APK debug.
@@ -27,7 +29,7 @@ El firmware depende de placa ESP32 clásica con 4 MB o más de flash para esquem
 4. No existe transporte LAN autenticado mediante TLS ni WebSocket multi-módulo.
 5. GPIO PWM/I2C/sensores adicionales aún necesitan mapeo físico por placa.
 6. OTA firmado, verificación de salud y rollback en placa física **NO implementados**.
-7. Falta validar flash, polaridad, circuitos, energía, BLE/Wi-Fi concurrentes, pinout y UX en dispositivo.
+7. Flash **4MB detectada**; aún falta validar polaridad, circuitos, energía, BLE/Wi-Fi concurrentes, pinout y UX en dispositivo.
 8. No se acepta código nativo remoto; laboratorio solo ejecuta acciones declarativas permitidas.
 
 ## Próximo trabajo concreto

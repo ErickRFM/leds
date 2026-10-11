@@ -45,3 +45,6 @@ Fundación modular F0/F1 sobre la versión RGB V1.1 respaldada en `baseline/rgb-
 La V2 dispone de SoftAP de laboratorio y panel Android debug para GPIO, ADC, Wi-Fi y secuencias limitadas. No está habilitado control general desde Internet ni OTA. Ver `docs/WIFI_LAB_V2.md` para configuración y advertencias de seguridad.
 
 **Requisito importante firmware V2:** confirma al menos 4 MB de flash; usa `Partition Scheme: Minimal SPIFFS (1.9MB APP with OTA)` para compilar. El esquema por defecto de 1.25MB por aplicación no alcanza. Se requiere prueba física antes de flashear otra placa. Ver [estado de entregas V2](docs/ESTADO_V2.md).
+
+## Hardware ESP32 confirmado
+La placa de prueba usa **ESP32-D0WD-V3 (rev. 3.1)** con **4 MB de flash** según consulta `esptool`. Para firmware Wi-Fi+BLE seleccionar **ESP32 Dev Module → Partition Scheme: Minimal SPIFFS (1.9MB APP with OTA)** en Arduino IDE. Flash compatible no equivale a OTA funcional. Consulta [hardware y QA](docs/HARDWARE_ESP32.md). No subir identificadores únicos de la placa al repo.
