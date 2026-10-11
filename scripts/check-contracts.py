@@ -28,4 +28,14 @@ assert "completeInitialRead" in android and "connectionTimeout" in android, "BLE
 assert "PROPERTY_READ" in firmware and "PROPERTY_NOTIFY" in firmware
 assert "WRITE_TYPE_DEFAULT" in android
 assert "onDescriptorWrite" in android and "onCharacteristicRead" in android
-print("PASS: UUIDs, PWM pinout, effects and GATT contract agree.")
+pin_manager = (root / "firmware/esp32_rgb/core/PinManager.h").read_text(encoding="utf-8")
+registry = (root / "firmware/esp32_rgb/core/ModuleRegistry.h").read_text(encoding="utf-8")
+led_module = (root / "firmware/esp32_rgb/modules/LedRgbModule.h").read_text(encoding="utf-8")
+assert "moduleRegistry.add(rgbModule)" in firmware, "RGB not registered"
+assert "moduleRegistry.startAll(pinManager)" in firmware, "Modules not initialized"
+assert "moduleRegistry.tickAll(millis())" in firmware, "Module ticks not wired"
+assert "manager.acquire(pins_[i], id(), PinFunction::PwmOutput)" in led_module, "RGB does not reserve pins"
+assert "manager.release(pin, id())" in led_module, "RGB does not release pins"
+assert "leasedCount()" in pin_manager, "Missing pin lease state"
+assert "startAll" in registry and "stopAll" in registry, "Missing module lifecycle"
+print("PASS: UUIDs, PWM pinout, BLE V1 compatibility and modular core contracts agree.")

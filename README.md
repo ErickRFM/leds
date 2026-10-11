@@ -37,3 +37,6 @@ Ver `docs/PLAN_MAESTRO.md` y `docs/CRITERIOS_DE_ACEPTACION.md`.
 
 ## Actualización V1.1
 Tema oscuro mate/tema claro seleccionable, navegación compacta, conexión con estados explícitos, muestreo RGB continuo cada 60 ms, interfaz refinada de presets/efectos, MTU BLE 128 y validación del estado antes de READY. Auditoría, riesgos y verificaciones físicas pendientes: `docs/AUDITORIA_V1_1.md`.
+
+## ESP32 Control Center V2 (en desarrollo)
+Fundación modular F0/F1 sobre la versión RGB V1.1 respaldada en `baseline/rgb-controller-v1.1`. La V2 incorpora `PinManager`, `ModuleRegistry` y adaptador LED; Wi-Fi y control GPIO remoto siguen pendientes por seguridad. Consulta `docs/PLAN_MAESTRO_V2.md` y `docs/V2_FOUNDATION.md`.
