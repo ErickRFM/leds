@@ -21,6 +21,8 @@ ci = (ROOT / ".github" / "workflows" / "android-ci.yml").read_text(encoding="utf
 for text, label in [(ps, "PowerShell"), (ci, "GitHub Actions")]:
     assert "config" in text and "esp32-board.env" in text, f"{label}: profile unused"
     assert "ARDUINO_FQBN" in text and "ARDUINO_ESP32_CORE" in text, f"{label}: keys missing"
+assert "if ($trimmed -match '^([A-Z0-9_]+)=(.+)$')" in ps, "PowerShell profile parser must accept digit-containing keys"
+assert 'if ($ValidateProfileOnly)' in ps, "Local profile-only validation is required"
 assert 'if ($Board -ne $expectedBoard)' in ps, "Manual unsafe partition override must be blocked"
 assert 'run: python3 scripts/check-board-profile.py' in ci
 print(f"PASS: firmware profile {values['ARDUINO_FQBN']} / Arduino-ESP32 {values['ARDUINO_ESP32_CORE']}")
