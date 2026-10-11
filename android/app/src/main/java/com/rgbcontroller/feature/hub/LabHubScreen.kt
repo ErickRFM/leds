@@ -22,6 +22,8 @@ import com.rgbcontroller.core.sensors.AdcSample
 import com.rgbcontroller.core.sensors.AdcTelemetry
 import com.rgbcontroller.core.hardware.Esp32BoardPinout
 import com.rgbcontroller.core.hardware.PinKind
+import com.rgbcontroller.core.qa.LabSnapshot
+import com.rgbcontroller.core.qa.LabSelfCheck
 import com.rgbcontroller.core.lab.LabStep
 import com.rgbcontroller.core.ui.SectionHeader
 import com.rgbcontroller.core.wifi.LocalLabClient
@@ -44,6 +46,7 @@ fun LabHubScreen() {
     var status by remember { mutableStateOf<JSONObject?>(null) }
     var firmware by remember { mutableStateOf<JSONObject?>(null) }
     var diagnostics by remember { mutableStateOf<JSONObject?>(null) }
+    var qaReport by remember { mutableStateOf<String?>(null) }
     var networks by remember { mutableStateOf<JSONArray?>(null) }
     var ssid by remember { mutableStateOf("") }
     var wifiPassword by remember { mutableStateOf("") }
@@ -149,6 +152,42 @@ fun LabHubScreen() {
             }
         }
         Spacer(Modifier.height(20.dp))
+        Text("Autodiagnóstico de conexión API", style = MaterialTheme.typography.titleMedium)
+        Text("Verifica la coherencia del protocolo, firmware y recursos. " +
+            "No confirma electricidad, seguridad BLE ni calidad del LED físico.",
+            style = MaterialTheme.typography.bodySmall)
+        Button(enabled = debug && !busy && LocalLabClient.validKey(secret),
+            onClick = { action {
+                qaReport = null
+                val s = client.status(secret)
+                val d = client.diagnostics(secret)
+                val f = client.firmwareInfo(secret)
+                status = s
+                diagnostics = d
+                firmware = f
+                qaReport = LabSelfCheck.report(LabSnapshot(
+                    apiVersion = s.optInt("version", -1),
+                    rgbFrame = s.optString("rgb"),
+                    chip = d.optString("chip"),
+                    flashBytes = d.optLong("flashBytes", -1),
+                    freeHeapBytes = d.optLong("freeHeap", -1),
+                    nextOtaSlotBytes = f.optLong("nextSize", -1),
+                    otaSlotPresent = f.optBoolean("otaSlotPresent", false),
+                    otaUploadEnabled = f.optBoolean("otaUploadEnabled", true)
+                ))
+                message = "Autodiagnóstico recibido; revisa PASS/FALLO antes de probar GPIO."
+            } }) { Text("Ejecutar autodiagnóstico (solo lectura)") }
+        qaReport?.let { report ->
+            Text(report, style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = {
+                val share = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, report)
+                }
+                context.startActivity(Intent.createChooser(share, "Compartir reporte del laboratorio"))
+            }) { Text("Compartir reporte sin claves") }
+        }
+        Spacer(Modifier.height(18.dp))
         Text("Diagnóstico de hardware y recursos", style = MaterialTheme.typography.titleMedium)
         Text("Datos del dispositivo; sin direcciones MAC ni contraseñas.",
             style = MaterialTheme.typography.bodySmall)
@@ -437,17 +476,17 @@ fun LabHubScreen() {
         Text("LED RGB por Wi-Fi", style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(enabled = debug && !busy && LocalLabClient.validKey(secret),
-                onClick = { action { client.rgb(secret, "ON"); message = "RGB encendido." } }) {
+                onClick = { action { client.rgb(secret, "ON"); message = "Comando ON aceptado; pulsa Consultar estado para verificar." } }) {
                 Text("ON")
             }
             OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
-                onClick = { action { client.rgb(secret, "OFF"); message = "RGB apagado." } }) {
+                onClick = { action { client.rgb(secret, "OFF"); message = "Comando OFF aceptado; pulsa Consultar estado para verificar." } }) {
                 Text("OFF")
             }
             OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
                 onClick = { action {
                     client.rgb(secret, "FX,RAINBOW,120")
-                    message = "Efecto arcoíris activado."
+                    message = "Arcoíris solicitado; consulta Estado y comprueba el LED real."
                 } }) { Text("Arcoíris") }
         }
         Text("Mezcla de color por Wi-Fi", style = MaterialTheme.typography.titleSmall)
@@ -467,17 +506,16 @@ fun LabHubScreen() {
             valueRange = 0f..255f, enabled = debug && !busy)
         Button(enabled = debug && !busy && LocalLabClient.validKey(secret),
             onClick = { action {
-                client.setRgb(secret, wifiRed.toInt(), wifiGreen.toInt(),
+                status = client.setRgbConfirmed(secret, wifiRed.toInt(), wifiGreen.toInt(),
                     wifiBlue.toInt(), wifiBrightness.toInt())
-                status = client.status(secret)
-                message = "Color aplicado y estado confirmado por Wi-Fi."
+                message = "RGB confirmado por lectura lógica de STATE; revisa el LED físico."
             } }) { Text("Aplicar color RGB por Wi-Fi") }
         Spacer(Modifier.height(12.dp))
         OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
             onClick = { action {
                 client.startRgbEffect(secret, "BREATHE", 120)
                 status = client.status(secret)
-                message = "Efecto respiración confirmado por Wi-Fi."
+                message = "Respiración aceptada; revisa estado y LED real."
             } }) { Text("Respiración por Wi-Fi") }
         Spacer(Modifier.height(16.dp))
         if (busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
