@@ -207,7 +207,7 @@ fun ProgramEditorScreen() {
             }
         }
 
-        if (language == ProgramLanguage.ARDUINO_CPP || laboratoryMode == "GPIO") ElevatedCard(Modifier.fillMaxWidth()) {
+        if (language == ProgramLanguage.LAB_SCRIPT && laboratoryMode == "GPIO") ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Laboratorio · ejecución real", style = MaterialTheme.typography.titleMedium)
                 Text(
@@ -290,14 +290,30 @@ fun ProgramEditorScreen() {
                         ) { Text("Detener") }
                     }
                 }
-                HorizontalDivider()
-                Text("Arduino C++", style = MaterialTheme.typography.titleSmall)
-                Text(
-                    "Puedes importar/editar/exportar Arduino C++, compilar con Arduino CLI local y USB " +
-                        "desde PC. Instalar C++ arbitrario reemplaza el firmware; OTA firmado aún pendiente.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                OutlinedButton(onClick = {}, enabled = false) { Text("Instalar firmware (pendiente)") }
+            }
+        }
+
+        if (language == ProgramLanguage.ARDUINO_CPP) {
+            ElevatedCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Arduino C++ · compilación y USB", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Puedes importar, guardar y exportar el código .ino desde Android. " +
+                            "En Windows compílalo con Arduino CLI mediante " +
+                            "scripts/build-user-sketch.ps1 o scripts/build-user-sketch.py.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        "Un sketch Arduino C++ completo reemplaza el firmware RGB/BLE/Wi-Fi. " +
+                            "No se ha habilitado flasheo desde Android ni OTA firmado; " +
+                            "la sustitución USB requiere respaldo y confirmación explícita.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedButton(onClick = {}, enabled = false) {
+                        Text("Instalar desde Android (pendiente)")
+                    }
+                }
             }
         }
 
