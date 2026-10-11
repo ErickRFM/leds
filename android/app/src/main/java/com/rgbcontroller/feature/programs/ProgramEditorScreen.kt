@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.programs.LabGpioScriptCompiler
+import com.rgbcontroller.core.programs.LabRgbScriptPolicy
 import com.rgbcontroller.core.programs.ProgramLanguage
 import com.rgbcontroller.core.programs.ProgramSourcePolicy
 import com.rgbcontroller.core.wifi.LocalLabClient
@@ -41,6 +42,8 @@ fun ProgramEditorScreen() {
     var notice by rememberSaveable { mutableStateOf("Selecciona un archivo o pega tus instrucciones.") }
     var controlKey by remember { mutableStateOf("") } // RAM only. Never persisted or exported.
     var experimentBusy by remember { mutableStateOf(false) }
+    var scriptKind by rememberSaveable { mutableStateOf("GPIO") }
+    val rgbCheck = remember(source) { LabRgbScriptPolicy.validate(source) }
     val language = ProgramLanguage.valueOf(selected)
     val compiled = remember(source, selected) {
         if (selected == ProgramLanguage.LAB_SCRIPT.name) {
@@ -180,6 +183,16 @@ fun ProgramEditorScreen() {
             MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.bodySmall)
 
+        if (language == ProgramLanguage.LAB_SCRIPT) {
+            Text("Tipo de script de laboratorio", style = MaterialTheme.typography.titleSmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = scriptKind == "GPIO", onClick = { scriptKind = "GPIO" },
+                    label = { Text("GPIO") })
+                FilterChip(selected = scriptKind == "RGB", onClick = { scriptKind = "RGB" },
+                    label = { Text("RGB") })
+            }
+        }
+        if (language == ProgramLanguage.LAB_SCRIPT && scriptKind == "GPIO") {
         ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Laboratorio · ejecución real", style = MaterialTheme.typography.titleMedium)
@@ -263,15 +276,113 @@ fun ProgramEditorScreen() {
                         ) { Text("Detener") }
                     }
                 }
-                HorizontalDivider()
-                Text("Arduino C++ y scripts RGB", style = MaterialTheme.typography.titleSmall)
-                Text(
-                    "Puedes importar, editar y exportar C++ o scripts RGB, pero todavía no se " +
-                        "pueden ejecutar o instalar desde aquí. Requieren compilador, nuevo intérprete " +
-                        "y, para OTA, autenticación y recuperación verificadas.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                OutlinedButton(onClick = {}, enabled = false) { Text("Instalar firmware (pendiente)") }
+            }
+        }
+        }
+        if (language == ProgramLanguage.LAB_SCRIPT && scriptKind == "RGB") {
+            ElevatedCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Scripts RGB V4", style = MaterialTheme.typography.titleMedium)
+                    Text("Ejecuta comandos RGB, WAIT, ON, OFF y STOP. Máximo 32 instrucciones y 20 segundos. " +
+                        "No reemplaza el firmware del ESP32.",
+                        style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(onClick = {
+                        source = "RGB 255 0 0 180\nWAIT 500\nRGB 0 0 255 180\nWAIT 500\nSTOP"
+                        fileName = "Ejemplo RGB"
+                        selected = ProgramLanguage.LAB_SCRIPT.name
+                        notice = "Ejemplo preparado: revisa las reglas y conexión."
+                    }) { Text("Cargar ejemplo RGB") }
+                    Text(rgbCheck.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (rgbCheck.accepted) MaterialTheme.colorScheme.onSurfaceVariant
+                                else MaterialTheme.colorScheme.error)
+                    OutlinedTextField(
+                        value = controlKey,
+                        onValueChange = { if (it.length <= 16) controlKey = it },
+                        label = { Text("Clave de control del laboratorio") },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = debug && !experimentBusy,
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation()
+                    )
+                    Text(if (debug) "Solo APK debug: conecta a ESP32-Control-Lab (192.168.4.1). " +
+                            "HTTP local sin TLS; la clave permanece únicamente en memoria."
+                        else "Control de laboratorio no disponible en APK release.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(enabled = debug && !experimentBusy && rgbCheck.accepted &&
+                            LocalLabClient.validKey(controlKey),
+                            onClick = {
+                                scope.launch {
+                                    experimentBusy = true
+                                    try {
+                                        labClient.runRgbScript(controlKey, source)
+                                        notice = "Script RGB aceptado. Consulta el estado para confirmarlo."
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
+                                    } catch (error: Exception) {
+                                        notice = error.message ?: "No se pudo ejecutar RGB."
+                                    } finally {
+                                        experimentBusy = false
+                                    }
+                                }
+                            }
+                        ) { Text("Ejecutar RGB") }
+                        OutlinedButton(
+                            enabled = debug && !experimentBusy && LocalLabClient.validKey(controlKey),
+                            onClick = {
+                                scope.launch {
+                                    experimentBusy = true
+                                    try {
+                                        labClient.stopRgbScript(controlKey)
+                                        notice = "Script RGB detenido; revisa el estado real."
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
+                                    } catch (error: Exception) {
+                                        notice = error.message ?: "No se pudo detener RGB."
+                                    } finally {
+                                        experimentBusy = false
+                                    }
+                                }
+                            }
+                        ) { Text("Detener RGB") }
+                    }
+                    OutlinedButton(
+                        enabled = debug && !experimentBusy && LocalLabClient.validKey(controlKey),
+                        onClick = {
+                            scope.launch {
+                                experimentBusy = true
+                                try {
+                                    val status = labClient.rgbScriptStatus(controlKey)
+                                    notice = if (status.optBoolean("active")) {
+                                        "RGB: paso " + (status.optInt("step") + 1) +
+                                            " de " + status.optInt("total")
+                                    } else "No hay script RGB activo."
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (error: Exception) {
+                                    notice = error.message ?: "No se pudo consultar RGB."
+                                } finally {
+                                    experimentBusy = false
+                                }
+                            }
+                        }
+                    ) { Text("Consultar estado RGB") }
+                }
+            }
+        }
+        if (language == ProgramLanguage.ARDUINO_CPP) {
+            ElevatedCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Arduino C++", style = MaterialTheme.typography.titleMedium)
+                    Text("Puedes importar, editar, copiar y exportar código. La compilación e instalación " +
+                        "requieren un entorno de build y OTA firmada o USB con recuperación verificada.",
+                        style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(onClick = {}, enabled = false) {
+                        Text("Instalar firmware (pendiente)")
+                    }
+                }
             }
         }
     }

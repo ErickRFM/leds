@@ -64,6 +64,18 @@ class LocalLabClient(private val context: Context) {
             mapOf("pin" to pin.toString(), "steps" to steps))
     }
     suspend fun stopExperiment(key: String) = request("POST", "/v2/lab/stop", key)
+    /** Debug SoftAP only; firmware validates the script again before running. */
+    suspend fun runRgbScript(key: String, source: String): JSONObject {
+        require(com.rgbcontroller.core.programs.LabRgbScriptPolicy.validate(source).accepted) {
+            "El script no cumple las reglas de laboratorio."
+        }
+        return request("POST", "/v2/script/run", key, mapOf("source" to source))
+    }
+    suspend fun rgbScriptStatus(key: String): JSONObject =
+        request("GET", "/v2/script/status", key)
+    suspend fun stopRgbScript(key: String): JSONObject =
+        request("POST", "/v2/script/stop", key)
+
     suspend fun setRgb(key: String, r: Int, g: Int, b: Int, brightness: Int): JSONObject =
         rgb(key, RgbDeviceCommand.set(r, g, b, brightness))
 
