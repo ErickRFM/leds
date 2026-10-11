@@ -40,6 +40,7 @@ class LocalWifiControl final {
     // AP+STA leaves the provisioning Wi-Fi active while connecting to a
     // user's router; all HTTP traffic is still rejected on STA interfaces.
     WiFi.mode(WIFI_AP_STA);
+    WiFi.persistent(true); // Wi-Fi STA credentials remain in NVS across reboot.
     WiFi.setAutoReconnect(true);
     if (!WiFi.softAP("ESP32-Control-Lab", password.c_str())) {
       Serial.println("ERROR: protected lab SoftAP failed; HTTP disabled");
@@ -51,6 +52,9 @@ class LocalWifiControl final {
     Serial.print("App pairing key (not Wi-Fi password): ");
     Serial.println(accessKey_);
     Serial.println("Use only for local bench testing; no TLS / no WAN.");
+    // Try any previously provisioned station credentials. This must not
+    // block the protected SoftAP or legacy BLE initialization.
+    WiFi.begin();
     server_.on("/v2/status", HTTP_GET, [this]() {
       if (!authorized()) return;
       String json = "{\"version\":2,\"uptimeMs\":" + String(millis()) +

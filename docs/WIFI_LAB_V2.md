@@ -57,3 +57,6 @@ El perfil Wi-Fi+BLE necesita >1.3 MB de app. El CI usa `esp32:esp32:esp32:Partit
 
 ## Auditoría de capacidad OTA
 `GET /v2/firmware` consulta las particiones activa y candidata que reporta ESP-IDF (tamaño y etiqueta) y muestra el estado en la app. La inspección no permite flashear. La ruta de subida OTA queda **deshabilitada** hasta tener autenticación de firmware, rollback y ensayos de recuperación probados en la placa física.
+
+## Reconexión tras reiniciar
+Wi-Fi STA almacena la configuración de red en NVS y al arrancar intenta restaurarla de forma no bloqueante con `WiFi.begin()`. El SoftAP protegido permanece accesible para recuperación. La persistencia y coexistencia BLE/Wi-Fi siguen pendientes de QA físico en la placa.
