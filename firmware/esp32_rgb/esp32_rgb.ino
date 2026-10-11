@@ -175,9 +175,13 @@ bool applyRgbCommand(const String& cmd) {
   return false;
 }
 
+void stopScriptOnManualBle();
+
 class CommandCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* characteristic) override {
-    if (!applyRgbCommand(characteristic->getValue())) reject();
+    const String command = characteristic->getValue();
+    if (command != "GET") stopScriptOnManualBle();
+    if (!applyRgbCommand(command)) reject();
   }
 };
 
@@ -226,6 +230,8 @@ esp32core::LedRgbModule rgbModule(
 esp32core::LocalWifiControl wifiLab(pinManager, stateString, applyRgbCommand,
     []() { return deviceIdentity.value(); });
 
+
+void stopScriptOnManualBle() { wifiLab.stopScriptFromBle(); }
 
 void setup() {
   Serial.begin(115200);

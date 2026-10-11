@@ -8,6 +8,7 @@
 #include <esp_partition.h>
 #include "PinManager.h"
 #include "ExperimentRuntime.h"
+#include "RgbScriptRuntime.h"
 
 namespace esp32core {
 
@@ -252,10 +253,44 @@ class LocalWifiControl final {
       experiment_.stop(pins_);
       server_.send(200, "application/json", "{\"status\":\"STOPPED\"}");
     });
+    // V4 bounded RGB scripts: no native code, direct GPIO or firmware writes.
+    // Lab SoftAP only. A physical/manual RGB command interrupts the script.
+    server_.on("/v2/script/status", HTTP_GET, [this]() {
+      if (!authorized()) return;
+      server_.send(200, "application/json",
+        "{\"active\":" + String(script_.active() ? "true" : "false") +
+        ",\"step\":" + String(script_.instructionIndex()) +
+        ",\"total\":" + String(script_.instructionCount()) + "}");
+    });
+    server_.on("/v2/script/run", HTTP_POST, [this]() {
+      if (!authorized()) return;
+      if (script_.active() || experiment_.active()) {
+        jsonError(409, "script_or_gpio_experiment_active"); return;
+      }
+      const String source = server_.arg("source");
+      if (source.isEmpty() || source.length() > RgbScriptRuntime::kMaxSourceBytes ||
+          !script_.start(source.c_str(), millis())) {
+        jsonError(400, "invalid_bounded_rgb_script"); return;
+      }
+      const bool applied = script_.tick(millis(), sendScriptRgb, this);
+      if (!applied) {
+        jsonError(409, "script_command_rejected"); return;
+      }
+      server_.send(202, "application/json", "{\"status\":\"ACCEPTED\"}");
+    });
+    server_.on("/v2/script/stop", HTTP_POST, [this]() {
+      if (!authorized()) return;
+      script_.stop(); // Leave the last RGB state, never stop BLE or Wi-Fi.
+      server_.send(200, "application/json", "{\"status\":\"STOPPED\"}");
+    });
     server_.on("/v2/led/command", HTTP_POST, [this]() {
       if (!authorized()) return;
       String cmd = server_.arg("command");
-      if (cmd.isEmpty() || cmd.length() > 48 || !rgbCommand_(cmd)) {
+      if (cmd.isEmpty() || cmd.length() > 48) {
+        jsonError(400, "invalid_rgb_command"); return;
+      }
+      script_.stop(); // Manual Wi-Fi RGB commands take priority.
+      if (!rgbCommand_(cmd)) {
         jsonError(400, "invalid_rgb_command"); return;
       }
       server_.send(200, "application/json", "{\"status\":\"APPLIED\"}");
@@ -274,21 +309,30 @@ class LocalWifiControl final {
   void tick(uint32_t nowMs) {
     if (!active_) return;
     server_.handleClient();
+    script_.tick(nowMs, sendScriptRgb, this);
     experiment_.tick(pins_, nowMs);
     if (hasManual() && static_cast<uint32_t>(nowMs - manualTouched_) >= 30000U) {
       releaseManual();  // Fail-safe bench timeout for manually controlled pins.
     }
   }
 
+  void stopScriptFromBle() { script_.stop(); }
+
  private:
   static constexpr const char* kManual = "gpio.manual";
   static constexpr const char* kRead = "gpio.read";
+  static bool sendScriptRgb(const char* command, void* context) {
+    auto* self = static_cast<LocalWifiControl*>(context);
+    return self != nullptr && self->rgbCommand_(String(command));
+  }
+
   static constexpr bool manualOutputAllowed(int pin) {
     return pin == 18 || pin == 19 || pin == 21 || pin == 22 || pin == 23;
   }
   PinManager& pins_;
   RgbState rgbState_;
   RgbCommand rgbCommand_;
+  RgbScriptRuntime script_;
   DeviceId deviceId_;
   Preferences prefs_;
   WebServer server_{80};
