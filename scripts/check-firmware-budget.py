@@ -4,6 +4,7 @@ from pathlib import Path
 import argparse
 import json
 import tempfile
+import re
 
 # Arduino-ESP32 3.0.7 4 MB Minimal SPIFFS partition: two 0x1E0000 app slots.
 OTA_SLOT_BYTES = 0x1E0000
@@ -23,6 +24,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("build_dir", nargs="?", help="Directory containing esp32_rgb.ino.bin")
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--app-name", default="esp32_rgb.ino.bin",
+                        help="Expected Arduino sketch app binary, filename only")
     args = parser.parse_args()
     if args.self_test:
         with tempfile.TemporaryDirectory() as temp:
@@ -37,7 +40,9 @@ def main() -> int:
         return 0
     if not args.build_dir:
         parser.error("build_dir required unless --self-test")
-    files = list(Path(args.build_dir).rglob("esp32_rgb.ino.bin"))
+    if not re.fullmatch(r"[A-Za-z0-9_-]+\\.ino\\.bin", args.app_name):
+        parser.error("--app-name must be a safe Arduino app binary filename")
+    files = list(Path(args.build_dir).rglob(args.app_name))
     if len(files) != 1:
         parser.error(f"Expected exactly one app binary; found {len(files)}")
     result = evaluate(files[0])
