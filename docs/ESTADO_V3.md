@@ -66,3 +66,21 @@ El script usa `config/esp32-board.env`: `esp32:esp32:esp32:PartitionScheme=min_s
 - No cerrar [#10](https://github.com/ErickRFM/leds/issues/10), [#12](https://github.com/ErickRFM/leds/issues/12), [#13](https://github.com/ErickRFM/leds/issues/13), [#14](https://github.com/ErickRFM/leds/issues/14) ni [#15](https://github.com/ErickRFM/leds/issues/15) sin aceptación comprobada.
 
 **Siguiente puerta técnica:** pruebas físicas en placa y teléfono, luego onboarding BLE protegido; el resto de funcionalidades sensibles depende de ella. Este documento es un registro de estado y no cambia las capacidades de hardware.
+
+## Iteración de pruebas físicas y depuración lógica (#34–#38)
+
+Los siguientes PR ya se fusionaron a `main` tras los checks de Android, firmware y host disponibles:
+
+| PR | Mejora funcional | Qué demuestra CI | Qué sigue requiriendo hardware |
+|---|---|---|---|
+| [#34](https://github.com/ErickRFM/leds/pull/34) | GATT WRITE timeout 5 s y reconexión/relectura `STATE` | Compilación y guardas de cola, contratos | Forzar pérdida real de ACK BLE |
+| [#35](https://github.com/ErickRFM/leds/pull/35) | Ruta explícita Wi-Fi SoftAP y sin fallback a datos móviles | Pruebas de política de red y APK | Android con Wi-Fi sin Internet |
+| [#36](https://github.com/ErickRFM/leds/pull/36) | APK y firmware DEBUG con hashes/commit vía Actions | Artefactos generados por CI | Flasheo/instalación y regresión física |
+| [#37](https://github.com/ErickRFM/leds/pull/37) | Autodiagnóstico y readback exacto del RGB enviado por Wi-Fi | Validación contra `STATE` y QA API | LED físico y carga eléctrica |
+| [#38](https://github.com/ErickRFM/leds/pull/38) | Secuencias GPIO ancladas a tiempo transcurrido, sin pulsos atrasados | Pruebas host de lag, fin de secuencia y `millis()` wrap | Temporización medida en osciloscopio o analizador |
+
+**Instrucciones ejecutables:** [PRUEBAS_REALES_V3.md](PRUEBAS_REALES_V3.md) (matriz B1…F1), [QA_BLE_V3.md](QA_BLE_V3.md) y [GitHub Actions](https://github.com/ErickRFM/leds/actions/workflows/android-ci.yml). Elige una ejecución verde de `main`; los artifacts deben incluir **rgb-controller-debug** y **esp32-lab-4mb-firmware**, junto con SHA-256 y revisión exacta.
+
+**Desde la app:** `Ajustes → Centro ESP32 → Ejecutar autodiagnóstico (solo lectura)`, luego `Compartir reporte sin claves`. El informe **no valida** autorización BLE, OTA ni pines eléctricos. Para pruebas Wi-Fi, conectarse a `ESP32-Control-Lab` y aceptar mantener el Wi-Fi sin Internet; un gateway diferente a `192.168.4.1` se rechaza intencionalmente, no se usa celular como respaldo.
+
+**Próxima decisión:** interpretar resultados B1–F1 que entregue el usuario y priorizar problemas observados, sin exponer credenciales en logs. Seguridad BLE, OTA firmado, I²C, red multi-ESP32 y release formal siguen pendientes.
