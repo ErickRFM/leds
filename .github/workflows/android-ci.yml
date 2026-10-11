@@ -19,6 +19,10 @@ jobs:
         shell: powershell
         run: .\\scripts\\test-board-profile.ps1
 
+      - name: Verify imported Arduino sketch USB safety gate (no flash)
+        shell: powershell
+        run: .\scripts\test-user-sketch-guards.ps1
+
       - name: Verify Arduino CLI discovery and actionable preflight errors
         shell: powershell
         run: .\scripts\test-arduino-cli-discovery.ps1
@@ -50,6 +54,8 @@ jobs:
         run: python3 scripts/check-diagnostics-contract.py
       - name: Production release safety gate
         run: python3 scripts/check-release-safety.py
+      - name: V5 local Arduino sketch packaging tests (offline, no flash)
+        run: python3 -m unittest discover -s tests -p 'test_build_user_sketch.py' -v
       - name: OTA slot budget logic regression
         run: python3 scripts/check-firmware-budget.py --self-test
       - name: V4 read-only BLE identity contract
@@ -141,6 +147,18 @@ jobs:
           arduino-cli compile --fqbn "$ARDUINO_FQBN" --output-dir build/v4-probe firmware/v4_provisioning_probe
       - name: Verify V4 probe binary size
         run: python3 scripts/check-firmware-budget.py build/v4-probe --app-name v4_provisioning_probe.ino.bin
+      - name: V4 private personalization kit regression
+        run: python3 scripts/test-v4-provisioning-kit.py
+      - name: V4 personalized BLE provisioning compile-only gate
+        run: |
+          . ./config/esp32-board.env
+          python3 scripts/create-v4-provisioning-kit.py --out build/v4-private-kit
+          mkdir -p firmware/esp32_rgb/config
+          cp build/v4-private-kit/FactoryProvisioning.h firmware/esp32_rgb/config/FactoryProvisioning.h
+          arduino-cli compile --fqbn "$ARDUINO_FQBN" --output-dir build/v4-provisioning-check firmware/esp32_rgb
+          python3 scripts/check-firmware-budget.py build/v4-provisioning-check
+          rm -f firmware/esp32_rgb/config/FactoryProvisioning.h
+          echo "V4 personalized provisioning build compiled; NEVER package this CI test image."
       - name: Check firmware fits dual OTA slot
         run: python3 scripts/check-firmware-budget.py build/firmware
       - name: Prepare firmware test manifest
