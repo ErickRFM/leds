@@ -104,6 +104,9 @@ jobs:
       - name: Unit tests
         working-directory: android
         run: gradle testDebugUnitTest --stacktrace
+      - name: Compile navigation UI tests (no emulator required)
+        working-directory: android
+        run: gradle assembleDebugAndroidTest --stacktrace
       - name: Android lint
         working-directory: android
         run: gradle lintDebug --stacktrace
