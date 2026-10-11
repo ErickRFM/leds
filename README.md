@@ -58,3 +58,38 @@ Se integraron mejoras de proyectos locales, editor visual de secuencias, telemet
 Para instalar una **versión de laboratorio**, abre las [últimas ejecuciones de CI](https://github.com/ErickRFM/leds/actions/workflows/android-ci.yml), selecciona una ejecución verde en `main`, descarga `rgb-controller-debug` y verifica su `SHA256SUMS.txt`. `esp32-lab-4mb-firmware` contiene binarios coincidentes pero **no flashea automáticamente**; antes de actualizar el ESP32, verifica particiones, cableado y recuperación USB. Sigue la [guía de pruebas reales](docs/PRUEBAS_REALES_V3.md).
 
 En la app debug, abre `Ajustes → Centro ESP32`. El autodiagnóstico valida la API y genera un reporte sin contraseñas; no prueba que el LED esté cableado correctamente. Conexión Wi-Fi local requiere `ESP32-Control-Lab` (sin Internet) y ruta `192.168.4.1`. **Release público continúa bloqueado por seguridad BLE pendiente.**
+
+## ESP Studio V4/V5: editor, proyectos y scripts (solo laboratorio debug)
+
+En la versión actual de `main`, la navegación incluye **Inicio, LED, Código, Centro y Ajustes**. **LED** utiliza la misma lógica de control RGB y permite elegir Bluetooth o Wi-Fi de laboratorio; la conexión Wi-Fi sigue siendo el SoftAP protegido `ESP32-Control-Lab` en `192.168.4.1`, **sin TLS ni servicio público**.
+
+**Código → Programas** permite escribir, pegar, importar TXT/INO/CPP/H, exportar y guardar hasta 12 proyectos privados en el teléfono. No se guarda la clave del ESP32 junto con el código. Puedes ejecutar desde la APK **debug**, usando la clave local, dos tipos de instrucciones limitadas y compatibles con firmware del mismo proyecto:
+
+- **GPIO**: por ejemplo, `GPIO 19 HIGH`, `WAIT 500`, `GPIO 19 LOW`, `WAIT 500`, `STOP`. Máximo 16 pasos, 20 segundos, un GPIO de 18/19/21/22/23. El motor comprueba de nuevo permisos y recursos en el ESP32.
+- **RGB**: instrucciones `RGB 255 0 0`, `WAIT 500`, `OFF`, `STOP`. El intérprete de firmware impone 32 instrucciones y 20 segundos y no permite C++ arbitrario. El control LED manual tiene prioridad.
+
+Los programas guardados en **Mis proyectos** son archivos locales de Android, **no** programas instalados para autoarrancar en la placa. Un resultado de API correcto confirma estado lógico; **no demuestra que el LED físico funcione**.
+
+### Arduino C++ verdadero: compilar en Windows, sin reemplazo inadvertido
+
+El modo Arduino del editor **no ejecuta directamente** texto C++ en la placa. Exporta el sketch y usa el compilador gratuito Arduino CLI en Windows:
+
+- `scripts/build-user-sketch.ps1`: compilar un archivo TXT/INO importado; la carga **USB** solo existe con puerto y reconocimiento explícito de que sustituirá el firmware, siguiendo `docs/V4_ARDUINO_CLI_USB.md`.
+- `scripts/build-user-sketch.py`: generar un paquete de compilación offline y un manifiesto con hashes verificables, documentado en `docs/V5_ARDUINO_CLI_TEST_BUILD.md`. Este paquete **no está firmado ni aprobado para OTA**.
+
+El perfil auditado se encuentra en `config/esp32-board.env` (ESP32 clásico 4 MB, Arduino-ESP32 3.0.7, `min_spiffs`). **Cargar un sketch Arduino arbitrario por USB reemplaza el programa principal y puede eliminar BLE/Wi-Fi/RGB**. No lo hagas sin respaldo, recuperación USB probada y aceptación del reemplazo.
+
+### Pruebas y restricciones de publicación
+
+Para verificar código en Windows, desde la raíz del repositorio:
+
+```powershell
+git fetch origin
+git switch main
+git pull --ff-only origin main
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-local.ps1
+```
+
+Para la APK, selecciona una ejecución **verde de `main`** en [GitHub Actions](https://github.com/ErickRFM/leds/actions/workflows/android-ci.yml) y descarga `rgb-controller-debug` junto con el SHA-256. También existe `esp32-lab-4mb-firmware` para pruebas supervisadas. El script local no flashea el ESP32 sin petición expresa.
+
+**Bloqueos vigentes:** autorización segura del BLE legado, seguridad de administración/aprovisionamiento demostrada, OTA firmado con rollback físico, pruebas en placa y teléfono, y aprobación de release. El funcionamiento como laboratorio debug **no** equivale a producto listo para producción. Sigue las incidencias [#42](https://github.com/ErickRFM/leds/issues/42), [#48](https://github.com/ErickRFM/leds/issues/48) y [#15](https://github.com/ErickRFM/leds/issues/15).
