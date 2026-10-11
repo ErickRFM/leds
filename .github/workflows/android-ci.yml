@@ -19,6 +19,10 @@ jobs:
         shell: powershell
         run: .\\scripts\\test-board-profile.ps1
 
+      - name: Verify Arduino CLI discovery and actionable preflight errors
+        shell: powershell
+        run: .\scripts\test-arduino-cli-discovery.ps1
+
   firmware-core-tests:
     runs-on: ubuntu-latest
     steps:
