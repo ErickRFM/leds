@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.programs.LabGpioScriptCompiler
+import com.rgbcontroller.core.programs.LabRgbScriptPolicy
 import com.rgbcontroller.core.programs.ProgramLanguage
 import com.rgbcontroller.core.programs.ProgramSourcePolicy
 import com.rgbcontroller.core.wifi.LocalLabClient
@@ -41,6 +42,7 @@ fun ProgramEditorScreen() {
     var notice by rememberSaveable { mutableStateOf("Selecciona un archivo o pega tus instrucciones.") }
     var controlKey by remember { mutableStateOf("") } // RAM only. Never persisted or exported.
     var experimentBusy by remember { mutableStateOf(false) }
+    var laboratoryMode by rememberSaveable { mutableStateOf("GPIO") }
     val language = ProgramLanguage.valueOf(selected)
     val compiled = remember(source, selected) {
         if (selected == ProgramLanguage.LAB_SCRIPT.name) {
@@ -49,6 +51,7 @@ fun ProgramEditorScreen() {
     }
     val gpioPlan = compiled?.getOrNull()
     val inspection = remember(source) { ProgramSourcePolicy.inspect(source) }
+    val rgbCheck = remember(source) { LabRgbScriptPolicy.validate(source) }
 
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
@@ -180,7 +183,29 @@ fun ProgramEditorScreen() {
             MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.bodySmall)
 
-        ElevatedCard(Modifier.fillMaxWidth()) {
+        CodeProjectsPanel(
+            source = source,
+            language = language,
+            onOpen = { project ->
+                source = project.source
+                selected = project.language.name
+                fileName = project.name
+                notice = "Código abierto desde Mis proyectos: " + project.name +
+                    ". No se envió nada a la placa."
+            }
+        )
+
+        if (language == ProgramLanguage.LAB_SCRIPT) {
+            Text("Motor de ejecución", style = MaterialTheme.typography.titleSmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = laboratoryMode == "GPIO", onClick = { laboratoryMode = "GPIO" },
+                    label = { Text("GPIO") })
+                FilterChip(selected = laboratoryMode == "RGB", onClick = { laboratoryMode = "RGB" },
+                    label = { Text("LED RGB") })
+            }
+        }
+
+        if (language == ProgramLanguage.ARDUINO_CPP || laboratoryMode == "GPIO") ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Laboratorio · ejecución real", style = MaterialTheme.typography.titleMedium)
                 Text(
@@ -264,14 +289,94 @@ fun ProgramEditorScreen() {
                     }
                 }
                 HorizontalDivider()
-                Text("Arduino C++ y scripts RGB", style = MaterialTheme.typography.titleSmall)
+                Text("Arduino C++", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "Puedes importar, editar y exportar C++ o scripts RGB, pero todavía no se " +
-                        "pueden ejecutar o instalar desde aquí. Requieren compilador, nuevo intérprete " +
-                        "y, para OTA, autenticación y recuperación verificadas.",
+                    "Puedes importar/editar/exportar Arduino C++, compilar con Arduino CLI local y USB " +
+                        "desde PC. Instalar C++ arbitrario reemplaza el firmware; OTA firmado aún pendiente.",
                     style = MaterialTheme.typography.bodySmall
                 )
                 OutlinedButton(onClick = {}, enabled = false) { Text("Instalar firmware (pendiente)") }
+            }
+        }
+
+        if (language == ProgramLanguage.LAB_SCRIPT && laboratoryMode == "RGB") {
+            ElevatedCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("RGB Script · ejecución real", style = MaterialTheme.typography.titleMedium)
+                    Text("Ejecuta temporalmente RGB, WAIT, ON, OFF y STOP sin reflashear. " +
+                        "Máximo 512 bytes, 32 pasos y 20 segundos. Requiere firmware V4 con /v2/script/run.",
+                        style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(onClick = {
+                        source = "RGB 255 0 0\\nWAIT 500\\nRGB 0 0 255\\nWAIT 500\\nOFF\\nSTOP".replace("\\n", "\n")
+                        fileName = "Ejemplo RGB V4"
+                        notice = "Ejemplo RGB cargado. Comprueba la conexión SoftAP."
+                    }) { Text("Cargar ejemplo RGB") }
+                    Text(rgbCheck.message, style = MaterialTheme.typography.bodySmall,
+                        color = if (rgbCheck.accepted) MaterialTheme.colorScheme.onSurfaceVariant
+                            else MaterialTheme.colorScheme.error)
+                    OutlinedTextField(
+                        value = controlKey,
+                        onValueChange = { if (it.length <= 16) controlKey = it },
+                        label = { Text("Clave de control del ESP32 (16 caracteres)") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        enabled = debug && !experimentBusy
+                    )
+                    Text("APK debug únicamente · Wi-Fi ESP32-Control-Lab sin Internet. " +
+                        "La clave queda en memoria, no se guarda. API HTTP sin TLS.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            enabled = debug && !experimentBusy && rgbCheck.accepted &&
+                                LocalLabClient.validKey(controlKey),
+                            onClick = {
+                                scope.launch {
+                                    experimentBusy = true
+                                    try {
+                                        labClient.runRgbScript(controlKey, source)
+                                        notice = "ESP32 aceptó el script RGB. Consulta estado y verifica LED físico."
+                                    } catch (cancelled: CancellationException) { throw cancelled
+                                    } catch (error: Exception) {
+                                        notice = error.message ?: "Falló la ejecución RGB."
+                                    } finally { experimentBusy = false }
+                                }
+                            }
+                        ) { Text("Ejecutar RGB") }
+                        OutlinedButton(
+                            enabled = debug && !experimentBusy && LocalLabClient.validKey(controlKey),
+                            onClick = {
+                                scope.launch {
+                                    experimentBusy = true
+                                    try {
+                                        labClient.stopRgbScript(controlKey)
+                                        notice = "Detención confirmada; el último color se conserva."
+                                    } catch (cancelled: CancellationException) { throw cancelled
+                                    } catch (error: Exception) {
+                                        notice = error.message ?: "No se pudo detener el RGB script."
+                                    } finally { experimentBusy = false }
+                                }
+                            }
+                        ) { Text("Detener") }
+                    }
+                    OutlinedButton(
+                        enabled = debug && !experimentBusy && LocalLabClient.validKey(controlKey),
+                        onClick = {
+                            scope.launch {
+                                experimentBusy = true
+                                try {
+                                    val state = labClient.rgbScriptStatus(controlKey)
+                                    notice = if (state.optBoolean("active")) {
+                                        "RGB ejecutando paso ${state.optInt("step") + 1} de ${state.optInt("total")}."
+                                    } else "RGB sin script en ejecución."
+                                } catch (cancelled: CancellationException) { throw cancelled
+                                } catch (error: Exception) {
+                                    notice = error.message ?: "No se pudo leer el estado RGB."
+                                } finally { experimentBusy = false }
+                            }
+                        }
+                    ) { Text("Consultar estado RGB") }
+                }
             }
         }
     }
