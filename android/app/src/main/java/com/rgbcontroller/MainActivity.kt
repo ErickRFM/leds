@@ -22,8 +22,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -75,6 +77,31 @@ private sealed class Screen(
     data object Hub : Screen("hub", "Laboratorio", Icons.Default.Memory)
 }
 
+/**
+ * Home is always the root destination, never a restored copy of a nested screen.
+ * Other tabs keep their navigation state; Bluetooth/Wi-Fi transport lives outside
+ * the navigation stack and must not be disconnected when changing screens.
+ */
+private fun NavHostController.navigateTopLevel(screen: Screen) {
+    if (currentDestination?.route == screen.route) return
+    if (screen == Screen.Home) {
+        // Pop the actual root rather than navigating to another Home instance with
+        // restoreState=true, which can revive the screen the user just left.
+        if (!popBackStack(Screen.Home.route, inclusive = false)) {
+            navigate(Screen.Home.route) {
+                popUpTo(graph.findStartDestination().id) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    } else {
+        navigate(screen.route) {
+            popUpTo(graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+}
+
 @Composable
 fun MainAppNavHost(bleManager: BleManager, preferencesRepository: PreferencesRepository) {
     val theme by preferencesRepository.themeMode.collectAsState(initial = "SYSTEM")
@@ -88,6 +115,7 @@ fun MainAppNavHost(bleManager: BleManager, preferencesRepository: PreferencesRep
                     val route = entry?.destination?.route
                     items.forEach { screen ->
                         NavigationBarItem(
+                            modifier = Modifier.testTag("nav_${screen.route}"),
                             icon = { Icon(screen.icon, contentDescription = screen.title) },
                             label = { Text(screen.title) },
                             alwaysShowLabel = true,
@@ -96,17 +124,7 @@ fun MainAppNavHost(bleManager: BleManager, preferencesRepository: PreferencesRep
                             ),
                             selected = route == screen.route ||
                                 (screen == Screen.Center && route in setOf(Screen.Devices.route, Screen.Hub.route)),
-                            onClick = {
-                                if (route != screen.route) {
-                                    navController.navigate(screen.route) {
-                                        popUpTo(navController.graph.findStartDestination().id) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
-                            }
+                            onClick = { navController.navigateTopLevel(screen) }
                         )
                     }
                 }
@@ -119,9 +137,9 @@ fun MainAppNavHost(bleManager: BleManager, preferencesRepository: PreferencesRep
             ) {
                 composable(Screen.Home.route) {
                     DashboardScreen(
-                        onLed = { navController.navigate(Screen.Led.route) },
-                        onCode = { navController.navigate(Screen.Code.route) },
-                        onCenter = { navController.navigate(Screen.Center.route) }
+                        onLed = { navController.navigateTopLevel(Screen.Led) },
+                        onCode = { navController.navigateTopLevel(Screen.Code) },
+                        onCenter = { navController.navigateTopLevel(Screen.Center) }
                     )
                 }
                 composable(Screen.Led.route) {
@@ -133,7 +151,7 @@ fun MainAppNavHost(bleManager: BleManager, preferencesRepository: PreferencesRep
                     CenterLandingScreen(
                         onDevices = { navController.navigate(Screen.Devices.route) },
                         onLab = { navController.navigate(Screen.Hub.route) },
-                        onCode = { navController.navigate(Screen.Code.route) }
+                        onCode = { navController.navigateTopLevel(Screen.Code) }
                     )
                 }
                 composable(Screen.Settings.route) {
