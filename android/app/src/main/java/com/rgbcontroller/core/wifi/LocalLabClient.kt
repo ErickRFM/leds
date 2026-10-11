@@ -1,5 +1,9 @@
 package com.rgbcontroller.core.wifi
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import com.rgbcontroller.core.lab.LabExperimentLibrary
 import com.rgbcontroller.core.model.RgbDeviceCommand
 import com.rgbcontroller.core.hardware.Esp32BoardPinout
@@ -11,7 +15,7 @@ import java.net.URL
 import java.net.URLEncoder
 
 /** Debug-only client for WPA2 SoftAP at 192.168.4.1; no WAN and no TLS. */
-class LocalLabClient {
+class LocalLabClient(private val context: Context) {
     companion object {
         const val BASE = "http://192.168.4.1"
         fun allowedOutput(pin: Int) = Esp32BoardPinout.canWrite(pin)
@@ -68,13 +72,31 @@ class LocalLabClient {
         return request("POST", "/v2/led/command", key, mapOf("command" to command))
     }
 
+    /**
+     * Android often prefers cellular when the ESP32's SoftAP has no Internet.
+     * Bind each request to the explicitly identified Wi-Fi route; NEVER fall back.
+     * This is still a debug laboratory channel, not a production authentication scheme.
+     */
+    private fun labNetwork(): Network {
+        val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        return connectivity.allNetworks.firstOrNull { network ->
+            val capabilities = connectivity.getNetworkCapabilities(network)
+            val gateways = connectivity.getLinkProperties(network)?.routes
+                ?.mapNotNull { it.gateway?.hostAddress }.orEmpty()
+            LabNetworkPolicy.isEligible(
+                capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true,
+                gateways
+            )
+        } ?: error("No hay red Wi-Fi del ESP32 con gateway 192.168.4.1. Conecta a ESP32-Control-Lab y acepta mantener Wi-Fi sin Internet.")
+    }
+
     private suspend fun request(
         method: String, path: String, key: String, form: Map<String, String> = emptyMap(),
         readTimeout: Int = 7000
     ): JSONObject = withContext(Dispatchers.IO) {
         require(validKey(key)) { "Clave inválida (16 caracteres hexadecimales)." }
         require(path.startsWith("/v2/"))
-        val connection = URL(BASE + path).openConnection() as HttpURLConnection
+        val connection = labNetwork().openConnection(URL(BASE + path)) as HttpURLConnection
         try {
             connection.requestMethod = method
             connection.connectTimeout = 5000
