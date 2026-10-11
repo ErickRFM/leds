@@ -20,9 +20,11 @@ class LocalWifiControl final {
  public:
   using RgbState = String (*)();
   using RgbCommand = bool (*)(const String&);
+  using DeviceId = String (*)();
 
-  LocalWifiControl(PinManager& pins, RgbState state, RgbCommand command)
-      : pins_(pins), rgbState_(state), rgbCommand_(command) {}
+  LocalWifiControl(PinManager& pins, RgbState state, RgbCommand command,
+                   DeviceId deviceId)
+      : pins_(pins), rgbState_(state), rgbCommand_(command), deviceId_(deviceId) {}
 
   void begin() {
     prefs_.begin("rgb-lab-v2", false);
@@ -81,6 +83,17 @@ class LocalWifiControl final {
       body += ",\"resetReason\":" + String(static_cast<int>(esp_reset_reason()));
       body += ",\"wifiRssi\":" + String(signal);
       body += ",\"leasedPins\":" + String(pins_.leasedCount()) + "}";
+      server_.send(200, "application/json", body);
+    });
+    // A non-secret NVS-stable identifier for compatibility/migration diagnostics.
+    // This endpoint is behind existing SoftAP-only lab authorization. It NEVER
+    // grants ownership or announces that BLE control is protected.
+    server_.on("/v2/identity", HTTP_GET, [this]() {
+      if (!authorized()) return;
+      String body = "{\"schemaVersion\":4,\"deviceId\":\"" +
+        deviceId_() + "\",\"secureProvisioning\":false," +
+        "\"legacyBleWriteUnauthenticated\":true," +
+        "\"ownerBound\":false}";
       server_.send(200, "application/json", body);
     });
     server_.on("/v2/firmware", HTTP_GET, [this]() {
@@ -276,6 +289,7 @@ class LocalWifiControl final {
   PinManager& pins_;
   RgbState rgbState_;
   RgbCommand rgbCommand_;
+  DeviceId deviceId_;
   Preferences prefs_;
   WebServer server_{80};
   ExperimentRuntime experiment_;
