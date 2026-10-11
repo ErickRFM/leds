@@ -25,39 +25,39 @@ Instala el APK recién descargado o usa el generado localmente; la ruta del coma
 ## Preparación de Arduino CLI en Windows
 
 Un APK Android puede compilar correctamente mientras el firmware falla con
-\`arduino-cli is not installed or not in PATH\`. Eso **no** invalida el APK ya generado.
-Arduino IDE y \`arduino-cli.exe\` son herramientas relacionadas pero no necesariamente
-expuestas con el mismo ejecutable en el \`PATH\`.
+`arduino-cli is not installed or not in PATH`. Eso **no** invalida el APK ya generado.
+Arduino IDE y `arduino-cli.exe` son herramientas relacionadas pero no necesariamente
+expuestas con el mismo ejecutable en el `PATH`.
 
 En PowerShell, comprueba primero:
 
-\`\`\`powershell
+```powershell
 Get-Command arduino-cli.exe -ErrorAction SilentlyContinue
-\`\`\`
+```
 
-Si no aparece, instala Arduino CLI con \`winget install --id ArduinoSA.CLI --exact\`
+Si no aparece, instala Arduino CLI con `winget install --id ArduinoSA.CLI --exact`
 y abre una nueva terminal. Alternativamente usa el ejecutable oficial desde
 https://docs.arduino.cc/arduino-cli/installation.
 
 El verificador actual intenta descubrir Arduino CLI en PATH, en ubicaciones
-comunes del IDE y en \`.tools\`. También admite un binario indicado explícitamente
-o la variable de entorno \`ARDUINO_CLI_PATH\` (ruta completa al ejecutable).
+comunes del IDE y en `.tools`. También admite un binario indicado explícitamente
+o la variable de entorno `ARDUINO_CLI_PATH` (ruta completa al ejecutable).
 
-\`\`\`powershell
+```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-local.ps1 -CheckToolchainOnly
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-local.ps1 -SkipAndroid
-\`\`\`
+```
 
 La primera instrucción verifica únicamente Arduino CLI; la segunda compila
 el firmware sin repetir la compilación del APK ya disponible. Si la búsqueda automática
 falla, indica explícitamente la ruta:
 
-\`\`\`powershell
+```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-local.ps1 -SkipAndroid -ArduinoCliPath "C:\ruta\arduino-cli.exe"
-\`\`\`
+```
 
 **Ningún ejemplo flashea el ESP32**; para grabación se necesita la opción
-explícita \`-UploadFirmware -Port COMx\`, previa comprobación del cableado,
+explícita `-UploadFirmware -Port COMx`, previa comprobación del cableado,
 particiones y recuperación USB.
 
 ## Paso 2. Verificación sin flashear (recomendada)
