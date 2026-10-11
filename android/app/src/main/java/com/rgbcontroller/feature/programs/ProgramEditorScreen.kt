@@ -183,17 +183,12 @@ fun ProgramEditorScreen() {
             MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.bodySmall)
 
-        CodeProjectsPanel(
-            source = source,
-            language = language,
-            onOpen = { project ->
-                source = project.source
-                selected = project.language.name
-                fileName = project.name
-                notice = "Código abierto desde Mis proyectos: " + project.name +
-                    ". No se envió nada a la placa."
-            }
-        )
+        ProjectLibraryPanel(source = source, language = language, onOpen = { project ->
+            source = project.source
+            selected = project.language.name
+            fileName = project.name
+            notice = "Proyecto abierto. Los cambios no se han enviado al ESP32."
+        })
 
         if (language == ProgramLanguage.LAB_SCRIPT) {
             Text("Motor de ejecución", style = MaterialTheme.typography.titleSmall)
@@ -205,7 +200,7 @@ fun ProgramEditorScreen() {
             }
         }
 
-        if (language == ProgramLanguage.ARDUINO_CPP || laboratoryMode == "GPIO") ElevatedCard(Modifier.fillMaxWidth()) {
+        if (language == ProgramLanguage.LAB_SCRIPT && laboratoryMode == "GPIO") ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Laboratorio · ejecución real", style = MaterialTheme.typography.titleMedium)
                 Text(
@@ -288,14 +283,31 @@ fun ProgramEditorScreen() {
                         ) { Text("Detener") }
                     }
                 }
-                HorizontalDivider()
-                Text("Arduino C++", style = MaterialTheme.typography.titleSmall)
-                Text(
-                    "Puedes importar/editar/exportar Arduino C++, compilar con Arduino CLI local y USB " +
-                        "desde PC. Instalar C++ arbitrario reemplaza el firmware; OTA firmado aún pendiente.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                OutlinedButton(onClick = {}, enabled = false) { Text("Instalar firmware (pendiente)") }
+            }
+        }
+
+        if (language == ProgramLanguage.ARDUINO_CPP) {
+            ElevatedCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Arduino C++ · compilación local", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Puedes importar, editar, guardar y exportar el código .ino. " +
+                            "Para compilarlo en Windows utiliza scripts/build-user-sketch.ps1 " +
+                            "o scripts/build-user-sketch.py con Arduino CLI. " +
+                            "No se ejecuta C++ nativo dentro del firmware actual.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        "Instalar un sketch Arduino arbitrario REEMPLAZA el firmware RGB/BLE/Wi-Fi. " +
+                            "No hay flasheo desde Android ni OTA firmado habilitados. " +
+                            "Para USB se exige puerto explícito y recuperación supervisada.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedButton(onClick = {}, enabled = false) {
+                        Text("Instalar desde Android (pendiente)")
+                    }
+                }
             }
         }
 
