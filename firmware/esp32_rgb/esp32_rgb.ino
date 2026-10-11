@@ -14,6 +14,7 @@
 #include "core/LocalWifiControl.h"
 #include "core/RgbCommandCodec.h"
 #include "core/DeviceIdentity.h"
+#include "core/RgbSettingsStore.h"
 
 constexpr uint8_t LED_R = 27, LED_G = 25, LED_B = 26;
 constexpr bool COMMON_ANODE = true;  // Set false for verified common cathode.
@@ -34,6 +35,29 @@ BLECharacteristic* stateCharacteristic = nullptr;
 volatile bool connected = false;
 bool connectedPreviously = false;
 uint32_t effectStarted = 0;
+esp32core::RgbSettingsStore rgbStorage;
+bool rgbDirty = false;
+bool rgbPersistenceAttempted = false;
+uint32_t rgbLastChangedMs = 0;
+uint32_t rgbLastPersistAttemptMs = 0;
+
+void persistRgbIfDue(uint32_t now) {
+  if (!rgbDirty || static_cast<uint32_t>(now - rgbLastChangedMs) < 2000) return;
+  if (rgbPersistenceAttempted &&
+      static_cast<uint32_t>(now - rgbLastPersistAttemptMs) < 5000) return;
+  rgbPersistenceAttempted = true;
+  rgbLastPersistAttemptMs = now;
+  const esp32core::RgbSaved saved{
+      rgb.r, rgb.g, rgb.b, rgb.brightness, rgb.power ? uint8_t{1} : uint8_t{0},
+      static_cast<uint8_t>(rgb.mode), rgb.speed};
+  if (rgbStorage.save(saved)) {
+    rgbDirty = false;
+    rgbPersistenceAttempted = false;
+  } else {
+    Serial.println("WARN: RGB snapshot could not be persisted; state is temporary");
+  }
+}
+
 
 const char* modeName(Mode m) {
   switch (m) {
@@ -102,6 +126,10 @@ bool applyRgbCommand(const String& cmd) {
   line.trim();
   esp32core::RgbCommand command;
   if (!esp32core::parseRgbCommand(line.c_str(), command)) return false;
+  if (command.action != esp32core::RgbAction::Get) {
+    rgbDirty = true;
+    rgbLastChangedMs = millis();
+  }
   switch (command.action) {
     case esp32core::RgbAction::Get:
       publishState();
@@ -204,6 +232,20 @@ void setup() {
     Serial.println("ERROR: V4 identity NVS unavailable; control services disabled");
     while (true) delay(1000);
   }
+  esp32core::RgbSaved previous{};
+  if (rgbStorage.load(previous)) {
+    rgb.r = previous.red;
+    rgb.g = previous.green;
+    rgb.b = previous.blue;
+    rgb.brightness = previous.brightness;
+    rgb.power = previous.power == 1;
+    rgb.mode = static_cast<Mode>(previous.mode);
+    rgb.speed = previous.speed;
+    effectStarted = millis();
+    Serial.println("RGB configuration restored from versioned NVS snapshot");
+  } else {
+    Serial.println("RGB NVS unavailable/invalid: booting safely with outputs off");
+  }
   if (!moduleRegistry.add(rgbModule) || !moduleRegistry.startAll(pinManager)) {
     Serial.println("ERROR: RGB module failed to reserve/attach PWM");
     while (true) delay(1000);
@@ -245,5 +287,6 @@ void loop() {
 
   moduleRegistry.tickAll(millis());
   wifiLab.tick(millis());
+  persistRgbIfDue(millis());
   delay(5);
 }
