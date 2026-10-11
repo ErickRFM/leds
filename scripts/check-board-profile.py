@@ -9,7 +9,7 @@ values = {}
 for line in profile.read_text(encoding="utf-8").splitlines():
     if line and not line.startswith("#"):
         key, sep, value = line.partition("=")
-        assert sep and re.fullmatch(r"[A-Z_]+", key), "Malformed board profile"
+        assert sep and re.fullmatch(r"[A-Z0-9_]+", key), "Malformed board profile"
         assert key not in values and value, "Duplicate or empty board setting"
         values[key] = value
 
