@@ -1,6 +1,7 @@
 package com.rgbcontroller.core.wifi
 
 import com.rgbcontroller.core.lab.LabExperimentLibrary
+import com.rgbcontroller.core.model.RgbDeviceCommand
 import com.rgbcontroller.core.hardware.Esp32BoardPinout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -55,8 +56,14 @@ class LocalLabClient {
             mapOf("pin" to pin.toString(), "steps" to steps))
     }
     suspend fun stopExperiment(key: String) = request("POST", "/v2/lab/stop", key)
+    suspend fun setRgb(key: String, r: Int, g: Int, b: Int, brightness: Int): JSONObject =
+        rgb(key, RgbDeviceCommand.set(r, g, b, brightness))
+
+    suspend fun startRgbEffect(key: String, name: String, speed: Int): JSONObject =
+        rgb(key, RgbDeviceCommand.effect(name, speed))
+
     suspend fun rgb(key: String, command: String): JSONObject {
-        require(command in setOf("ON", "OFF", "GET", "FX,STOP", "FX,RAINBOW,120"))
+        require(RgbDeviceCommand.allowed(command)) { "Invalid RGB command" }
         return request("POST", "/v2/led/command", key, mapOf("command" to command))
     }
 
