@@ -8,6 +8,9 @@
 #include <BLE2902.h>
 #include <cstdio>
 #include <cstring>
+#include "core/PinManager.h"
+#include "core/ModuleRegistry.h"
+#include "modules/LedRgbModule.h"
 
 constexpr uint8_t LED_R = 27, LED_G = 25, LED_B = 26;
 constexpr bool COMMON_ANODE = true;  // Set false for verified common cathode.
@@ -28,7 +31,6 @@ BLECharacteristic* stateCharacteristic = nullptr;
 volatile bool connected = false;
 bool connectedPreviously = false;
 uint32_t effectStarted = 0;
-uint32_t lastFrame = 0;
 
 const char* modeName(Mode m) {
   switch (m) {
@@ -153,7 +155,6 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
       rgb.speed = speed;
       rgb.power = true;
       effectStarted = millis();
-      lastFrame = 0;
       publishState();
       return;
     }
@@ -195,15 +196,20 @@ void renderEffect(uint32_t now) {
   }
 }
 
+// Static storage, no heap allocation and no second BLE implementation.
+esp32core::PinManager pinManager;
+esp32core::ModuleRegistry moduleRegistry;
+esp32core::LedRgbModule rgbModule(
+    LED_R, LED_G, LED_B, COMMON_ANODE,
+    renderStatic, renderEffect,
+    []() { return rgb.mode != Mode::NONE; });
+
 void setup() {
   Serial.begin(115200);
-  if (!ledcAttach(LED_R, 5000, 8) ||
-      !ledcAttach(LED_G, 5000, 8) ||
-      !ledcAttach(LED_B, 5000, 8)) {
-    Serial.println("ERROR: PWM attach failed");
+  if (!moduleRegistry.add(rgbModule) || !moduleRegistry.startAll(pinManager)) {
+    Serial.println("ERROR: RGB module failed to reserve/attach PWM");
     while (true) delay(1000);
   }
-  renderStatic();  // boot OFF
 
   BLEDevice::init(DEVICE_NAME);
   // STATE frames can be longer than the 20-byte default notification payload.
@@ -238,10 +244,6 @@ void loop() {
   }
   if (connected) connectedPreviously = true;
 
-  uint32_t now = millis();
-  if (rgb.mode != Mode::NONE && now - lastFrame >= 25U) {
-    lastFrame = now;
-    renderEffect(now);
-  }
+  moduleRegistry.tickAll(millis());
   delay(5);
 }
