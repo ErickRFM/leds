@@ -12,7 +12,7 @@ protocol = (root / "docs/PROTOCOLO_BLE.md").read_text(encoding="utf-8")
 uuid_pattern = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 uuids = set(re.findall(uuid_pattern, firmware.lower()))
 uuids.discard("00002902-0000-1000-8000-00805f9b34fb")
-assert len(uuids) == 3, f"Expected 3 unique BLE UUIDs; got {uuids}"
+assert len(uuids) == 4, f"Expected RGB V1 plus read-only public ID UUID; got {uuids}"
 assert uuids <= set(re.findall(uuid_pattern, android.lower())), "UUID mismatch with Android"
 assert uuids <= set(re.findall(uuid_pattern, protocol.lower())), "UUID mismatch with protocol docs"
 

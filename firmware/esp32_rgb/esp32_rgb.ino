@@ -22,6 +22,7 @@ constexpr char DEVICE_NAME[] = "RGB-ESP32";
 constexpr char SERVICE_UUID[] = "4b9d0001-7a5e-4d4c-ae88-c8c70d3ab211";
 constexpr char WRITE_UUID[] = "4b9d0002-7a5e-4d4c-ae88-c8c70d3ab211";
 constexpr char STATE_UUID[] = "4b9d0003-7a5e-4d4c-ae88-c8c70d3ab211";
+constexpr char PUBLIC_ID_UUID[] = "4b9d0004-7a5e-4d4c-ae88-c8c70d3ab211";
 
 enum class Mode : uint8_t { NONE, RAINBOW, BREATHE, FADE };
 struct RgbState {
@@ -267,6 +268,12 @@ void setup() {
       STATE_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
   stateCharacteristic->addDescriptor(new BLE2902());
   stateCharacteristic->setValue(stateString().c_str());
+
+  // Optional V4 identity characteristic. Public identifier only; no
+  // password, token, PoP or ownership/authentication claim.
+  BLECharacteristic* publicId = service->createCharacteristic(
+      PUBLIC_ID_UUID, BLECharacteristic::PROPERTY_READ);
+  publicId->setValue(deviceIdentity.value().c_str());
   service->start();
 
   BLEAdvertising* advertising = BLEDevice::getAdvertising();

@@ -7,6 +7,7 @@ Nombre anunciado: `RGB-ESP32` (ESP32 clásico con Bluetooth LE).
 | Servicio | `4b9d0001-7a5e-4d4c-ae88-c8c70d3ab211` | Discover |
 | Comando | `4b9d0002-7a5e-4d4c-ae88-c8c70d3ab211` | WRITE with response |
 | Estado | `4b9d0003-7a5e-4d4c-ae88-c8c70d3ab211` | READ + NOTIFY, CCCD 0x2902 |
+| Identidad pública V4 (opcional) | `4b9d0004-7a5e-4d4c-ae88-c8c70d3ab211` | READ únicamente; 16 caracteres ASCII hexadecimales, NO es secreto |
 
 Todos los comandos se escriben como texto ASCII/UTF-8, sin nueva línea, hasta 48 bytes.
 
@@ -28,7 +29,7 @@ Los clientes pueden admitir el estado anterior de 6 campos, pero el firmware nue
 Para un comando inválido se notifica `ERR,INVALID_COMMAND`; no modifica el estado del LED.
 
 ## Sincronización
-Android habilita notificaciones mediante CCCD y espera confirmación; después lee STATE. Solo cuando READ termina satisfactoriamente declara GATT Ready. Todas las operaciones GATT deben serializarse y el estado de la UI debe distinguir cambios locales de valores confirmados.
+Android habilita notificaciones mediante CCCD y espera confirmación; después lee STATE. En V4 lee opcionalmente la característica de identidad pública antes de READY. En firmware anterior, que no la anuncia, mantiene compatibilidad RGB; nunca interpreta el ID como prueba de propiedad. Solo al finalizar lectura y validación del estado declara GATT Ready. Todas las operaciones GATT deben serializarse y el estado de la UI debe distinguir cambios locales de valores confirmados.
 
 ## Seguridad y limitaciones
 Firmware **experimental**: no incluye emparejamiento seguro ni autorización BLE. Cualquier cliente BLE cercano que conozca el UUID podría enviar comandos. Antes de distribución fuera de laboratorio, implementar bonding/enrolamiento de dispositivo y autorización de escrituras; no asumir que la cercanía protege el dispositivo.
