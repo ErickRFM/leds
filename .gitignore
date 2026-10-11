@@ -26,3 +26,8 @@ Thumbs.db
 
 # local Windows build distribution
 android/.tools/
+
+# V4 private factory provisioning: NEVER commit per-device credentials or QR kits.
+firmware/esp32_rgb/config/FactoryProvisioning.h
+local-validation/
+**/provisioning-qr.json

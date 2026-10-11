@@ -15,6 +15,7 @@
 #include "core/RgbCommandCodec.h"
 #include "core/DeviceIdentity.h"
 #include "core/RgbSettingsStore.h"
+#include "core/PhysicalProvisioningMode.h"
 
 constexpr uint8_t LED_R = 27, LED_G = 25, LED_B = 26;
 constexpr bool COMMON_ANODE = true;  // Set false for verified common cathode.
@@ -35,6 +36,7 @@ RgbState rgb;
 BLECharacteristic* stateCharacteristic = nullptr;
 volatile bool connected = false;
 bool connectedPreviously = false;
+uint32_t physicalProvisionHoldStarted = 0;
 uint32_t effectStarted = 0;
 esp32core::RgbSettingsStore rgbStorage;
 bool rgbDirty = false;
@@ -239,6 +241,12 @@ void setup() {
     Serial.println("ERROR: V4 identity NVS unavailable; control services disabled");
     while (true) delay(1000);
   }
+  // Only personalized firmware can enter Wi-Fi onboarding. This runs BEFORE
+  // legacy BLE/GATT and SoftAP are started, preventing duplicate BLE stacks.
+  if (esp32core::factory::beginIfPhysicalRequest()) return;
+#if RGB_V4_PERSONALIZED
+  pinMode(0, INPUT_PULLUP); // BOOT, observed only after the ESP32 has started.
+#endif
   esp32core::RgbSaved previous{};
   if (rgbStorage.load(previous)) {
     rgb.r = previous.red;
@@ -291,6 +299,23 @@ void setup() {
 }
 
 void loop() {
+  if (esp32core::factory::tick()) {
+    delay(20);
+    return;
+  }
+#if RGB_V4_PERSONALIZED
+  // BOOT must be held AFTER power-on, for 5 s. It is a recovery gesture,
+  // not a network command. GPIO0 remains excluded from PinManager leases.
+  if (digitalRead(0) == LOW) {
+    if (physicalProvisionHoldStarted == 0) physicalProvisionHoldStarted = millis();
+    else if (static_cast<uint32_t>(millis() - physicalProvisionHoldStarted) >= 5000U) {
+      Serial.println("Physical provisioning request accepted; restarting");
+      esp32core::factory::requestAfterPhysicalHold();
+    }
+  } else {
+    physicalProvisionHoldStarted = 0;
+  }
+#endif
   if (!connected && connectedPreviously) {
     delay(120);
     BLEDevice::startAdvertising();
