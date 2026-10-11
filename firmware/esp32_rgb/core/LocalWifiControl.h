@@ -185,6 +185,39 @@ class LocalWifiControl final {
       }
       server_.send(202, "application/json", "{\"status\":\"RUNNING\"}");
     });
+    server_.on("/v2/lab/sequence", HTTP_POST, [this]() {
+      if (!authorized()) return;
+      int pin = -1;
+      if (!parseInt("pin", 0, 39, pin) || !manualOutputAllowed(pin)) {
+        jsonError(400, "invalid_lab_pin"); return;
+      }
+      String input = server_.arg("steps");
+      if (input.isEmpty() || input.length() > 120 || input.endsWith(",")) {
+        jsonError(400, "invalid_lab_steps"); return;
+      }
+      ExperimentRuntime::Step steps[ExperimentRuntime::kMaxSequenceSteps] = {};
+      size_t count = 0;
+      size_t cursor = 0;
+      bool valid = true;
+      while (cursor < input.length()) {
+        if (count == ExperimentRuntime::kMaxSequenceSteps) { valid = false; break; }
+        int comma = input.indexOf(',', cursor);
+        if (comma < 0) comma = static_cast<int>(input.length());
+        String part = input.substring(cursor, comma);
+        if (part.length() < 5 || part.length() > 6 || part[1] != ':' ||
+            (part[0] != '1' && part[0] != '0')) { valid = false; break; }
+        String durationText = part.substring(2);
+        int duration = 0;
+        if (!decimal(durationText, 100, 2000, duration)) { valid = false; break; }
+        steps[count++] = {part[0] == '1', static_cast<uint16_t>(duration)};
+        cursor = static_cast<size_t>(comma) + 1;
+      }
+      if (!valid || count == 0) { jsonError(400, "invalid_lab_steps"); return; }
+      if (!experiment_.startSequence(pins_, pin, steps, count, millis())) {
+        jsonError(409, "lab_resource_or_time_limit"); return;
+      }
+      server_.send(202, "application/json", "{\"status\":\"RUNNING\"}");
+    });
     server_.on("/v2/lab/stop", HTTP_POST, [this]() {
       if (!authorized()) return;
       experiment_.stop(pins_);
@@ -265,6 +298,17 @@ class LocalWifiControl final {
     server_.send(status, "application/json",
                  String("{\"error\":\"") + code + "\"}");
   }
+  static bool decimal(const String& text, int min, int max, int& out) {
+    if (text.isEmpty() || text.length() > 4) return false;
+    for (size_t i = 0; i < text.length(); ++i) {
+      if (text[i] < '0' || text[i] > '9') return false;
+    }
+    int value = text.toInt();
+    if (value < min || value > max) return false;
+    out = value;
+    return true;
+  }
+
   bool parseInt(const char* name, int min, int max, int& out) {
     String s = server_.arg(name);
     if (s.isEmpty() || s.length() > 4) return false;

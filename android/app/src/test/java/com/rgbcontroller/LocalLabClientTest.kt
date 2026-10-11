@@ -18,6 +18,16 @@ class LocalLabClientTest {
         assertFalse(LocalLabClient.validPassword("x".repeat(64)))
     }
 
+    @Test fun validatesBoundedDeclarativeSteps() {
+        assertTrue(LocalLabClient.validSequence("1:500,0:500,1:300"))
+        assertFalse(LocalLabClient.validSequence("1:500,"))
+        assertFalse(LocalLabClient.validSequence("1:50,0:500"))
+        assertFalse(LocalLabClient.validSequence("1:2500"))
+        assertFalse(LocalLabClient.validSequence("2:500"))
+        assertFalse(LocalLabClient.validSequence("1:2000,".repeat(17)))
+        assertFalse(LocalLabClient.validSequence("1:2000,".repeat(11).dropLast(1)))
+    }
+
     @Test fun pinPoliciesRejectDangerousValues() {
         assertTrue(LocalLabClient.allowedOutput(18))
         assertFalse(LocalLabClient.allowedOutput(0))
