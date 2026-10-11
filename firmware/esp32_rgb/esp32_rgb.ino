@@ -13,6 +13,7 @@
 #include "modules/LedRgbModule.h"
 #include "core/LocalWifiControl.h"
 #include "core/RgbCommandCodec.h"
+#include "core/DeviceIdentity.h"
 
 constexpr uint8_t LED_R = 27, LED_G = 25, LED_B = 26;
 constexpr bool COMMON_ANODE = true;  // Set false for verified common cathode.
@@ -186,17 +187,23 @@ void renderEffect(uint32_t now) {
 }
 
 // Static storage, no heap allocation and no second BLE implementation.
+esp32core::DeviceIdentity deviceIdentity;
 esp32core::PinManager pinManager;
 esp32core::ModuleRegistry moduleRegistry;
 esp32core::LedRgbModule rgbModule(
     LED_R, LED_G, LED_B, COMMON_ANODE,
     renderStatic, renderEffect,
     []() { return rgb.mode != Mode::NONE; });
-esp32core::LocalWifiControl wifiLab(pinManager, stateString, applyRgbCommand);
+esp32core::LocalWifiControl wifiLab(pinManager, stateString, applyRgbCommand,
+    []() { return deviceIdentity.value(); });
 
 
 void setup() {
   Serial.begin(115200);
+  if (!deviceIdentity.begin()) {
+    Serial.println("ERROR: V4 identity NVS unavailable; control services disabled");
+    while (true) delay(1000);
+  }
   if (!moduleRegistry.add(rgbModule) || !moduleRegistry.startAll(pinManager)) {
     Serial.println("ERROR: RGB module failed to reserve/attach PWM");
     while (true) delay(1000);
