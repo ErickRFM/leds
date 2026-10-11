@@ -7,7 +7,9 @@
 - Ninguna credencial ESP32 se incluye en el modelo ni se almacena.
 - Pruebas JVM de roundtrip Unicode, actualización, corrupción, límites y nombres.
 
-## Pendiente
-Conectar la pantalla Programas cuando finalice la integración de GPIO/RGB; el editor se está modificando en los PR #52/#56.
-Esta entrega aislada no cambia firmware, comunicación BLE/Wi-Fi, OTA, ni navegación. No expone el almacenamiento fuera del app sandbox.
-Verificación requerida: testDebugUnitTest, lintDebug, assembleDebug y comprobar recuperación tras cierre de proceso antes de declarar funcional la UX.
+## UI y alcance
+La pantalla Programas unificada conserva GPIO, RGB y Arduino C++, y añade el panel Mis proyectos: Guardar, Abrir y Eliminar con confirmación. Al abrir un proyecto se recupera el texto, nunca se envía a la placa por sí solo.
+Esta entrega no modifica firmware, comunicación BLE/Wi-Fi, OTA ni rutas de navegación. No expone archivos fuera del almacenamiento privado de Android.
+
+## Validación pendiente
+Exigir testDebugUnitTest, lintDebug y assembleDebug; pruebas Android reales de guardado, cierre forzado, reapertura, rotación, corrupción recuperable y caracteres Unicode. Si hay fallo al leer una biblioteca, no se sobrescribe silenciosamente con cero proyectos.
