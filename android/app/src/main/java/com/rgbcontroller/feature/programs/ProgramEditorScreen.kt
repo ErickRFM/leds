@@ -191,7 +191,7 @@ fun ProgramEditorScreen() {
                 selected = project.language.name
                 fileName = project.name
                 if (project.language == ProgramLanguage.LAB_SCRIPT) {
-                    laboratoryMode = if (Regex("""(?m)^\\s*RGB\\s+""").containsMatchIn(project.source)) "RGB" else "GPIO"
+                    laboratoryMode = if (Regex("""(?m)^\s*RGB\s+""").containsMatchIn(project.source)) "RGB" else "GPIO"
                 }
                 notice = "Proyecto abierto: " + project.name + ". No se envió código a la placa."
             }
