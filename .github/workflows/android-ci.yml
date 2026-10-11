@@ -48,6 +48,8 @@ jobs:
         run: python3 scripts/check-release-safety.py
       - name: OTA slot budget logic regression
         run: python3 scripts/check-firmware-budget.py --self-test
+      - name: V4 read-only BLE identity contract
+        run: python3 scripts/check-v4-ble-id.py
       - name: V4 identity and truthful security capability gate
         run: python3 scripts/check-v4-identity.py
       - name: V4 device identity codec host tests
