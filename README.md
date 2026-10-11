@@ -40,3 +40,6 @@ Tema oscuro mate/tema claro seleccionable, navegación compacta, conexión con e
 
 ## ESP32 Control Center V2 (en desarrollo)
 Fundación modular F0/F1 sobre la versión RGB V1.1 respaldada en `baseline/rgb-controller-v1.1`. La V2 incorpora `PinManager`, `ModuleRegistry` y adaptador LED; Wi-Fi y control GPIO remoto siguen pendientes por seguridad. Consulta `docs/PLAN_MAESTRO_V2.md` y `docs/V2_FOUNDATION.md`.
+
+## Wi-Fi y laboratorio (desarrollo experimental)
+La V2 dispone de SoftAP de laboratorio y panel Android debug para GPIO, ADC, Wi-Fi y secuencias limitadas. No está habilitado control general desde Internet ni OTA. Ver `docs/WIFI_LAB_V2.md` para configuración y advertencias de seguridad.
