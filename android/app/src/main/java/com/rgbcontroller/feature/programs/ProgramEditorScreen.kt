@@ -183,6 +183,20 @@ fun ProgramEditorScreen() {
             MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.bodySmall)
 
+        CodeProjectsPanel(
+            source = source,
+            language = language,
+            onOpen = { project ->
+                source = project.source
+                selected = project.language.name
+                fileName = project.name
+                if (project.language == ProgramLanguage.LAB_SCRIPT) {
+                    laboratoryMode = if (Regex("""(?m)^\\s*RGB\\s+""").containsMatchIn(project.source)) "RGB" else "GPIO"
+                }
+                notice = "Proyecto abierto: " + project.name + ". No se envió código a la placa."
+            }
+        )
+
         if (language == ProgramLanguage.LAB_SCRIPT) {
             Text("Motor de ejecución", style = MaterialTheme.typography.titleSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
