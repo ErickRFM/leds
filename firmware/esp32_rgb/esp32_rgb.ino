@@ -12,6 +12,7 @@
 #include "core/ModuleRegistry.h"
 #include "modules/LedRgbModule.h"
 #include "core/LocalWifiControl.h"
+#include "core/RgbCommandCodec.h"
 
 constexpr uint8_t LED_R = 27, LED_G = 25, LED_B = 26;
 constexpr bool COMMON_ANODE = true;  // Set false for verified common cathode.
@@ -82,33 +83,6 @@ void reject() {
   }
 }
 
-bool parseSet(const String& line, uint8_t& r, uint8_t& g, uint8_t& b, uint8_t& brightness) {
-  int rr = -1, gg = -1, bb = -1, br = -1;
-  char trailing = 0;
-  if (sscanf(line.c_str(), "SET,%d,%d,%d,%d%c", &rr, &gg, &bb, &br, &trailing) != 4) return false;
-  if (rr < 0 || rr > 255 || gg < 0 || gg > 255 || bb < 0 || bb > 255 ||
-      br < 0 || br > 255) return false;
-  r = static_cast<uint8_t>(rr);
-  g = static_cast<uint8_t>(gg);
-  b = static_cast<uint8_t>(bb);
-  brightness = static_cast<uint8_t>(br);
-  return true;
-}
-
-bool parseEffect(const String& line, Mode& mode, uint16_t& speed) {
-  char name[16] = {0};
-  int value = 0;
-  char trailing = 0;
-  if (sscanf(line.c_str(), "FX,%15[^,],%d%c", name, &value, &trailing) != 2) return false;
-  if (value < 10 || value > 1000) return false;
-  if (strcmp(name, "RAINBOW") == 0) mode = Mode::RAINBOW;
-  else if (strcmp(name, "BREATHE") == 0) mode = Mode::BREATHE;
-  else if (strcmp(name, "FADE") == 0) mode = Mode::FADE;
-  else return false;
-  speed = static_cast<uint16_t>(value);
-  return true;
-}
-
 class ServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer*) override {
     connected = true;
@@ -124,30 +98,49 @@ class ServerCallbacks : public BLEServerCallbacks {
 // the new AP-only laboratory transport. Invalid input never changes PWM.
 bool applyRgbCommand(const String& cmd) {
   String line = cmd;
-  if (line.isEmpty() || line.length() > 48) return false;
   line.trim();
-  if (line == "GET") { publishState(); return true; }
-  if (line == "OFF") { rgb.power = false; renderStatic(); publishState(); return true; }
-  if (line == "ON") {
-    rgb.power = true;
-    if (rgb.mode == Mode::NONE) renderStatic();
-    publishState(); return true;
-  }
-  if (line == "FX,STOP") {
-    rgb.mode = Mode::NONE;
-    renderStatic(); publishState(); return true;
-  }
-  uint8_t r, g, b, brightness;
-  if (parseSet(line, r, g, b, brightness)) {
-    rgb.r = r; rgb.g = g; rgb.b = b; rgb.brightness = brightness;
-    rgb.mode = Mode::NONE; rgb.power = true;
-    renderStatic(); publishState(); return true;
-  }
-  Mode mode;
-  uint16_t speed;
-  if (parseEffect(line, mode, speed)) {
-    rgb.mode = mode; rgb.speed = speed; rgb.power = true;
-    effectStarted = millis(); publishState(); return true;
+  esp32core::RgbCommand command;
+  if (!esp32core::parseRgbCommand(line.c_str(), command)) return false;
+  switch (command.action) {
+    case esp32core::RgbAction::Get:
+      publishState();
+      return true;
+    case esp32core::RgbAction::Off:
+      rgb.power = false;
+      renderStatic();
+      publishState();
+      return true;
+    case esp32core::RgbAction::On:
+      rgb.power = true;
+      if (rgb.mode == Mode::NONE) renderStatic();
+      publishState();
+      return true;
+    case esp32core::RgbAction::StopEffect:
+      rgb.mode = Mode::NONE;
+      renderStatic();
+      publishState();
+      return true;
+    case esp32core::RgbAction::Set:
+      rgb.r = command.red;
+      rgb.g = command.green;
+      rgb.b = command.blue;
+      rgb.brightness = command.brightness;
+      rgb.mode = Mode::NONE;
+      rgb.power = true;
+      renderStatic();
+      publishState();
+      return true;
+    case esp32core::RgbAction::StartEffect:
+      switch (command.effect) {
+        case esp32core::RgbEffect::Rainbow: rgb.mode = Mode::RAINBOW; break;
+        case esp32core::RgbEffect::Breathe: rgb.mode = Mode::BREATHE; break;
+        case esp32core::RgbEffect::Fade: rgb.mode = Mode::FADE; break;
+      }
+      rgb.speed = command.speed;
+      rgb.power = true;
+      effectStarted = millis();
+      publishState();
+      return true;
   }
   return false;
 }
