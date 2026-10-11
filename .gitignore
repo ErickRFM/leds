@@ -31,3 +31,5 @@ android/.tools/
 firmware/esp32_rgb/config/FactoryProvisioning.h
 local-validation/
 **/provisioning-qr.json
+
+**/lab-access-private.json
