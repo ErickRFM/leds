@@ -28,6 +28,8 @@ jobs:
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic -I tests/stubs tests/experiment_runtime_test.cpp -o /tmp/experiment_runtime_test
           /tmp/experiment_runtime_test
 
+      - name: Read-only diagnostics security contract
+        run: python3 scripts/check-diagnostics-contract.py
       - name: Production release safety gate
         run: python3 scripts/check-release-safety.py
       - name: OTA slot budget logic regression
