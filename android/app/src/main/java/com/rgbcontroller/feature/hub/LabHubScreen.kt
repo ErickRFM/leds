@@ -34,6 +34,7 @@ fun LabHubScreen() {
     var busy by remember { mutableStateOf(false) }
     var selectedPin by remember { mutableIntStateOf(18) }
     var adcValue by remember { mutableStateOf<Int?>(null) }
+    var steps by remember { mutableStateOf("1:500,0:500,1:500,0:500") }
 
     fun action(block: suspend () -> Unit) {
         if (!debug || busy) return
@@ -202,6 +203,19 @@ fun LabHubScreen() {
                     message = "Experimento detenido y pin liberado."
                 } }) { Text("Detener") }
         }
+        Spacer(Modifier.height(12.dp))
+        Text("Secuencia editable: 1=HIGH, 0=LOW; tiempo en ms por paso.",
+            style = MaterialTheme.typography.bodySmall)
+        OutlinedTextField(value = steps, onValueChange = { steps = it.take(120) },
+            label = { Text("Instrucciones (máximo 16 pasos)") },
+            modifier = Modifier.fillMaxWidth(), singleLine = false)
+        Spacer(Modifier.height(8.dp))
+        Button(enabled = debug && !busy && LocalLabClient.validKey(secret) &&
+            LocalLabClient.validSequence(steps),
+            onClick = { action {
+                client.sequence(secret, 19, steps)
+                message = "Secuencia declarativa iniciada en GPIO19."
+            } }) { Text("Ejecutar secuencia") }
         Spacer(Modifier.height(20.dp))
         Text("LED RGB por Wi-Fi", style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
