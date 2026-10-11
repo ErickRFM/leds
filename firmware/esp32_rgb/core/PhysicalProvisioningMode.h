@@ -18,6 +18,7 @@ namespace esp32core {
 namespace factory {
 constexpr uint32_t kMagic = 0xA9C14F72u;
 RTC_NOINIT_ATTR uint32_t softBootMarker;
+// Never expose a credential in Serial, QR response or normal BLE readback.
 static volatile bool credentialsAccepted = false;
 static bool active = false;
 static uint32_t enteredAt = 0;
