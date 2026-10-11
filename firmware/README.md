@@ -10,11 +10,11 @@ O compilar:
 ```sh
 arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
 arduino-cli core install esp32:esp32@3.0.7 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-arduino-cli compile --fqbn esp32:esp32:esp32 firmware/esp32_rgb
+arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=min_spiffs firmware/esp32_rgb
 ```
 Luego probar con nRF Connect Android: servicio BLE y UUIDs en `docs/PROTOCOLO_BLE.md`, activar notificaciones en STATE, enviar ASCII `SET,255,0,0,255`, `OFF`, `ON`, `FX,RAINBOW,120`, `FX,STOP`.
 
-Nota: el control se realiza por Bluetooth Low Energy, no por Wi-Fi ni potenciómetros. Firmware de laboratorio sin emparejamiento seguro; no utilizar fuera de pruebas hasta añadir autorización.
+Nota: además de BLE V1, V2 incluye Wi-Fi **SoftAP solo para laboratorio** con clave independiente por Serial. No expone API HTTP a la red del router; no hay TLS ni emparejamiento BLE seguro. Firmware de laboratorio: no utilizar fuera de pruebas supervisadas hasta añadir autorización.
 
 ## Fundacion modular V2
 El sketch existente mantiene el protocolo BLE V1. El nucleo en `core/` gestiona las reservas de recursos y el ciclo de vida, y `modules/LedRgbModule.h` controla PWM y el tick. Restricciones ESP32 clasico; no usar este mapa GPIO en otra placa sin validacion. Ver `docs/V2_FOUNDATION.md`.
@@ -27,3 +27,13 @@ arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=min_spiffs firmware
 ```
 
 **No flashees** este perfil en un ESP32 cuya flash real no hayas identificado. El perfil mantiene dos slots OTA en placas compatibles, pero **no implementa todavía actualizaciones OTA ni rollback de aplicación**. Si no dispones de 4 MB, hay que optimizar firmware o elegir otra variante de placa; no cambiar a No OTA sin evaluar la recuperación.
+
+## Placa real verificada (esptool)
+- ESP32-D0WD-V3, revisión 3.1, cristal 40 MHz.
+- Flash identificada: **4 MB, 3.3 V**.
+- Interfaz de programación: CH9102, el puerto COM cambia según PC.
+- Consulta de solo lectura: `esptool --chip esp32 --port <PUERTO> flash-id`.
+- El esquema V2 `PartitionScheme=min_spiffs` cabe en esta capacidad **según el tamaño de flash**, pero la compatibilidad de circuito, particiones instaladas y rendimiento solo se confirman cargando y probando la placa. **Antes de cambiar el esquema de particiones, respaldar firmware/datos si hacen falta**.
+- No registrar la MAC ni credenciales de SoftAP/clave API en logs públicos, Git ni screenshots.
+
+Instrucciones de ensayo físico y recuperación: [Hardware confirmado](../docs/HARDWARE_ESP32.md).
