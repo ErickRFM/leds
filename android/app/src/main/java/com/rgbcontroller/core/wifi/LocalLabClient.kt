@@ -1,5 +1,6 @@
 package com.rgbcontroller.core.wifi
 
+import com.rgbcontroller.core.lab.LabExperimentLibrary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -15,22 +16,7 @@ class LocalLabClient {
         fun allowedInput(pin: Int) = allowedOutput(pin) || pin in setOf(34,35,36,39)
         fun allowedAnalog(pin: Int) = pin in setOf(32,33,34,35,36,39)
         fun validKey(key: String) = Regex("[a-fA-F0-9]{16}").matches(key)
-        fun validSequence(steps: String): Boolean {
-            if (steps.isBlank() || steps.length > 120 || steps.endsWith(",")) return false
-            val parts = steps.split(',')
-            if (parts.size !in 1..16) return false
-            var total = 0
-            for (part in parts) {
-                val fields = part.split(':')
-                if (fields.size != 2 || fields[0] !in listOf("0", "1")) return false
-                if (!fields[1].all(Char::isDigit) || fields[1].length !in 3..4) return false
-                val duration = fields[1].toIntOrNull() ?: return false
-                if (duration !in 100..2000) return false
-                total += duration
-                if (total > 20000) return false
-            }
-            return true
-        }
+        fun validSequence(steps: String) = LabExperimentLibrary.parse(steps) != null
         fun validSsid(ssid: String) = ssid.isNotBlank() && ssid.toByteArray(Charsets.UTF_8).size <= 32
         fun validPassword(password: String) = password.isEmpty() || password.length in 8..63
     }
