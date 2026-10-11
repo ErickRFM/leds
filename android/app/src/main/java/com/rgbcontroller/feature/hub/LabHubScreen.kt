@@ -38,6 +38,7 @@ fun LabHubScreen() {
     val debug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     val client = remember { LocalLabClient() }
     val preferences = remember(context) { PreferencesRepository(context.applicationContext) }
+    val savedProjects by preferences.experimentProjects.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var secret by remember { mutableStateOf("") } // Never persist credentials
     var status by remember { mutableStateOf<JSONObject?>(null) }
@@ -59,6 +60,7 @@ fun LabHubScreen() {
     var wifiBrightness by remember { mutableFloatStateOf(255f) }
     var nextHigh by remember { mutableStateOf(true) }
     var nextDuration by remember { mutableStateOf("500") }
+    var projectName by remember { mutableStateOf("") }
 
     // Sampling belongs to this Composable lifecycle; navigation away cancels the job.
     // No GPS, no background process, no unbounded retention and no device secrets in CSV.
@@ -388,6 +390,37 @@ fun LabHubScreen() {
                     message = "Borrador local cargado."
                 }
             } }, enabled = debug && !busy) { Text("Cargar") }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text("Proyectos locales · máximo 8", style = MaterialTheme.typography.titleSmall)
+        OutlinedTextField(value = projectName,
+            onValueChange = { projectName = it.take(24).filterNot(Char::isISOControl) },
+            label = { Text("Nombre del proyecto") },
+            singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = debug && !busy)
+        Button(onClick = { action {
+            preferences.saveExperimentProject(projectName, steps)
+            message = "Proyecto guardado localmente; sin credenciales de dispositivo."
+        } }, enabled = debug && !busy && projectName.isNotBlank() && parsedSteps != null) {
+            Text("Guardar proyecto")
+        }
+        savedProjects.forEach { project ->
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(project.name, style = MaterialTheme.typography.titleSmall)
+                    Text(project.sequence, style = MaterialTheme.typography.bodySmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = {
+                            steps = project.sequence
+                            projectName = project.name
+                            message = "Proyecto cargado para editar o ejecutar."
+                        }, enabled = debug && !busy) { Text("Abrir") }
+                        TextButton(onClick = { action {
+                            preferences.deleteExperimentProject(project.name)
+                            message = "Proyecto eliminado del teléfono."
+                        } }, enabled = debug && !busy) { Text("Eliminar") }
+                    }
+                }
+            }
         }
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(value = steps, onValueChange = { steps = it.take(120) },
