@@ -153,6 +153,13 @@ fun ProgramEditorScreen() {
                 enabled = inspection.acceptedForEditing,
                 onClick = { exporter.launch(if (language == ProgramLanguage.ARDUINO_CPP) "programa.ino" else "programa.txt") }
             ) { Text("Exportar") }
+            OutlinedButton(
+                enabled = inspection.acceptedForEditing,
+                onClick = {
+                    clipboard.setText(androidx.compose.ui.text.AnnotatedString(source))
+                    notice = "Código copiado al portapapeles."
+                }
+            ) { Text("Copiar") }
         }
         Text(notice, color = if (inspection.acceptedForEditing)
             MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
