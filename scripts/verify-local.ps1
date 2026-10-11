@@ -5,7 +5,8 @@ param(
     [string]$Board = "",
     [string]$Port = "",
     [switch]$UploadFirmware,
-    [switch]$SkipAndroid
+    [switch]$SkipAndroid,
+    [switch]$ValidateProfileOnly
 )
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
@@ -16,7 +17,15 @@ $profilePath = Join-Path $repo "config\esp32-board.env"
 if (-not (Test-Path $profilePath)) { throw "Missing ESP32 board profile: $profilePath" }
 $profile = @{}
 foreach ($line in (Get-Content -Path $profilePath)) {
-    if ($line -match '^([A-Z_]+)=(.+)$') { $profile[$Matches[1]] = $Matches[2] }
+    $trimmed = $line.Trim()
+    if ([string]::IsNullOrWhiteSpace($trimmed) -or $trimmed.StartsWith("#")) { continue }
+    if ($trimmed -match '^([A-Z0-9_]+)=(.+)$') {
+        $key = $Matches[1]
+        if ($profile.ContainsKey($key)) { throw "Duplicate board profile key: $key" }
+        $profile[$key] = $Matches[2].Trim()
+    } else {
+        throw "Invalid ESP32 board profile entry: $trimmed"
+    }
 }
 $expectedBoard = $profile["ARDUINO_FQBN"]
 $coreVersion = $profile["ARDUINO_ESP32_CORE"]
@@ -28,6 +37,10 @@ if ($Board -ne $expectedBoard) {
     throw "Board $Board differs from the audited 4 MB layout ($expectedBoard). Update the profile only after a partition and recovery audit."
 }
 Write-Host "Verified board profile: $Board (ESP32 core $coreVersion)"
+if ($ValidateProfileOnly) {
+    Write-Host "PASS: ESP32 board profile validation (no build, no flash)"
+    return
+}
 New-Item -ItemType Directory -Force -Path $reports | Out-Null
 
 if (-not $SkipAndroid) {
