@@ -48,3 +48,7 @@ La V2 dispone de SoftAP de laboratorio y panel Android debug para GPIO, ADC, Wi-
 
 ## Hardware ESP32 confirmado
 La placa de prueba usa **ESP32-D0WD-V3 (rev. 3.1)** con **4 MB de flash** según consulta `esptool`. Para firmware Wi-Fi+BLE seleccionar **ESP32 Dev Module → Partition Scheme: Minimal SPIFFS (1.9MB APP with OTA)** en Arduino IDE. Flash compatible no equivale a OTA funcional. Consulta [hardware y QA](docs/HARDWARE_ESP32.md). No subir identificadores únicos de la placa al repo.
+
+## Estado V3 incremental (laboratorio)
+
+Se integraron mejoras de proyectos locales, editor visual de secuencias, telemetría ADC1, diagnósticos y control RGB completo en el SoftAP de laboratorio. Las compilaciones usan un perfil de ESP32 de 4 MB y CI controla el presupuesto de firmware; el release Android permanece deshabilitado hasta asegurar BLE y realizar QA física. **No es una versión lista para producción.** Ver [estado V3 y bloqueos F00–F16](docs/ESTADO_V3.md) y [seguimiento de integración](https://github.com/ErickRFM/leds/issues/28).
