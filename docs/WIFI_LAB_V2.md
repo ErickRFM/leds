@@ -51,3 +51,6 @@ almacenados en NVS: contraseña WPA2 de 16 hex y clave API de 16 hex.
 - El estado V2 no será PRODUCTION_READY hasta completar todos estos puntos.
 
 **Esta fase NO equivale a entrega completa de F2–F9.**
+
+## Requisito de memoria y particiones
+El perfil Wi-Fi+BLE necesita >1.3 MB de app. El CI usa `esp32:esp32:esp32:PartitionScheme=min_spiffs` (4 MB de flash, dos slots de ~1.9 MB), sujeto a verificación física. Una compilación válida para esta partición no certifica que la placa real tenga flash suficiente ni que OTA funcione.
