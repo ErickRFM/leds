@@ -11,7 +11,7 @@ import java.net.URLEncoder
 class LocalLabClient {
     companion object {
         const val BASE = "http://192.168.4.1"
-        fun allowedOutput(pin: Int) = pin in setOf(16,17,18,19,21,22,23,25,26,27,32,33)
+        fun allowedOutput(pin: Int) = pin in setOf(18,19,21,22,23)
         fun allowedInput(pin: Int) = allowedOutput(pin) || pin in setOf(34,35,36,39)
         fun allowedAnalog(pin: Int) = pin in setOf(32,33,34,35,36,39)
         fun validKey(key: String) = Regex("[a-fA-F0-9]{16}").matches(key)
@@ -20,6 +20,7 @@ class LocalLabClient {
     }
 
     suspend fun status(key: String) = request("GET", "/v2/status", key)
+    suspend fun firmwareInfo(key: String) = request("GET", "/v2/firmware", key)
     suspend fun scan(key: String) = request("GET", "/v2/wifi/scan", key, readTimeout = 15000)
     suspend fun connectWifi(key: String, ssid: String, password: String): JSONObject {
         require(validSsid(ssid) && validPassword(password))

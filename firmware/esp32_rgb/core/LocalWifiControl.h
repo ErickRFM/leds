@@ -4,6 +4,8 @@
 #include <WebServer.h>
 #include <Preferences.h>
 #include <esp_system.h>
+#include <esp_ota_ops.h>
+#include <esp_partition.h>
 #include "PinManager.h"
 #include "ExperimentRuntime.h"
 
@@ -61,6 +63,24 @@ class LocalWifiControl final {
         ",\"experimentActive\":" + String(experiment_.active() ? "true":"false") + "}";
       server_.send(200, "application/json", json);
     });
+    server_.on("/v2/firmware", HTTP_GET, [this]() {
+      if (!authorized()) return;
+      const esp_partition_t* current = esp_ota_get_running_partition();
+      const esp_partition_t* next = esp_ota_get_next_update_partition(nullptr);
+      String body = "{\"firmwareVersion\":\"1.2.0-lab\",";
+      body += "\"activePartition\":\"";
+      body += current ? escape(String(current->label)) : "unknown";
+      body += "\",\"activeSize\":";
+      body += current ? String(current->size) : "0";
+      body += ",\"nextPartition\":\"";
+      body += next ? escape(String(next->label)) : "none";
+      body += "\",\"nextSize\":";
+      body += next ? String(next->size) : "0";
+      body += ",\"otaSlotPresent\":";
+      body += next ? "true" : "false";
+      body += ",\"otaUploadEnabled\":false}";
+      server_.send(200, "application/json", body);
+    });
     server_.on("/v2/wifi/scan", HTTP_GET, [this]() {
       if (!authorized()) return;
       int count = WiFi.scanNetworks(false, true);
@@ -94,6 +114,11 @@ class LocalWifiControl final {
       if (!parseInt("pin", 0, 39, pin) || !parseInt("value", 0, 1, value) ||
           !PinManager::canUse(pin, PinFunction::DigitalOutput)) {
         jsonError(400, "invalid_gpio"); return;
+      }
+      // Restrict experimental outputs further until the exact ESP32 module
+      // and PSRAM/peripheral pin assignments are confirmed on the bench.
+      if (!manualOutputAllowed(pin)) {
+        jsonError(403, "gpio_not_approved"); return;
       }
       if (!pins_.belongsTo(pin, kManual)) {
         if (!pins_.acquire(pin, kManual, PinFunction::DigitalOutput)) {
@@ -151,7 +176,7 @@ class LocalWifiControl final {
           !parseInt("cycles", 1, 20, count)) {
         jsonError(400, "invalid_experiment"); return;
       }
-      if (!experiment_.start(pins_, pin, interval, count, millis())) {
+      if (!manualOutputAllowed(pin) || !experiment_.start(pins_, pin, interval, count, millis())) {
         jsonError(409, "experiment_conflict"); return;
       }
       server_.send(202, "application/json", "{\"status\":\"RUNNING\"}");
@@ -192,6 +217,9 @@ class LocalWifiControl final {
  private:
   static constexpr const char* kManual = "gpio.manual";
   static constexpr const char* kRead = "gpio.read";
+  static constexpr bool manualOutputAllowed(int pin) {
+    return pin == 18 || pin == 19 || pin == 21 || pin == 22 || pin == 23;
+  }
   PinManager& pins_;
   RgbState rgbState_;
   RgbCommand rgbCommand_;

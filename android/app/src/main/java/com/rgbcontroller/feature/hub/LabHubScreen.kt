@@ -26,6 +26,7 @@ fun LabHubScreen() {
     val scope = rememberCoroutineScope()
     var secret by remember { mutableStateOf("") } // Never persist credentials
     var status by remember { mutableStateOf<JSONObject?>(null) }
+    var firmware by remember { mutableStateOf<JSONObject?>(null) }
     var networks by remember { mutableStateOf<JSONArray?>(null) }
     var ssid by remember { mutableStateOf("") }
     var wifiPassword by remember { mutableStateOf("") }
@@ -88,6 +89,24 @@ fun LabHubScreen() {
                     Text("Experimento: " + if (data.optBoolean("experimentActive")) "Activo" else "Inactivo")
                 }
             }
+        }
+        Spacer(Modifier.height(20.dp))
+        Text("Diagnóstico de firmware", style = MaterialTheme.typography.titleMedium)
+        Text("Inspección de particiones OTA. La actualización no está activada.",
+            style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
+            onClick = { action {
+                firmware = client.firmwareInfo(secret)
+                message = "Particiones leídas directamente desde el ESP32."
+            } }) { Text("Comprobar espacio para OTA") }
+        firmware?.let { data ->
+            Text("Firmware: " + data.optString("firmwareVersion"))
+            Text("Actual: " + data.optString("activePartition") +
+                " · " + data.optLong("activeSize") + " bytes")
+            Text("Siguiente: " + data.optString("nextPartition") +
+                " · " + data.optLong("nextSize") + " bytes")
+            Text("Partición candidata: " + if (data.optBoolean("otaSlotPresent")) "Sí" else "No")
+            Text("Subir firmware OTA: DESHABILITADO", color = MaterialTheme.colorScheme.error)
         }
         Spacer(Modifier.height(20.dp))
         Text("Wi-Fi del ESP32", style = MaterialTheme.typography.titleMedium)
