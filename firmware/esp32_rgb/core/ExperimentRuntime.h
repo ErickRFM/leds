@@ -35,15 +35,28 @@ class ExperimentRuntime final {
   }
 
   void tick(PinManager& pins, uint32_t nowMs) {
-    if (!active_ || static_cast<uint32_t>(nowMs - startedAtMs_) >= kMaxDurationMs) {
-      if (active_) stop(pins);
+    if (!active_) return;
+    // Fail safe at the global runtime limit, including normal millis() wraparound.
+    if (static_cast<uint32_t>(nowMs - startedAtMs_) >= kMaxDurationMs) {
+      stop(pins);
       return;
     }
-    if (static_cast<uint32_t>(nowMs - stepAtMs_) < steps_[stepIndex_].durationMs) return;
-    ++stepIndex_;
-    if (stepIndex_ >= stepCount_) { stop(pins); return; }
-    stepAtMs_ = nowMs;
-    digitalWrite(pin_, steps_[stepIndex_].high ? HIGH : LOW);
+    // Wi-Fi operations may block loop() for longer than a sequence step.
+    // Fast-forward elapsed steps, without replaying delayed HIGH pulses.
+    // Never extend an output's duration by resetting the step clock to "now".
+    const size_t previous = stepIndex_;
+    while (stepIndex_ < stepCount_ &&
+           static_cast<uint32_t>(nowMs - stepAtMs_) >= steps_[stepIndex_].durationMs) {
+      stepAtMs_ += steps_[stepIndex_].durationMs;
+      ++stepIndex_;
+    }
+    if (stepIndex_ >= stepCount_) {
+      stop(pins);
+      return;
+    }
+    if (stepIndex_ != previous) {
+      digitalWrite(pin_, steps_[stepIndex_].high ? HIGH : LOW);
+    }
   }
 
   void stop(PinManager& pins) {
