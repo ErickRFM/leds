@@ -2,6 +2,8 @@ package com.rgbcontroller.core.data
 
 import android.content.Context
 import com.rgbcontroller.core.lab.LabExperimentLibrary
+import com.rgbcontroller.core.lab.LabProject
+import com.rgbcontroller.core.lab.LabProjects
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -18,6 +20,7 @@ class PreferencesRepository(private val context: Context) {
         val FAVORITE_COLORS = stringPreferencesKey("favorite_colors")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val EXPERIMENT_DRAFT = stringPreferencesKey("experiment_draft")
+        val EXPERIMENT_PROJECTS = stringPreferencesKey("experiment_projects_v3")
     }
 
     val themeMode: Flow<String> = context.dataStore.data
@@ -35,6 +38,23 @@ class PreferencesRepository(private val context: Context) {
     suspend fun saveExperimentDraft(sequence: String) {
         require(LabExperimentLibrary.parse(sequence) != null) { "Invalid experiment" }
         context.dataStore.edit { prefs -> prefs[EXPERIMENT_DRAFT] = sequence }
+    }
+
+    val experimentProjects: Flow<List<LabProject>> = context.dataStore.data
+        .map { prefs -> LabProjects.decode(prefs[EXPERIMENT_PROJECTS] ?: "") }
+
+    suspend fun saveExperimentProject(name: String, sequence: String) {
+        context.dataStore.edit { prefs ->
+            val before = LabProjects.decode(prefs[EXPERIMENT_PROJECTS] ?: "")
+            prefs[EXPERIMENT_PROJECTS] = LabProjects.encode(LabProjects.upsert(before, name, sequence))
+        }
+    }
+
+    suspend fun deleteExperimentProject(name: String) {
+        context.dataStore.edit { prefs ->
+            val before = LabProjects.decode(prefs[EXPERIMENT_PROJECTS] ?: "")
+            prefs[EXPERIMENT_PROJECTS] = LabProjects.encode(LabProjects.remove(before, name))
+        }
     }
 
     val lastDeviceMac: Flow<String?> = context.dataStore.data
