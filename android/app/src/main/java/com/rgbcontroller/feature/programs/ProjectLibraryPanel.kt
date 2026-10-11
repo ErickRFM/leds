@@ -48,16 +48,19 @@ fun ProjectLibraryPanel(
     var projects by remember { mutableStateOf<List<CodeProject>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(true) }
+    var storageUnreadable by remember { mutableStateOf(false) }
     var pendingOpen by remember { mutableStateOf<CodeProject?>(null) }
     var pendingDelete by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(store) {
         try {
             projects = store.list()
+            storageUnreadable = false
             error = null
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
+            storageUnreadable = true
             error = "No se pudo leer la biblioteca. No se sobrescribirá: " +
                 (failure.message ?: "archivo no válido")
         } finally {
@@ -85,7 +88,7 @@ fun ProjectLibraryPanel(
                 modifier = Modifier.fillMaxWidth()
             )
             Button(
-                enabled = !busy && error == null &&
+                enabled = !busy && !storageUnreadable &&
                     ProgramSourcePolicy.inspect(source).acceptedForEditing && name.isNotBlank(),
                 onClick = {
                     val selectedName = name.trim()
