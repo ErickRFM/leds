@@ -74,12 +74,21 @@ jobs:
       - name: Build debug APK
         working-directory: android
         run: gradle assembleDebug --stacktrace
-      - name: Upload APK
+      - name: Prepare APK test manifest
+        run: |
+          cd android/app/build/outputs/apk/debug
+          sha256sum app-debug.apk > SHA256SUMS.txt
+          echo "Git commit: $GITHUB_SHA" > build-info.txt
+          echo "DEBUG LAB ONLY — not authorized for public release" >> build-info.txt
+      - name: Upload APK and checksums
         uses: actions/upload-artifact@v4
         with:
           name: rgb-controller-debug
           if-no-files-found: error
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/build/outputs/apk/debug/SHA256SUMS.txt
+            android/app/build/outputs/apk/debug/build-info.txt
 
   firmware:
     runs-on: ubuntu-latest
@@ -98,3 +107,23 @@ jobs:
           arduino-cli compile --fqbn "$ARDUINO_FQBN" --output-dir build/firmware firmware/esp32_rgb
       - name: Check firmware fits dual OTA slot
         run: python3 scripts/check-firmware-budget.py build/firmware
+      - name: Prepare firmware test manifest
+        run: |
+          . ./config/esp32-board.env
+          (
+            echo "Git commit: $GITHUB_SHA"
+            echo "Board: $ARDUINO_FQBN"
+            echo "Arduino ESP32 core: $ARDUINO_ESP32_CORE"
+            echo "LAB ONLY — no signed OTA, no physical validation"
+          ) > build/firmware/build-info.txt
+          cd build/firmware
+          sha256sum ./*.bin > SHA256SUMS.txt
+      - name: Upload firmware for supervised testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp32-lab-4mb-firmware
+          if-no-files-found: error
+          path: |
+            build/firmware/*.bin
+            build/firmware/SHA256SUMS.txt
+            build/firmware/build-info.txt
