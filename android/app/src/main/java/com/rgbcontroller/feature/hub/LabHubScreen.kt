@@ -3,24 +3,31 @@ package com.rgbcontroller.feature.hub
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.provider.Settings
+import android.os.SystemClock
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.lab.LabExperimentLibrary
 import com.rgbcontroller.core.model.RgbDeviceState
+import com.rgbcontroller.core.sensors.AdcSample
+import com.rgbcontroller.core.sensors.AdcTelemetry
 import com.rgbcontroller.core.hardware.Esp32BoardPinout
 import com.rgbcontroller.core.hardware.PinKind
 import com.rgbcontroller.core.lab.LabStep
 import com.rgbcontroller.core.ui.SectionHeader
 import com.rgbcontroller.core.wifi.LocalLabClient
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
@@ -35,6 +42,7 @@ fun LabHubScreen() {
     var secret by remember { mutableStateOf("") } // Never persist credentials
     var status by remember { mutableStateOf<JSONObject?>(null) }
     var firmware by remember { mutableStateOf<JSONObject?>(null) }
+    var diagnostics by remember { mutableStateOf<JSONObject?>(null) }
     var networks by remember { mutableStateOf<JSONArray?>(null) }
     var ssid by remember { mutableStateOf("") }
     var wifiPassword by remember { mutableStateOf("") }
@@ -42,6 +50,8 @@ fun LabHubScreen() {
     var busy by remember { mutableStateOf(false) }
     var selectedPin by remember { mutableIntStateOf(18) }
     var adcValue by remember { mutableStateOf<Int?>(null) }
+    var adcHistory by remember { mutableStateOf(emptyList<AdcSample>()) }
+    var samplingAdc by remember { mutableStateOf(false) }
     var steps by remember { mutableStateOf("1:500,0:500,1:500,0:500") }
     var wifiRed by remember { mutableFloatStateOf(255f) }
     var wifiGreen by remember { mutableFloatStateOf(120f) }
@@ -49,6 +59,30 @@ fun LabHubScreen() {
     var wifiBrightness by remember { mutableFloatStateOf(255f) }
     var nextHigh by remember { mutableStateOf(true) }
     var nextDuration by remember { mutableStateOf("500") }
+
+    // Sampling belongs to this Composable lifecycle; navigation away cancels the job.
+    // No GPS, no background process, no unbounded retention and no device secrets in CSV.
+    LaunchedEffect(samplingAdc) {
+        if (!samplingAdc) return@LaunchedEffect
+        val started = SystemClock.elapsedRealtime()
+        try {
+            for (i in 0 until 40) {
+                val elapsed = SystemClock.elapsedRealtime() - started
+                if (elapsed >= 20_000L) break
+                val reading = client.readAnalog(secret, 34).optInt("raw", -1)
+                adcHistory = AdcTelemetry.append(adcHistory, AdcSample(elapsed, reading))
+                adcValue = reading
+                delay(500L)
+            }
+            message = "Muestreo ADC1 finalizado. Valores brutos sin calibrar."
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            message = error.message ?: "Muestreo ADC1 interrumpido."
+        } finally {
+            samplingAdc = false
+        }
+    }
 
     fun action(block: suspend () -> Unit) {
         if (!debug || busy) return
@@ -111,6 +145,24 @@ fun LabHubScreen() {
                     Text("Experimento: " + if (data.optBoolean("experimentActive")) "Activo" else "Inactivo")
                 }
             }
+        }
+        Spacer(Modifier.height(20.dp))
+        Text("Diagnóstico de hardware y recursos", style = MaterialTheme.typography.titleMedium)
+        Text("Datos del dispositivo; sin direcciones MAC ni contraseñas.",
+            style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
+            onClick = { action {
+                diagnostics = client.diagnostics(secret)
+                message = "Diagnóstico actualizado desde el ESP32."
+            } }) { Text("Consultar diagnóstico") }
+        diagnostics?.let { info ->
+            Text("Chip: " + info.optString("chip") + " · rev " + info.optInt("chipRevision"))
+            Text("Flash: " + info.optLong("flashBytes") + " bytes")
+            Text("RAM libre: " + info.optLong("freeHeap") + " bytes")
+            Text("RAM mínima observada: " + info.optLong("minFreeHeap") + " bytes")
+            Text("Reinicio (código): " + info.optInt("resetReason"))
+            Text("Wi-Fi RSSI: " + info.optInt("wifiRssi") + " dBm (0 = sin conexión)")
+            Text("GPIO reservados: " + info.optInt("leasedPins"))
         }
         Spacer(Modifier.height(20.dp))
         Text("Diagnóstico de firmware", style = MaterialTheme.typography.titleMedium)
@@ -226,6 +278,49 @@ fun LabHubScreen() {
                 message = "ADC1 leído desde el ESP32."
             } }) { Text("Leer ADC GPIO34") }
         adcValue?.let { Text("ADC: " + it) }
+        Spacer(Modifier.height(10.dp))
+        Text("Telemetría ADC1 (máximo 40 muestras / 20 segundos)",
+            style = MaterialTheme.typography.titleSmall)
+        Text("Lecturas RAW 12 bits; no son voltios calibrados ni un osciloscopio.",
+            style = MaterialTheme.typography.bodySmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = {
+                adcHistory = emptyList()
+                samplingAdc = true
+            }, enabled = debug && !busy && !samplingAdc && LocalLabClient.validKey(secret)) {
+                Text("Iniciar")
+            }
+            OutlinedButton(onClick = { samplingAdc = false },
+                enabled = samplingAdc) { Text("Detener") }
+        }
+        if (samplingAdc) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        if (adcHistory.isNotEmpty()) {
+            val minValue = adcHistory.minOf { it.raw }
+            val maxValue = adcHistory.maxOf { it.raw }
+            Text("Muestras: " + adcHistory.size + " · min: " + minValue + " · max: " + maxValue,
+                style = MaterialTheme.typography.bodySmall)
+            val graphColor = MaterialTheme.colorScheme.primary
+            Canvas(modifier = Modifier.fillMaxWidth().height(150.dp)) {
+                val samples = adcHistory
+                if (samples.size >= 2) {
+                    for (i in 1 until samples.size) {
+                        val x1 = size.width * (i - 1).toFloat() / (samples.size - 1)
+                        val x2 = size.width * i.toFloat() / (samples.size - 1)
+                        val y1 = size.height * (1f - samples[i - 1].raw / 4095f)
+                        val y2 = size.height * (1f - samples[i].raw / 4095f)
+                        drawLine(graphColor, Offset(x1, y1), Offset(x2, y2),
+                            strokeWidth = 2.dp.toPx())
+                    }
+                }
+            }
+            OutlinedButton(onClick = {
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/csv"
+                    putExtra(Intent.EXTRA_TEXT, AdcTelemetry.csv(adcHistory))
+                }
+                context.startActivity(Intent.createChooser(send, "Compartir datos ADC1"))
+            }, enabled = !samplingAdc) { Text("Exportar CSV") }
+        }
         Spacer(Modifier.height(20.dp))
         Text("Laboratorio protegido", style = MaterialTheme.typography.titleMedium)
         Text("Prueba declarativa: GPIO19 se alterna 5 veces, cada 500 ms.",
