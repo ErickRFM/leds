@@ -15,3 +15,6 @@ arduino-cli compile --fqbn esp32:esp32:esp32 firmware/esp32_rgb
 Luego probar con nRF Connect Android: servicio BLE y UUIDs en `docs/PROTOCOLO_BLE.md`, activar notificaciones en STATE, enviar ASCII `SET,255,0,0,255`, `OFF`, `ON`, `FX,RAINBOW,120`, `FX,STOP`.
 
 Nota: el control se realiza por Bluetooth Low Energy, no por Wi-Fi ni potenciómetros. Firmware de laboratorio sin emparejamiento seguro; no utilizar fuera de pruebas hasta añadir autorización.
+
+## Fundacion modular V2
+El sketch existente mantiene el protocolo BLE V1. El nucleo en `core/` gestiona las reservas de recursos y el ciclo de vida, y `modules/LedRgbModule.h` controla PWM y el tick. Restricciones ESP32 clasico; no usar este mapa GPIO en otra placa sin validacion. Ver `docs/V2_FOUNDATION.md`.
