@@ -183,6 +183,18 @@ fun ProgramEditorScreen() {
             MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.bodySmall)
 
+        CodeProjectsPanel(
+            source = source,
+            language = language,
+            onOpen = { project ->
+                source = project.source
+                selected = project.language.name
+                fileName = project.name
+                notice = "Código abierto desde Mis proyectos: " + project.name +
+                    ". No se envió nada a la placa."
+            }
+        )
+
         if (language == ProgramLanguage.LAB_SCRIPT) {
             Text("Motor de ejecución", style = MaterialTheme.typography.titleSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
