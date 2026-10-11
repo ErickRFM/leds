@@ -24,6 +24,7 @@ import android.os.ParcelUuid
 import androidx.core.content.ContextCompat
 import com.rgbcontroller.core.model.RgbDeviceState
 import com.rgbcontroller.core.model.RgbDeviceCommand
+import com.rgbcontroller.core.model.DeviceIdCodec
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,6 +41,7 @@ class BleManager(private val context: Context) {
         val SERVICE_UUID: UUID = UUID.fromString("4b9d0001-7a5e-4d4c-ae88-c8c70d3ab211")
         val COMMAND_CHAR_UUID: UUID = UUID.fromString("4b9d0002-7a5e-4d4c-ae88-c8c70d3ab211")
         val STATE_CHAR_UUID: UUID = UUID.fromString("4b9d0003-7a5e-4d4c-ae88-c8c70d3ab211")
+        val PUBLIC_ID_CHAR_UUID: UUID = UUID.fromString("4b9d0004-7a5e-4d4c-ae88-c8c70d3ab211")
         private val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
         const val WRITE_TIMEOUT_MS = 5000L
     }
@@ -59,10 +61,13 @@ class BleManager(private val context: Context) {
 
     private val _rgbState = MutableStateFlow<RgbDeviceState?>(null)
     val rgbState: StateFlow<RgbDeviceState?> = _rgbState.asStateFlow()
+    private val _publicDeviceId = MutableStateFlow<String?>(null)
+    val publicDeviceId: StateFlow<String?> = _publicDeviceId.asStateFlow()
 
     private var gatt: BluetoothGatt? = null
     private var commandCharacteristic: BluetoothGattCharacteristic? = null
     private var stateCharacteristic: BluetoothGattCharacteristic? = null
+    private var publicIdCharacteristic: BluetoothGattCharacteristic? = null
     private var scanning = false
     private val pending = ArrayDeque<String>()
     private var writeInFlight = false
@@ -176,6 +181,7 @@ class BleManager(private val context: Context) {
         closeConnection()
         armConnectionTimeout()
         _rgbState.value = null
+        _publicDeviceId.value = null
         _deviceState.value = "Esperando estado del ESP32"
         _connectionState.value = BleConnectionState.Connecting
         try {
@@ -248,6 +254,7 @@ class BleManager(private val context: Context) {
             }
             commandCharacteristic = command
             stateCharacteristic = state
+            publicIdCharacteristic = service.getCharacteristic(PUBLIC_ID_CHAR_UUID)
             val started = if (Build.VERSION.SDK_INT >= 33) {
                 remote.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) ==
                     BluetoothStatusCodes.SUCCESS
@@ -273,12 +280,8 @@ class BleManager(private val context: Context) {
             remote: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int
         ) {
             if (remote !== gatt) return
-            if (status != BluetoothGatt.GATT_SUCCESS || characteristic.uuid != STATE_CHAR_UUID) {
-                lostLink("Error al leer estado inicial")
-                return
-            }
             @Suppress("DEPRECATION")
-            completeInitialRead(characteristic.value)
+            handleInitialRead(remote, characteristic, characteristic.value, status)
         }
 
         override fun onCharacteristicRead(
@@ -286,11 +289,7 @@ class BleManager(private val context: Context) {
             value: ByteArray, status: Int
         ) {
             if (remote !== gatt) return
-            if (status != BluetoothGatt.GATT_SUCCESS || characteristic.uuid != STATE_CHAR_UUID) {
-                lostLink("Error al leer estado inicial")
-                return
-            }
-            completeInitialRead(value)
+            handleInitialRead(remote, characteristic, value, status)
         }
 
         override fun onCharacteristicChanged(remote: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
@@ -319,6 +318,35 @@ class BleManager(private val context: Context) {
         }
     }
 
+    private fun handleInitialRead(
+        remote: BluetoothGatt, characteristic: BluetoothGattCharacteristic,
+        bytes: ByteArray?, status: Int
+    ) {
+        when (characteristic.uuid) {
+            STATE_CHAR_UUID -> {
+                if (status != BluetoothGatt.GATT_SUCCESS) {
+                    lostLink("Error al leer estado RGB inicial")
+                } else {
+                    completeInitialRead(bytes)
+                }
+            }
+            PUBLIC_ID_CHAR_UUID -> {
+                // Optional identity read: incompatible old firmware still controls RGB.
+                _publicDeviceId.value = if (status == BluetoothGatt.GATT_SUCCESS) {
+                    DeviceIdCodec.accept(bytes?.toString(Charsets.UTF_8).orEmpty())
+                } else null
+                finishInitialRead()
+            }
+        }
+    }
+
+    private fun finishInitialRead() {
+        handler.removeCallbacks(connectionTimeout)
+        retries = 0
+        _connectionState.value = BleConnectionState.Ready
+        drainQueue()
+    }
+
     private fun completeInitialRead(bytes: ByteArray?) {
         val frame = bytes?.toString(Charsets.UTF_8).orEmpty()
         val parsed = RgbDeviceState.parse(frame)
@@ -326,12 +354,16 @@ class BleManager(private val context: Context) {
             lostLink("El ESP32 devolvió un estado RGB inválido")
             return
         }
-        handler.removeCallbacks(connectionTimeout)
-        retries = 0
         _deviceState.value = frame
         _rgbState.value = parsed
-        _connectionState.value = BleConnectionState.Ready
-        drainQueue()
+        val identity = publicIdCharacteristic
+        val remote = gatt
+        if (identity != null && remote != null) {
+            val started = try { remote.readCharacteristic(identity) }
+                catch (_: SecurityException) { false }
+            if (started) return
+        }
+        finishInitialRead()
     }
 
     private fun acceptState(bytes: ByteArray?) {
@@ -400,6 +432,7 @@ class BleManager(private val context: Context) {
         closeConnection()
         activeDevice = null
         _rgbState.value = null
+        _publicDeviceId.value = null
         _connectionState.value = BleConnectionState.Disconnected
     }
 
@@ -410,6 +443,8 @@ class BleManager(private val context: Context) {
             writeInFlight = false
             commandCharacteristic = null
             stateCharacteristic = null
+            publicIdCharacteristic = null
+            _publicDeviceId.value = null
         }
         val old = gatt
         gatt = null
