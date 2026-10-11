@@ -52,3 +52,9 @@ La placa de prueba usa **ESP32-D0WD-V3 (rev. 3.1)** con **4 MB de flash** según
 ## Estado V3 incremental (laboratorio)
 
 Se integraron mejoras de proyectos locales, editor visual de secuencias, telemetría ADC1, diagnósticos y control RGB completo en el SoftAP de laboratorio. Las compilaciones usan un perfil de ESP32 de 4 MB y CI controla el presupuesto de firmware; el release Android permanece deshabilitado hasta asegurar BLE y realizar QA física. **No es una versión lista para producción.** Ver [estado V3 y bloqueos F00–F16](docs/ESTADO_V3.md) y [seguimiento de integración](https://github.com/ErickRFM/leds/issues/28).
+
+### Probar V3 en Android y ESP32 físico
+
+Para instalar una **versión de laboratorio**, abre las [últimas ejecuciones de CI](https://github.com/ErickRFM/leds/actions/workflows/android-ci.yml), selecciona una ejecución verde en `main`, descarga `rgb-controller-debug` y verifica su `SHA256SUMS.txt`. `esp32-lab-4mb-firmware` contiene binarios coincidentes pero **no flashea automáticamente**; antes de actualizar el ESP32, verifica particiones, cableado y recuperación USB. Sigue la [guía de pruebas reales](docs/PRUEBAS_REALES_V3.md).
+
+En la app debug, abre `Ajustes → Centro ESP32`. El autodiagnóstico valida la API y genera un reporte sin contraseñas; no prueba que el LED esté cableado correctamente. Conexión Wi-Fi local requiere `ESP32-Control-Lab` (sin Internet) y ruta `192.168.4.1`. **Release público continúa bloqueado por seguridad BLE pendiente.**
