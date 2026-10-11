@@ -23,3 +23,6 @@ Pruebas físicas pendientes:
 F2 debe asegurar identidad/vinculación antes de ofrecer Wi-Fi provisioning.
 F3 compartirá estado único, autorización central y request IDs.
 F4 deberá pasar por PinManager y controlar estados seguros al detenerse.
+
+## Nota de estado posterior
+Este documento describe la fundación histórica F0/F1. Desde las PR #16, #17 y #18 existen Wi-Fi SoftAP, GPIO/ADC y laboratorio declarativo **en modo de depuración**. Ver `docs/ESTADO_V2.md` para el estado actual; los controles de producción y hardware físico permanecen pendientes.

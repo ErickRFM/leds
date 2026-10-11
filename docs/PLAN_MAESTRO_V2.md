@@ -9,16 +9,16 @@
 ## Fases y criterios
 | Fase | Objetivo | Estado | Puerta de salida |
 | --- | --- | --- | --- |
-| F0 | Respaldo, mapa GPIO y auditoría | Parcial | Baseline y criterios documentados |
-| F1 | Core de módulos, PinManager y LED | En desarrollo | CI firmware + Android + pruebas host |
-| F2 | Vinculación segura y aprovisionamiento Wi-Fi por BLE | Pendiente | Contraseñas protegidas y prueba física |
-| F3 | HTTP/WebSocket local y estado único | Pendiente | Autenticación, reconexión e idempotencia |
-| F4 | GPIO + control Android | Pendiente | Exclusividad de recursos, restricciones y estado seguro |
-| F5 | LED RGB integrado en ambos transportes | Pendiente | Regresiones V1 BLE y control Wi-Fi |
-| F6 | Sensores, ADC y telemetría | Pendiente | Valores reales y errores recuperables |
-| F7 | Laboratorio declarativo | Pendiente | Límites, cancelación y liberación de recursos |
-| F8 | OTA A/B y rollback | Pendiente | Firma/versión y recuperación demostrada |
-| F9 | UX, accesibilidad, QA y release | Pendiente | Pruebas físicas y CI completos |
+| F0 | Respaldo, mapa GPIO y auditoría | Parcial: falta placa física | Baseline y criterios documentados |
+| F1 | Core de módulos, PinManager y LED | Integrada CI | CI firmware + Android + pruebas host |
+| F2 | Vinculación segura y aprovisionamiento Wi-Fi por BLE | Parcial: SoftAP WPA2 laboratorio; BLE seguro pendiente | Contraseñas protegidas y prueba física |
+| F3 | HTTP/WebSocket local y estado único | Parcial: HTTP SoftAP clave API; TLS/WebSocket LAN pendiente | Autenticación, reconexión e idempotencia |
+| F4 | GPIO + control Android | Parcial: GPIO 18/19/21/22/23 laboratorio; PWM genérico pendiente | Exclusividad de recursos, restricciones y estado seguro |
+| F5 | LED RGB integrado en ambos transportes | Parcial: BLE V1 + comandos RGB HTTP SoftAP; QA físico pendiente | Regresiones V1 BLE y control Wi-Fi |
+| F6 | Sensores, ADC y telemetría | Parcial: lectura digital/ADC1 y diagnóstico; drivers/historial pendiente | Valores reales y errores recuperables |
+| F7 | Laboratorio declarativo | Parcial: secuencia HIGH/LOW limitada y cancelación; editor avanzado pendiente | Límites, cancelación y liberación de recursos |
+| F8 | OTA A/B y rollback | Parcial: inspección de slots; carga/firma/rollback pendiente | Firma/versión y recuperación demostrada |
+| F9 | UX, accesibilidad, QA y release | Parcial: hub Compose debug, CI verde; QA físico y visual pendiente | Pruebas físicas y CI completos |
 
 ## Garantías del desarrollo
 1. RGB V1 BLE se preserva (UUID, SET/GET/ON/OFF/FX/STATE).
@@ -39,5 +39,13 @@
 - python3 scripts/check-contracts.py
 - g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/firmware_core_test.cpp -o /tmp/firmware_core_test
 - /tmp/firmware_core_test
-- arduino-cli compile --fqbn esp32:esp32:esp32 firmware/esp32_rgb
+- arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=min_spiffs firmware/esp32_rgb
 - Android: gradle testDebugUnitTest lintDebug assembleDebug
+
+## Registro de PRs reales V2
+- [#11](https://github.com/ErickRFM/leds/pull/11): F0/F1 y pruebas de núcleo.
+- [#16](https://github.com/ErickRFM/leds/pull/16): API Wi-Fi SoftAP, GPIO, ADC y app Android debug.
+- [#17](https://github.com/ErickRFM/leds/pull/17): inspección de particiones OTA y restauración Wi-Fi.
+- [#18](https://github.com/ErickRFM/leds/pull/18): intérprete declarativo acotado y pruebas host.
+
+Los bloqueos de producción siguen abiertos en [#12](https://github.com/ErickRFM/leds/issues/12), [#13](https://github.com/ErickRFM/leds/issues/13), [#14](https://github.com/ErickRFM/leds/issues/14) y [#15](https://github.com/ErickRFM/leds/issues/15). **No se completan automáticamente por CI**.
