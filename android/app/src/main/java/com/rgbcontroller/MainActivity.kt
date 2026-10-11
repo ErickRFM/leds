@@ -112,7 +112,10 @@ fun MainAppNavHost(bleManager: BleManager, preferencesRepository: PreferencesRep
             startDestination = Screen.Devices.route,
             modifier = Modifier.padding(padding)
         ) {
-            composable(Screen.Devices.route) { DevicesScreen(bleManager, preferencesRepository) }
+            composable(Screen.Devices.route) {
+                DevicesScreen(bleManager, preferencesRepository,
+                    onInspectSecurity = { navController.navigate(Screen.Hub.route) })
+            }
             composable(Screen.Control.route) { ControlScreen(bleManager) }
             composable(Screen.Presets.route) { PresetsScreen(bleManager, preferencesRepository) }
             composable(Screen.Effects.route) { EffectsScreen(bleManager) }

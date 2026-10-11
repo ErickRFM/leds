@@ -23,7 +23,11 @@ import com.rgbcontroller.core.ui.SectionHeader
 
 @SuppressLint("MissingPermission")
 @Composable
-fun DevicesScreen(bleManager: BleManager, preferencesRepository: PreferencesRepository) {
+fun DevicesScreen(
+    bleManager: BleManager,
+    preferencesRepository: PreferencesRepository,
+    onInspectSecurity: () -> Unit
+) {
     val connection by bleManager.connectionState.collectAsState()
     val devices by bleManager.discoveredDevices.collectAsState()
     val lastMac by preferencesRepository.lastDeviceMac.collectAsState(initial = null)
@@ -83,6 +87,19 @@ fun DevicesScreen(bleManager: BleManager, preferencesRepository: PreferencesRepo
             Text("Último dispositivo conocido: …${lastMac!!.takeLast(5)}",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp)) {
+                Text("Conexión de laboratorio (BLE V1)",
+                    style = MaterialTheme.typography.titleSmall)
+                Text("Estar conectado NO significa ser propietario del ESP32. " +
+                    "La vinculación segura V4 todavía está pendiente.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = onInspectSecurity) {
+                    Text("Consultar identidad y seguridad")
+                }
+            }
         }
         Spacer(Modifier.height(18.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
