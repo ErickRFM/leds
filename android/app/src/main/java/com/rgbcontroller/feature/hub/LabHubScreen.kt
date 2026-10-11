@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.lab.LabExperimentLibrary
 import com.rgbcontroller.core.model.RgbDeviceState
+import com.rgbcontroller.core.model.DeviceIdentityInfo
 import com.rgbcontroller.core.sensors.AdcSample
 import com.rgbcontroller.core.sensors.AdcTelemetry
 import com.rgbcontroller.core.hardware.Esp32BoardPinout
@@ -47,6 +48,7 @@ fun LabHubScreen() {
     var firmware by remember { mutableStateOf<JSONObject?>(null) }
     var diagnostics by remember { mutableStateOf<JSONObject?>(null) }
     var qaReport by remember { mutableStateOf<String?>(null) }
+    var deviceIdentity by remember { mutableStateOf<DeviceIdentityInfo?>(null) }
     var networks by remember { mutableStateOf<JSONArray?>(null) }
     var ssid by remember { mutableStateOf("") }
     var wifiPassword by remember { mutableStateOf("") }
@@ -149,6 +151,36 @@ fun LabHubScreen() {
                     Text("Recursos ocupados: " + data.optInt("leasedPins"))
                     Text("Experimento: " + if (data.optBoolean("experimentActive")) "Activo" else "Inactivo")
                 }
+            }
+        }
+        Spacer(Modifier.height(20.dp))
+        Text("Identidad V4 del ESP32", style = MaterialTheme.typography.titleMedium)
+        Text("ID público persistente, NO es contraseña, QR de vinculación ni prueba de propiedad.",
+            style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
+            onClick = { action {
+                deviceIdentity = null
+                val info = client.identity(secret)
+                deviceIdentity = DeviceIdentityInfo(
+                    schemaVersion = info.optInt("schemaVersion", -1),
+                    deviceId = info.optString("deviceId"),
+                    secureProvisioning = info.optBoolean("secureProvisioning", false),
+                    legacyBleWriteUnauthenticated = info.optBoolean("legacyBleWriteUnauthenticated", true),
+                    ownerBound = info.optBoolean("ownerBound", false)
+                )
+                message = if (deviceIdentity?.validId == true) {
+                    "Identidad V4 recibida desde el ESP32; comprueba seguridad antes de vincular."
+                } else "El firmware no devolvió una identidad V4 válida."
+            } }) { Text("Consultar identidad V4") }
+        deviceIdentity?.let { identity ->
+            Text("ID de este equipo: " +
+                (if (identity.validId) identity.deviceId else "Desconocido"))
+            Text(identity.report, color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall)
+            if (identity.legacyBleWriteUnauthenticated) {
+                Text("BLE V1 sigue aceptando escrituras sin propietario: usar solo en laboratorio.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error)
             }
         }
         Spacer(Modifier.height(20.dp))
