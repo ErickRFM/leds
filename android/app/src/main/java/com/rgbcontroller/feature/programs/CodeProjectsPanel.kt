@@ -33,15 +33,19 @@ fun CodeProjectsPanel(
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("Se guardan en el teléfono, no en el ESP32.") }
     var pendingDelete by remember { mutableStateOf<CodeProject?>(null) }
+    var pendingOpen by remember { mutableStateOf<CodeProject?>(null) }
+    var storageUnreadable by remember { mutableStateOf(false) }
 
     LaunchedEffect(store) {
         try {
             val saved = store.list()
             projects.clear()
             projects.addAll(saved)
+            storageUnreadable = false
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
+            storageUnreadable = true
             message = "No se pudo leer la biblioteca; se conserva el archivo original. " +
                 (error.message ?: "")
         }
@@ -67,7 +71,7 @@ fun CodeProjectsPanel(
                 enabled = !busy
             )
             Button(
-                enabled = !busy && projectName.isNotBlank() &&
+                enabled = !busy && !storageUnreadable && projectName.isNotBlank() &&
                     ProgramSourcePolicy.inspect(source).acceptedForEditing,
                 onClick = {
                     scope.launch {
@@ -116,9 +120,13 @@ fun CodeProjectsPanel(
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(enabled = !busy, onClick = {
-                            projectName = project.name
-                            onOpen(project)
-                            message = "Proyecto abierto: " + project.name
+                            if (source.isNotBlank() && source != project.source) {
+                                pendingOpen = project
+                            } else {
+                                projectName = project.name
+                                onOpen(project)
+                                message = "Proyecto abierto: " + project.name
+                            }
                         }) { Text("Abrir") }
                         TextButton(enabled = !busy, onClick = { pendingDelete = project }) {
                             Text("Eliminar")
@@ -133,6 +141,26 @@ fun CodeProjectsPanel(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+
+    pendingOpen?.let { project ->
+        AlertDialog(
+            onDismissRequest = { pendingOpen = null },
+            title = { Text("¿Reemplazar el código del editor?") },
+            text = { Text("El código actual tiene cambios distintos al proyecto guardado. " +
+                "Si no lo guardaste, se perderá al abrir otro proyecto.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    projectName = project.name
+                    onOpen(project)
+                    message = "Proyecto abierto: " + project.name
+                    pendingOpen = null
+                }) { Text("Abrir de todos modos") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingOpen = null }) { Text("Cancelar") }
+            }
+        )
     }
 
     val target = pendingDelete
