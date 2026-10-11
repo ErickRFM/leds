@@ -17,6 +17,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify board profile consistency
         run: python3 scripts/check-board-profile.py
+      - name: BLE write queue timeout contract
+        run: python3 scripts/check-ble-write-path.py
       - name: Contract regression (BLE RGB V1 + V2 core)
         run: python3 scripts/check-contracts.py
       - name: Host unit tests (no ESP32 required)
