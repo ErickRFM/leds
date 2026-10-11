@@ -30,6 +30,7 @@ fun DevicesScreen(
 ) {
     val connection by bleManager.connectionState.collectAsState()
     val devices by bleManager.discoveredDevices.collectAsState()
+    val publicId by bleManager.publicDeviceId.collectAsState()
     val lastMac by preferencesRepository.lastDeviceMac.collectAsState(initial = null)
     var searched by rememberSaveable { mutableStateOf(false) }
     var requestedAddress by remember { mutableStateOf<String?>(null) }
@@ -81,6 +82,18 @@ fun DevicesScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+        }
+        if (ready) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                if (publicId != null) "Identidad pública ESP32: " + publicId
+                else "Firmware anterior: no anuncia identidad V4 por Bluetooth",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text("Este ID no concede acceso ni comprueba quién es el propietario.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (lastMac != null && !ready) {
             Spacer(Modifier.height(8.dp))
