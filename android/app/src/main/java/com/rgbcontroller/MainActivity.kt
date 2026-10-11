@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -114,6 +115,7 @@ fun MainAppNavHost(bleManager: BleManager, preferencesRepository: PreferencesRep
                     val route = entry?.destination?.route
                     items.forEach { screen ->
                         NavigationBarItem(
+                            modifier = Modifier.testTag("nav_${screen.route}"),
                             icon = { Icon(screen.icon, contentDescription = screen.title) },
                             label = { Text(screen.title) },
                             alwaysShowLabel = true,
