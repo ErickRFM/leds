@@ -15,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Verify board profile consistency
+        run: python3 scripts/check-board-profile.py
       - name: Contract regression (BLE RGB V1 + V2 core)
         run: python3 scripts/check-contracts.py
       - name: Host unit tests (no ESP32 required)
@@ -77,6 +79,9 @@ jobs:
       - name: Install ESP32 board
         run: |
           arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-          arduino-cli core install esp32:esp32@3.0.7 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          . ./config/esp32-board.env
+          arduino-cli core install "esp32:esp32@$ARDUINO_ESP32_CORE" --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
       - name: Compile firmware
-        run: arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=min_spiffs firmware/esp32_rgb
+        run: |
+          . ./config/esp32-board.env
+          arduino-cli compile --fqbn "$ARDUINO_FQBN" firmware/esp32_rgb

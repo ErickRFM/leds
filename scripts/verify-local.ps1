@@ -2,7 +2,7 @@
 # Run from repo root: powershell -ExecutionPolicy Bypass -File .\scripts\verify-local.ps1
 # Requires JDK 17, Android SDK Platform 34, and Arduino CLI.
 param(
-    [string]$Board = "esp32:esp32:esp32",
+    [string]$Board = "",
     [string]$Port = "",
     [switch]$UploadFirmware,
     [switch]$SkipAndroid
@@ -12,6 +12,22 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $reports = Join-Path $repo "local-validation"
 $firmwareDir = Join-Path $repo "firmware\esp32_rgb"
 $arduinoUrl = "https://espressif.github.io/arduino-esp32/package_esp32_index.json"
+$profilePath = Join-Path $repo "config\esp32-board.env"
+if (-not (Test-Path $profilePath)) { throw "Missing ESP32 board profile: $profilePath" }
+$profile = @{}
+foreach ($line in (Get-Content -Path $profilePath)) {
+    if ($line -match '^([A-Z_]+)=(.+)$') { $profile[$Matches[1]] = $Matches[2] }
+}
+$expectedBoard = $profile["ARDUINO_FQBN"]
+$coreVersion = $profile["ARDUINO_ESP32_CORE"]
+if ([string]::IsNullOrWhiteSpace($expectedBoard) -or [string]::IsNullOrWhiteSpace($coreVersion)) {
+    throw "Incomplete board profile"
+}
+if ([string]::IsNullOrWhiteSpace($Board)) { $Board = $expectedBoard }
+if ($Board -ne $expectedBoard) {
+    throw "Board $Board differs from the audited 4 MB layout ($expectedBoard). Update the profile only after a partition and recovery audit."
+}
+Write-Host "Verified board profile: $Board (ESP32 core $coreVersion)"
 New-Item -ItemType Directory -Force -Path $reports | Out-Null
 
 if (-not $SkipAndroid) {
@@ -26,14 +42,14 @@ if (-not $SkipAndroid) {
     Write-Host "Android SHA256: $apkHash"
 }
 
-Write-Host "[2/3] ESP32: compilation using Arduino-ESP32 3.0.7"
+Write-Host "[2/3] ESP32: compilation using Arduino-ESP32 $coreVersion"
 $cli = Get-Command "arduino-cli" -ErrorAction SilentlyContinue
 if (-not $cli) {
     throw "arduino-cli is not installed or not in PATH. Install the official Arduino CLI, then rerun."
 }
 & arduino-cli core update-index --additional-urls $arduinoUrl
 if ($LASTEXITCODE -ne 0) { throw "Cannot update Espressif board index" }
-& arduino-cli core install esp32:esp32@3.0.7 --additional-urls $arduinoUrl
+& arduino-cli core install "esp32:esp32@$coreVersion" --additional-urls $arduinoUrl
 if ($LASTEXITCODE -ne 0) { throw "Arduino ESP32 core install failed" }
 $firmwareOutput = Join-Path $reports "firmware"
 New-Item -ItemType Directory -Force -Path $firmwareOutput | Out-Null
