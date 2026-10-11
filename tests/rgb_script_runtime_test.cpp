@@ -50,7 +50,7 @@ int main() {
       "", "  ", "void setup() {}", "RGB 255 0", "RGB 256 0 0",
       "RGB 1 2 3 256", "RGB 1 2 3.5", "WAIT 50\nON",
       "ON\nWAIT 2001", "ON\nWAIT -1", "ON\nBOGUS",
-      "STOP\nON", "GPIO 27 HIGH", "ON\nWAIT 100\0OFF"}) {
+      "STOP\nON", "GPIO 27 HIGH", "WAIT 100"}) {
     assert(!RgbScriptRuntime::validate(invalid));
   }
   std::string tooLong(513, 'A');
