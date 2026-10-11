@@ -42,6 +42,7 @@ fun LabHubScreen() {
     var secret by remember { mutableStateOf("") } // Never persist credentials
     var status by remember { mutableStateOf<JSONObject?>(null) }
     var firmware by remember { mutableStateOf<JSONObject?>(null) }
+    var diagnostics by remember { mutableStateOf<JSONObject?>(null) }
     var networks by remember { mutableStateOf<JSONArray?>(null) }
     var ssid by remember { mutableStateOf("") }
     var wifiPassword by remember { mutableStateOf("") }
@@ -144,6 +145,24 @@ fun LabHubScreen() {
                     Text("Experimento: " + if (data.optBoolean("experimentActive")) "Activo" else "Inactivo")
                 }
             }
+        }
+        Spacer(Modifier.height(20.dp))
+        Text("Diagnóstico de hardware y recursos", style = MaterialTheme.typography.titleMedium)
+        Text("Datos del dispositivo; sin direcciones MAC ni contraseñas.",
+            style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
+            onClick = { action {
+                diagnostics = client.diagnostics(secret)
+                message = "Diagnóstico actualizado desde el ESP32."
+            } }) { Text("Consultar diagnóstico") }
+        diagnostics?.let { info ->
+            Text("Chip: " + info.optString("chip") + " · rev " + info.optInt("chipRevision"))
+            Text("Flash: " + info.optLong("flashBytes") + " bytes")
+            Text("RAM libre: " + info.optLong("freeHeap") + " bytes")
+            Text("RAM mínima observada: " + info.optLong("minFreeHeap") + " bytes")
+            Text("Reinicio (código): " + info.optInt("resetReason"))
+            Text("Wi-Fi RSSI: " + info.optInt("wifiRssi") + " dBm (0 = sin conexión)")
+            Text("GPIO reservados: " + info.optInt("leasedPins"))
         }
         Spacer(Modifier.height(20.dp))
         Text("Diagnóstico de firmware", style = MaterialTheme.typography.titleMedium)

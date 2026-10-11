@@ -25,6 +25,7 @@ class LocalLabClient {
 
     suspend fun status(key: String) = request("GET", "/v2/status", key)
     suspend fun firmwareInfo(key: String) = request("GET", "/v2/firmware", key)
+    suspend fun diagnostics(key: String) = request("GET", "/v2/diagnostics", key)
     suspend fun scan(key: String) = request("GET", "/v2/wifi/scan", key, readTimeout = 15000)
     suspend fun connectWifi(key: String, ssid: String, password: String): JSONObject {
         require(validSsid(ssid) && validPassword(password))
