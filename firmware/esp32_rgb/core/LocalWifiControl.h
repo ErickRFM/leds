@@ -6,6 +6,12 @@
 #include <esp_system.h>
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
+#if __has_include("../config/FactoryProvisioning.h")
+#define RGB_V4_PRIVATE_LAB_LABEL 1
+#include "../config/FactoryProvisioning.h"
+#else
+#define RGB_V4_PRIVATE_LAB_LABEL 0
+#endif
 #include "PinManager.h"
 #include "ExperimentRuntime.h"
 #include "RgbScriptRuntime.h"
@@ -32,11 +38,19 @@ class LocalWifiControl final {
     String password = prefs_.getString("ap", "");
     String secret = prefs_.getString("key", "");
     if (password.length() != 16) {
+#if RGB_V4_PRIVATE_LAB_LABEL
+      password = esp32factory::kLabApPassword;
+#else
       password = randomKey();
+#endif
       prefs_.putString("ap", password);
     }
     if (secret.length() != 16) {
+#if RGB_V4_PRIVATE_LAB_LABEL
+      secret = esp32factory::kLabAccessKey;
+#else
       secret = randomKey();
+#endif
       prefs_.putString("key", secret);
     }
     accessKey_ = secret;
@@ -49,11 +63,17 @@ class LocalWifiControl final {
       Serial.println("ERROR: protected lab SoftAP failed; HTTP disabled");
       return;
     }
+#if RGB_V4_PRIVATE_LAB_LABEL
+    Serial.println("=== ESP32 LAB ACCESS: PRIVATE FACTORY LABEL ===");
+    Serial.println("Wi-Fi credentials are never printed in personalized builds.");
+    Serial.println("Physical BOOT 5s: rotate old V3 lab credentials to private-label values.");
+#else
     Serial.println("=== ESP32 LAB ACCESS (PHYSICAL SERIAL ONLY) ===");
     Serial.print("SoftAP: ESP32-Control-Lab / password: ");
     Serial.println(password);
     Serial.print("App pairing key (not Wi-Fi password): ");
     Serial.println(accessKey_);
+#endif
     Serial.println("Use only for local bench testing; no TLS / no WAN.");
     // Try any previously provisioned station credentials. This must not
     // block the protected SoftAP or legacy BLE initialization.
