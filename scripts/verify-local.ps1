@@ -71,6 +71,7 @@ if (-not [string]::IsNullOrWhiteSpace($ArduinoCliPath)) {
         }
         if ($env:LOCALAPPDATA) {
             $candidates += Join-Path $env:LOCALAPPDATA "Programs\Arduino CLI\arduino-cli.exe"
+            $candidates += Join-Path $env:LOCALAPPDATA "Programs\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe"
         }
         foreach ($candidate in $candidates) {
             if (Test-Path -LiteralPath $candidate -PathType Leaf) {
