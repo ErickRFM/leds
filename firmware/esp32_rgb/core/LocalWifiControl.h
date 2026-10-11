@@ -9,6 +9,7 @@
 #include "PinManager.h"
 #include "ExperimentRuntime.h"
 #include "RgbScriptRuntime.h"
+#include "CompiCapabilities.h"
 
 namespace esp32core {
 
@@ -95,6 +96,29 @@ class LocalWifiControl final {
         deviceId_() + "\",\"secureProvisioning\":false," +
         "\"legacyBleWriteUnauthenticated\":true," +
         "\"ownerBound\":false}";
+      server_.send(200, "application/json", body);
+    });
+    // Versioned, truthful feature negotiation. This is diagnostic metadata,
+    // NOT evidence of ownership or secure BLE authorization.
+    server_.on("/v2/capabilities", HTTP_GET, [this]() {
+      if (!authorized()) return;
+      const uint32_t features =
+          capabilityBit(Capability::Rgb) |
+          capabilityBit(Capability::Effects) |
+          capabilityBit(Capability::Gpio) |
+          capabilityBit(Capability::Adc) |
+          capabilityBit(Capability::Sequences) |
+          capabilityBit(Capability::Diagnostics);
+      // In particular: do not advertise SecurePairing, FirmwareUpdate,
+      // Automation or SerialMonitor before the corresponding gates pass.
+      const BoardProfile profile = {1, 1, ESP.getFlashChipSize(), features, 0};
+      if (!validProfile(profile)) { jsonError(500, "invalid_capability_profile"); return; }
+      String body = "{\"protocolMajor\":" + String(profile.protocolMajor);
+      body += ",\"protocolMinor\":" + String(profile.protocolMinor);
+      body += ",\"flashBytes\":" + String(profile.flashBytes);
+      body += ",\"capabilityBits\":" + String(profile.advertisedCapabilities);
+      body += ",\"secureBleWrites\":false,\"otaUploadEnabled\":false";
+      body += ",\"runtime\":\"lab\"}";
       server_.send(200, "application/json", body);
     });
     server_.on("/v2/firmware", HTTP_GET, [this]() {
