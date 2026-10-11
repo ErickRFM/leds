@@ -63,3 +63,7 @@ Wi-Fi STA almacena la configuración de red en NVS y al arrancar intenta restaur
 
 ## Editor declarativo de experimentos V2
 La pantalla Centro ESP32 permite introducir secuencias `1:500,0:500,1:300`, donde 1/0 representan HIGH/LOW y el número es duración en milisegundos. Se admiten entre 1 y 16 pasos, cada uno entre 100 y 2000 ms, y máximo 20 segundos totales. Solo GPIO19 está expuesto inicialmente desde la UI. El firmware valida cada valor antes de reservar el GPIO, permite cancelar, libera la reserva y fuerza LOW/INPUT al terminar. No admite Python, C++ ni scripts arbitrarios por red.
+
+### Read-only hardware diagnostics (new)
+
+`GET /v2/diagnostics` is available **only** through the authenticated laboratory SoftAP session with `X-Device-Key` and the existing station-interface rejection. Fields: chip model/revision, flash bytes, current/minimum free heap, uptime, numeric reset reason, station RSSI or zero when disconnected, and reserved pin count. It intentionally omits MAC, SSID, passwords and the API key. This is not a serial boot log, production telemetry service, physical memory proof or calibration record.
