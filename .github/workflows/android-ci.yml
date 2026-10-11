@@ -54,6 +54,10 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/device_identity_test.cpp -o /tmp/device_identity_test
           /tmp/device_identity_test
+      - name: V4 RGB persistence codec regression
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/rgb_persistence_test.cpp -o /tmp/rgb_persistence_test
+          /tmp/rgb_persistence_test
       - name: RGB command codec host regression
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/rgb_command_codec_test.cpp -o /tmp/rgb_command_codec_test
