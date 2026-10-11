@@ -60,3 +60,6 @@ El perfil Wi-Fi+BLE necesita >1.3 MB de app. El CI usa `esp32:esp32:esp32:Partit
 
 ## Reconexión tras reiniciar
 Wi-Fi STA almacena la configuración de red en NVS y al arrancar intenta restaurarla de forma no bloqueante con `WiFi.begin()`. El SoftAP protegido permanece accesible para recuperación. La persistencia y coexistencia BLE/Wi-Fi siguen pendientes de QA físico en la placa.
+
+## Editor declarativo de experimentos V2
+La pantalla Centro ESP32 permite introducir secuencias `1:500,0:500,1:300`, donde 1/0 representan HIGH/LOW y el número es duración en milisegundos. Se admiten entre 1 y 16 pasos, cada uno entre 100 y 2000 ms, y máximo 20 segundos totales. Solo GPIO19 está expuesto inicialmente desde la UI. El firmware valida cada valor antes de reservar el GPIO, permite cancelar, libera la reserva y fuerza LOW/INPUT al terminar. No admite Python, C++ ni scripts arbitrarios por red.
