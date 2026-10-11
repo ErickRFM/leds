@@ -40,7 +40,7 @@ def main() -> int:
         return 0
     if not args.build_dir:
         parser.error("build_dir required unless --self-test")
-    if not re.fullmatch(r"[A-Za-z0-9_-]+\\.ino\\.bin", args.app_name):
+    if not re.fullmatch(r"[A-Za-z0-9_-]+\.ino\.bin", args.app_name):
         parser.error("--app-name must be a safe Arduino app binary filename")
     files = list(Path(args.build_dir).rglob(args.app_name))
     if len(files) != 1:
