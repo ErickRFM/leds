@@ -361,17 +361,23 @@ class BleManager(private val context: Context) {
             val message = pending.removeFirst()
             val bytes = message.toByteArray(Charsets.UTF_8)
             writeInFlight = true
-            val ok = if (Build.VERSION.SDK_INT >= 33) {
-                remote.writeCharacteristic(
-                    characteristic, bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                ) == BluetoothStatusCodes.SUCCESS
-            } else {
-                @Suppress("DEPRECATION")
-                characteristic.value = bytes
-                @Suppress("DEPRECATION")
-                characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                @Suppress("DEPRECATION")
-                remote.writeCharacteristic(characteristic)
+            val ok = try {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    remote.writeCharacteristic(
+                        characteristic, bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                    ) == BluetoothStatusCodes.SUCCESS
+                } else {
+                    @Suppress("DEPRECATION")
+                    characteristic.value = bytes
+                    @Suppress("DEPRECATION")
+                    characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                    @Suppress("DEPRECATION")
+                    remote.writeCharacteristic(characteristic)
+                }
+            } catch (_: SecurityException) {
+                false
+            } catch (_: IllegalStateException) {
+                false
             }
             if (!ok) {
                 writeInFlight = false
