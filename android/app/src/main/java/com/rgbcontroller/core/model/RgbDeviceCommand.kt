@@ -17,13 +17,13 @@ object RgbDeviceCommand {
         val fields = command.split(',')
         if (fields.size == 5 && fields[0] == "SET") {
             return fields.drop(1).all {
-                it.isNotEmpty() && it.all(Char::isDigit) &&
+                it.isNotEmpty() && it.all { ch -> ch in '0'..'9' } &&
                     it.toIntOrNull()?.let { value -> value in 0..255 } == true
             }
         }
         if (fields.size == 3 && fields[0] == "FX" &&
             fields[1] in setOf("RAINBOW", "BREATHE", "FADE")) {
-            return fields[2].isNotEmpty() && fields[2].all(Char::isDigit) &&
+            return fields[2].isNotEmpty() && fields[2].all { ch -> ch in '0'..'9' } &&
                 fields[2].toIntOrNull()?.let { it in 10..1000 } == true
         }
         return false
