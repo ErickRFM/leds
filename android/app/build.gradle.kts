@@ -49,7 +49,7 @@ android {
     }
     lint {
         disable.add("CoarseFineLocation")
-        abortOnError = false
+        abortOnError = true
     }
 }
 
