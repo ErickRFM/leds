@@ -21,7 +21,9 @@ for name, pin in (("LED_R", 27), ("LED_G", 25), ("LED_B", 26)):
 for mode in ("RAINBOW", "BREATHE", "FADE"):
     assert f'EffectItem("{mode}"' in effects, f"Missing {mode} Android action"
     assert f'"{mode}"' in firmware, f"Missing {mode} ESP32 parser"
-assert 'writeCommand("FX,${effect.id},' in effects, "Dynamic FX action missing"
+android_rgb_contract = (root / "android/app/src/main/java/com/rgbcontroller/core/model/RgbDeviceCommand.kt").read_text(encoding="utf-8")
+assert "RgbDeviceCommand.effect(effect.id" in effects, "Dynamic FX must use shared typed codec"
+assert '"FX," + name + "," + speed' in android_rgb_contract, "Shared effect serialization missing"
 codec = (root / "firmware/esp32_rgb/core/RgbCommandCodec.h").read_text(encoding="utf-8")
 assert "FX,STOP" in effects and "FX,STOP" in codec
 assert "esp32core::parseRgbCommand" in firmware, "Firmware must route RGB through shared codec"

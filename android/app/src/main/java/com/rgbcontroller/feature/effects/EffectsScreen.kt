@@ -11,6 +11,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
 import com.rgbcontroller.core.ble.BleManager
+import com.rgbcontroller.core.model.RgbDeviceCommand
 import com.rgbcontroller.core.ui.SectionHeader
 
 private data class EffectItem(val id: String, val name: String, val description: String)
@@ -66,7 +67,7 @@ fun EffectsScreen(bleManager: BleManager) {
                     }
                     Spacer(Modifier.width(12.dp))
                     Button(
-                        onClick = { bleManager.writeCommand("FX,${effect.id},${speed.toInt()}") },
+                        onClick = { bleManager.writeCommand(RgbDeviceCommand.effect(effect.id, speed.toInt())) },
                         enabled = ready,
                         shape = RoundedCornerShape(14.dp)
                     ) { Text(if (active) "Activo" else "Usar") }

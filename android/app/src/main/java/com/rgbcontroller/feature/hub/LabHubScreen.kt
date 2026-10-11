@@ -14,6 +14,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.lab.LabExperimentLibrary
+import com.rgbcontroller.core.model.RgbDeviceState
 import com.rgbcontroller.core.hardware.Esp32BoardPinout
 import com.rgbcontroller.core.hardware.PinKind
 import com.rgbcontroller.core.lab.LabStep
@@ -42,6 +43,10 @@ fun LabHubScreen() {
     var selectedPin by remember { mutableIntStateOf(18) }
     var adcValue by remember { mutableStateOf<Int?>(null) }
     var steps by remember { mutableStateOf("1:500,0:500,1:500,0:500") }
+    var wifiRed by remember { mutableFloatStateOf(255f) }
+    var wifiGreen by remember { mutableFloatStateOf(120f) }
+    var wifiBlue by remember { mutableFloatStateOf(0f) }
+    var wifiBrightness by remember { mutableFloatStateOf(255f) }
     var nextHigh by remember { mutableStateOf(true) }
     var nextDuration by remember { mutableStateOf("500") }
 
@@ -82,7 +87,14 @@ fun LabHubScreen() {
                 Spacer(Modifier.height(10.dp))
                 Button(onClick = {
                     action {
-                        status = client.status(secret)
+                        val fresh = client.status(secret)
+                        status = fresh
+                        RgbDeviceState.parse(fresh.optString("rgb"))?.let { actual ->
+                            wifiRed = actual.red.toFloat()
+                            wifiGreen = actual.green.toFloat()
+                            wifiBlue = actual.blue.toFloat()
+                            wifiBrightness = actual.brightness.toFloat()
+                        }
                         message = "Estado recibido del ESP32."
                     }
                 }, enabled = debug && !busy && LocalLabClient.validKey(secret)) {
@@ -310,6 +322,35 @@ fun LabHubScreen() {
                     message = "Efecto arcoíris activado."
                 } }) { Text("Arcoíris") }
         }
+        Text("Mezcla de color por Wi-Fi", style = MaterialTheme.typography.titleSmall)
+        Text("Valores confirmados en el dispositivo al consultar su estado.",
+            style = MaterialTheme.typography.bodySmall)
+        Text("Rojo " + wifiRed.toInt())
+        Slider(value = wifiRed, onValueChange = { wifiRed = it },
+            valueRange = 0f..255f, enabled = debug && !busy)
+        Text("Verde " + wifiGreen.toInt())
+        Slider(value = wifiGreen, onValueChange = { wifiGreen = it },
+            valueRange = 0f..255f, enabled = debug && !busy)
+        Text("Azul " + wifiBlue.toInt())
+        Slider(value = wifiBlue, onValueChange = { wifiBlue = it },
+            valueRange = 0f..255f, enabled = debug && !busy)
+        Text("Brillo " + wifiBrightness.toInt())
+        Slider(value = wifiBrightness, onValueChange = { wifiBrightness = it },
+            valueRange = 0f..255f, enabled = debug && !busy)
+        Button(enabled = debug && !busy && LocalLabClient.validKey(secret),
+            onClick = { action {
+                client.setRgb(secret, wifiRed.toInt(), wifiGreen.toInt(),
+                    wifiBlue.toInt(), wifiBrightness.toInt())
+                status = client.status(secret)
+                message = "Color aplicado y estado confirmado por Wi-Fi."
+            } }) { Text("Aplicar color RGB por Wi-Fi") }
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
+            onClick = { action {
+                client.startRgbEffect(secret, "BREATHE", 120)
+                status = client.status(secret)
+                message = "Efecto respiración confirmado por Wi-Fi."
+            } }) { Text("Respiración por Wi-Fi") }
         Spacer(Modifier.height(16.dp))
         if (busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         Text(message, style = MaterialTheme.typography.bodyMedium,
