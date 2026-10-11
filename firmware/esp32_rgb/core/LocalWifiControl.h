@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <Preferences.h>
+#include <esp_system.h>
 #include "PinManager.h"
 #include "ExperimentRuntime.h"
 
@@ -172,6 +173,8 @@ class LocalWifiControl final {
       if (!authorized()) return;
       jsonError(404, "not_found");
     });
+    const char* acceptedHeaders[] = {"X-Device-Key"};
+    server_.collectHeaders(acceptedHeaders, 1);
     server_.begin();
     active_ = true;
     Serial.println("ESP32 local lab API ready at http://192.168.4.1");

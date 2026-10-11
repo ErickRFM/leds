@@ -11,6 +11,7 @@
 #include "core/PinManager.h"
 #include "core/ModuleRegistry.h"
 #include "modules/LedRgbModule.h"
+#include "core/LocalWifiControl.h"
 
 constexpr uint8_t LED_R = 27, LED_G = 25, LED_B = 26;
 constexpr bool COMMON_ANODE = true;  // Set false for verified common cathode.
@@ -119,46 +120,41 @@ class ServerCallbacks : public BLEServerCallbacks {
   }
 };
 
+// One RGB command implementation shared by the legacy BLE service and
+// the new AP-only laboratory transport. Invalid input never changes PWM.
+bool applyRgbCommand(const String& cmd) {
+  String line = cmd;
+  if (line.isEmpty() || line.length() > 48) return false;
+  line.trim();
+  if (line == "GET") { publishState(); return true; }
+  if (line == "OFF") { rgb.power = false; renderStatic(); publishState(); return true; }
+  if (line == "ON") {
+    rgb.power = true;
+    if (rgb.mode == Mode::NONE) renderStatic();
+    publishState(); return true;
+  }
+  if (line == "FX,STOP") {
+    rgb.mode = Mode::NONE;
+    renderStatic(); publishState(); return true;
+  }
+  uint8_t r, g, b, brightness;
+  if (parseSet(line, r, g, b, brightness)) {
+    rgb.r = r; rgb.g = g; rgb.b = b; rgb.brightness = brightness;
+    rgb.mode = Mode::NONE; rgb.power = true;
+    renderStatic(); publishState(); return true;
+  }
+  Mode mode;
+  uint16_t speed;
+  if (parseEffect(line, mode, speed)) {
+    rgb.mode = mode; rgb.speed = speed; rgb.power = true;
+    effectStarted = millis(); publishState(); return true;
+  }
+  return false;
+}
+
 class CommandCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* characteristic) override {
-    String line = characteristic->getValue();
-    if (line.length() == 0 || line.length() > 48) { reject(); return; }
-    line.trim();
-    if (line == "GET") { publishState(); return; }
-    if (line == "OFF") { rgb.power = false; renderStatic(); publishState(); return; }
-    if (line == "ON") {
-      rgb.power = true;
-      if (rgb.mode == Mode::NONE) renderStatic();
-      publishState();
-      return;
-    }
-    if (line == "FX,STOP") {
-      rgb.mode = Mode::NONE;
-      renderStatic();
-      publishState();
-      return;
-    }
-
-    uint8_t r, g, b, brightness;
-    if (parseSet(line, r, g, b, brightness)) {
-      rgb.r = r; rgb.g = g; rgb.b = b; rgb.brightness = brightness;
-      rgb.mode = Mode::NONE;
-      rgb.power = true;
-      renderStatic();
-      publishState();
-      return;
-    }
-    Mode mode;
-    uint16_t speed;
-    if (parseEffect(line, mode, speed)) {
-      rgb.mode = mode;
-      rgb.speed = speed;
-      rgb.power = true;
-      effectStarted = millis();
-      publishState();
-      return;
-    }
-    reject();
+    if (!applyRgbCommand(characteristic->getValue())) reject();
   }
 };
 
@@ -203,6 +199,8 @@ esp32core::LedRgbModule rgbModule(
     LED_R, LED_G, LED_B, COMMON_ANODE,
     renderStatic, renderEffect,
     []() { return rgb.mode != Mode::NONE; });
+esp32core::LocalWifiControl wifiLab(pinManager, stateString, applyRgbCommand);
+
 
 void setup() {
   Serial.begin(115200);
@@ -234,6 +232,7 @@ void setup() {
   advertising->setScanResponse(true);
   BLEDevice::startAdvertising();
   Serial.println("RGB-ESP32 ready (laboratory; BLE not authenticated)");
+  wifiLab.begin();
 }
 
 void loop() {
@@ -245,5 +244,6 @@ void loop() {
   if (connected) connectedPreviously = true;
 
   moduleRegistry.tickAll(millis());
+  wifiLab.tick(millis());
   delay(5);
 }
