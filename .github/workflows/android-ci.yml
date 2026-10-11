@@ -28,6 +28,8 @@ jobs:
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic -I tests/stubs tests/experiment_runtime_test.cpp -o /tmp/experiment_runtime_test
           /tmp/experiment_runtime_test
 
+      - name: Production release safety gate
+        run: python3 scripts/check-release-safety.py
       - name: OTA slot budget logic regression
         run: python3 scripts/check-firmware-budget.py --self-test
       - name: RGB command codec host regression
