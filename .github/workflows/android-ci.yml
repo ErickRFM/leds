@@ -28,6 +28,11 @@ jobs:
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic -I tests/stubs tests/experiment_runtime_test.cpp -o /tmp/experiment_runtime_test
           /tmp/experiment_runtime_test
 
+      - name: RGB command codec host regression
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/rgb_command_codec_test.cpp -o /tmp/rgb_command_codec_test
+          /tmp/rgb_command_codec_test
+
   android:
     runs-on: ubuntu-latest
     steps:
