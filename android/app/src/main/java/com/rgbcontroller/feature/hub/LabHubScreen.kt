@@ -17,7 +17,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.lab.LabExperimentLibrary
-import com.rgbcontroller.core.model.RgbDeviceState
 import com.rgbcontroller.core.model.DeviceIdentityInfo
 import com.rgbcontroller.core.sensors.AdcSample
 import com.rgbcontroller.core.sensors.AdcTelemetry
@@ -59,10 +58,6 @@ fun LabHubScreen() {
     var adcHistory by remember { mutableStateOf(emptyList<AdcSample>()) }
     var samplingAdc by remember { mutableStateOf(false) }
     var steps by remember { mutableStateOf("1:500,0:500,1:500,0:500") }
-    var wifiRed by remember { mutableFloatStateOf(255f) }
-    var wifiGreen by remember { mutableFloatStateOf(120f) }
-    var wifiBlue by remember { mutableFloatStateOf(0f) }
-    var wifiBrightness by remember { mutableFloatStateOf(255f) }
     var nextHigh by remember { mutableStateOf(true) }
     var nextDuration by remember { mutableStateOf("500") }
     var projectName by remember { mutableStateOf("") }
@@ -130,12 +125,6 @@ fun LabHubScreen() {
                     action {
                         val fresh = client.status(secret)
                         status = fresh
-                        RgbDeviceState.parse(fresh.optString("rgb"))?.let { actual ->
-                            wifiRed = actual.red.toFloat()
-                            wifiGreen = actual.green.toFloat()
-                            wifiBlue = actual.blue.toFloat()
-                            wifiBrightness = actual.brightness.toFloat()
-                        }
                         message = "Estado recibido del ESP32."
                     }
                 }, enabled = debug && !busy && LocalLabClient.validKey(secret)) {
@@ -505,51 +494,7 @@ fun LabHubScreen() {
                 message = "Secuencia declarativa iniciada en GPIO19."
             } }) { Text("Ejecutar secuencia") }
         Spacer(Modifier.height(20.dp))
-        Text("LED RGB por Wi-Fi", style = MaterialTheme.typography.titleMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(enabled = debug && !busy && LocalLabClient.validKey(secret),
-                onClick = { action { client.rgb(secret, "ON"); message = "Comando ON aceptado; pulsa Consultar estado para verificar." } }) {
-                Text("ON")
-            }
-            OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
-                onClick = { action { client.rgb(secret, "OFF"); message = "Comando OFF aceptado; pulsa Consultar estado para verificar." } }) {
-                Text("OFF")
-            }
-            OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
-                onClick = { action {
-                    client.rgb(secret, "FX,RAINBOW,120")
-                    message = "Arcoíris solicitado; consulta Estado y comprueba el LED real."
-                } }) { Text("Arcoíris") }
-        }
-        Text("Mezcla de color por Wi-Fi", style = MaterialTheme.typography.titleSmall)
-        Text("Valores confirmados en el dispositivo al consultar su estado.",
-            style = MaterialTheme.typography.bodySmall)
-        Text("Rojo " + wifiRed.toInt())
-        Slider(value = wifiRed, onValueChange = { wifiRed = it },
-            valueRange = 0f..255f, enabled = debug && !busy)
-        Text("Verde " + wifiGreen.toInt())
-        Slider(value = wifiGreen, onValueChange = { wifiGreen = it },
-            valueRange = 0f..255f, enabled = debug && !busy)
-        Text("Azul " + wifiBlue.toInt())
-        Slider(value = wifiBlue, onValueChange = { wifiBlue = it },
-            valueRange = 0f..255f, enabled = debug && !busy)
-        Text("Brillo " + wifiBrightness.toInt())
-        Slider(value = wifiBrightness, onValueChange = { wifiBrightness = it },
-            valueRange = 0f..255f, enabled = debug && !busy)
-        Button(enabled = debug && !busy && LocalLabClient.validKey(secret),
-            onClick = { action {
-                status = client.setRgbConfirmed(secret, wifiRed.toInt(), wifiGreen.toInt(),
-                    wifiBlue.toInt(), wifiBrightness.toInt())
-                message = "RGB confirmado por lectura lógica de STATE; revisa el LED físico."
-            } }) { Text("Aplicar color RGB por Wi-Fi") }
-        Spacer(Modifier.height(12.dp))
-        OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
-            onClick = { action {
-                client.startRgbEffect(secret, "BREATHE", 120)
-                status = client.status(secret)
-                message = "Respiración aceptada; revisa estado y LED real."
-            } }) { Text("Respiración por Wi-Fi") }
-        Spacer(Modifier.height(16.dp))
+        // RGB Wi-Fi controls live in the LED module. Laboratory stays focused on GPIO, network and sensors.
         if (busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         Text(message, style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)

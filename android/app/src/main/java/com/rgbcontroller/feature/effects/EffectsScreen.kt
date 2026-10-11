@@ -12,15 +12,20 @@ import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.model.RgbDeviceCommand
+import com.rgbcontroller.core.model.RgbControlLink
 import com.rgbcontroller.core.ui.SectionHeader
 
 private data class EffectItem(val id: String, val name: String, val description: String)
 
 @Composable
-fun EffectsScreen(bleManager: BleManager) {
+fun EffectsScreen(bleManager: BleManager, link: RgbControlLink? = null) {
     val connection by bleManager.connectionState.collectAsState()
-    val state by bleManager.rgbState.collectAsState()
-    val ready = connection == BleConnectionState.Ready
+    val bleState by bleManager.rgbState.collectAsState()
+    val state = if (link != null) link.state else bleState
+    val ready = link?.ready ?: (connection == BleConnectionState.Ready)
+    fun send(command: String) {
+        if (link != null) link.sendCommand(command) else bleManager.writeCommand(command)
+    }
     var speed by remember { mutableFloatStateOf(120f) }
     LaunchedEffect(state?.speed) { state?.let { speed = it.speed.toFloat() } }
     val effects = listOf(
@@ -67,7 +72,7 @@ fun EffectsScreen(bleManager: BleManager) {
                     }
                     Spacer(Modifier.width(12.dp))
                     Button(
-                        onClick = { bleManager.writeCommand(RgbDeviceCommand.effect(effect.id, speed.toInt())) },
+                        onClick = { send(RgbDeviceCommand.effect(effect.id, speed.toInt())) },
                         enabled = ready,
                         shape = RoundedCornerShape(14.dp)
                     ) { Text(if (active) "Activo" else "Usar") }
@@ -76,7 +81,7 @@ fun EffectsScreen(bleManager: BleManager) {
             Spacer(Modifier.height(10.dp))
         }
         OutlinedButton(
-            onClick = { bleManager.writeCommand("FX,STOP") },
+            onClick = { send("FX,STOP") },
             enabled = ready && state?.effect != null && state?.effect != "NONE",
             modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp),
             shape = RoundedCornerShape(16.dp)

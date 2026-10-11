@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.data.PreferencesRepository
+import com.rgbcontroller.core.model.RgbControlLink
 import com.rgbcontroller.core.model.ColorUtils
 import kotlinx.coroutines.launch
 
@@ -26,12 +27,16 @@ private data class NamedColor(
 )
 
 @Composable
-fun PresetsScreen(bleManager: BleManager, preferencesRepository: PreferencesRepository) {
+fun PresetsScreen(bleManager: BleManager, preferencesRepository: PreferencesRepository, link: RgbControlLink? = null) {
     val connected by bleManager.connectionState.collectAsState()
-    val current by bleManager.rgbState.collectAsState()
+    val bleCurrent by bleManager.rgbState.collectAsState()
+    val current = if (link != null) link.state else bleCurrent
     val stored by preferencesRepository.favoriteColors.collectAsState(initial = "")
     val scope = rememberCoroutineScope()
-    val ready = connected == BleConnectionState.Ready
+    val ready = link?.ready ?: (connected == BleConnectionState.Ready)
+    fun send(command: String) {
+        if (link != null) link.sendCommand(command) else bleManager.writeCommand(command)
+    }
     val favorites = stored.split(',').map { it.trim() }
         .filter { ColorUtils.hexToRgb(it) != null }.distinct()
     val presets = listOf(
@@ -48,7 +53,7 @@ fun PresetsScreen(bleManager: BleManager, preferencesRepository: PreferencesRepo
     fun apply(hex: String) {
         if (!ready) return
         val rgb = ColorUtils.hexToRgb(hex) ?: return
-        bleManager.writeCommand(
+        send(
             ColorUtils.serializeSetCommand(rgb.r, rgb.g, rgb.b, current?.brightness ?: 255)
         )
     }

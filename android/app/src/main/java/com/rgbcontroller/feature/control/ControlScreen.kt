@@ -23,6 +23,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
 import com.rgbcontroller.core.ble.BleManager
+import com.rgbcontroller.core.model.RgbControlLink
 import com.rgbcontroller.core.model.ColorUtils
 import com.rgbcontroller.core.ui.SectionHeader
 import kotlinx.coroutines.delay
@@ -33,10 +34,14 @@ import kotlin.math.sin
 import kotlin.math.cos
 
 @Composable
-fun ControlScreen(bleManager: BleManager) {
+fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null) {
     val connection by bleManager.connectionState.collectAsState()
-    val actual by bleManager.rgbState.collectAsState()
-    val ready = connection == BleConnectionState.Ready
+    val bleActual by bleManager.rgbState.collectAsState()
+    val actual = if (link != null) link.state else bleActual
+    val ready = link?.ready ?: (connection == BleConnectionState.Ready)
+    fun send(command: String) {
+        if (link != null) link.sendCommand(command) else bleManager.writeCommand(command)
+    }
     var red by remember { mutableFloatStateOf(255f) }
     var green by remember { mutableFloatStateOf(120f) }
     var blue by remember { mutableFloatStateOf(0f) }
@@ -66,15 +71,15 @@ fun ControlScreen(bleManager: BleManager) {
     // Sample the latest input every 60 ms, including during continuous drags.
     // A debounce-only effect would wait until the user stopped dragging.
     // BleManager serializes GATT writes and coalesces superseded SET commands.
-    LaunchedEffect(ready) {
+    LaunchedEffect(ready, link?.transport) {
         while (ready) {
-            delay(60)
+            delay(if (link?.transport == "WIFI_LAB") 250 else 60)
             if (dirty) {
                 val sent = ColorUtils.RgbColor(
                     red.toInt(), green.toInt(), blue.toInt(), brightness.toInt()
                 )
                 awaitingState = sent
-                bleManager.writeCommand(
+                send(
                     ColorUtils.serializeSetCommand(sent.r, sent.g, sent.b, sent.brightness)
                 )
                 dirty = false
@@ -90,7 +95,7 @@ fun ControlScreen(bleManager: BleManager) {
             if (awaitingState == pending) awaitingState = null
         }
     }
-    LaunchedEffect(ready) {
+    LaunchedEffect(ready, link?.transport) {
         if (!ready) {
             awaitingState = null
             dirty = false
@@ -111,7 +116,7 @@ fun ControlScreen(bleManager: BleManager) {
         SectionHeader("Control RGB", "Selecciona un color y ajústalo a tu gusto")
         Spacer(Modifier.height(10.dp))
         Text(
-            if (ready) "●  ESP32 conectado" else "○  Conecta tu ESP32 en Dispositivos",
+            if (ready) "●  ESP32 conectado" else "○  Conecta el ESP32 con el canal seleccionado",
             style = MaterialTheme.typography.labelLarge,
             color = if (ready) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -185,7 +190,7 @@ fun ControlScreen(bleManager: BleManager) {
             Switch(
                 checked = actual?.power == true,
                 enabled = ready,
-                onCheckedChange = { bleManager.writeCommand(if (it) "ON" else "OFF") }
+                onCheckedChange = { send(if (it) "ON" else "OFF") }
             )
         }
         }
