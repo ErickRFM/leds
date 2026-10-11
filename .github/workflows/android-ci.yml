@@ -28,6 +28,8 @@ jobs:
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic -I tests/stubs tests/experiment_runtime_test.cpp -o /tmp/experiment_runtime_test
           /tmp/experiment_runtime_test
 
+      - name: OTA slot budget logic regression
+        run: python3 scripts/check-firmware-budget.py --self-test
       - name: RGB command codec host regression
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/rgb_command_codec_test.cpp -o /tmp/rgb_command_codec_test
@@ -89,4 +91,6 @@ jobs:
       - name: Compile firmware
         run: |
           . ./config/esp32-board.env
-          arduino-cli compile --fqbn "$ARDUINO_FQBN" firmware/esp32_rgb
+          arduino-cli compile --fqbn "$ARDUINO_FQBN" --output-dir build/firmware firmware/esp32_rgb
+      - name: Check firmware fits dual OTA slot
+        run: python3 scripts/check-firmware-budget.py build/firmware
