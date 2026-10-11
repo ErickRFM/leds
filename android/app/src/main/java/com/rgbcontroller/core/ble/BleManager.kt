@@ -254,7 +254,7 @@ class BleManager(private val context: Context) {
             }
             commandCharacteristic = command
             stateCharacteristic = state
-            publicIdCharacteristic = service.getCharacteristic(PUBLIC_ID_CHAR_UUID)
+            publicIdCharacteristic = service?.getCharacteristic(PUBLIC_ID_CHAR_UUID)
             val started = if (Build.VERSION.SDK_INT >= 33) {
                 remote.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) ==
                     BluetoothStatusCodes.SUCCESS
