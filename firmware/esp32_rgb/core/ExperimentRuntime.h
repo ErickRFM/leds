@@ -55,3 +55,5 @@ class ExperimentRuntime final {
   bool high_ = false;
   bool active_ = false;
 };
+
+} // namespace esp32core
