@@ -6,6 +6,8 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import com.rgbcontroller.core.lab.LabExperimentLibrary
 import com.rgbcontroller.core.model.RgbDeviceCommand
+import com.rgbcontroller.core.model.RgbDeviceState
+import com.rgbcontroller.core.model.RgbReadback
 import com.rgbcontroller.core.hardware.Esp32BoardPinout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -63,6 +65,20 @@ class LocalLabClient(private val context: Context) {
     suspend fun stopExperiment(key: String) = request("POST", "/v2/lab/stop", key)
     suspend fun setRgb(key: String, r: Int, g: Int, b: Int, brightness: Int): JSONObject =
         rgb(key, RgbDeviceCommand.set(r, g, b, brightness))
+
+    /**
+     * Confirms the requested RGB values from the ESP32's own /status endpoint.
+     * This proves logical state only: physical LED voltage still requires a bench test.
+     */
+    suspend fun setRgbConfirmed(key: String, r: Int, g: Int, b: Int, brightness: Int): JSONObject {
+        setRgb(key, r, g, b, brightness)
+        val readback = status(key)
+        val actual = RgbDeviceState.parse(readback.optString("rgb"))
+        check(RgbReadback.confirmsSet(r, g, b, brightness, actual)) {
+            "ESP32 aceptó SET, pero el estado leído no coincide. Comprueba logs y reconecta."
+        }
+        return readback
+    }
 
     suspend fun startRgbEffect(key: String, name: String, speed: Int): JSONObject =
         rgb(key, RgbDeviceCommand.effect(name, speed))
