@@ -33,7 +33,7 @@ if ($ext -notin @(".ino", ".txt")) {
 }
 $bytes = [System.IO.File]::ReadAllBytes($sourcePath)
 if ($bytes.Length -lt 1 -or $bytes.Length -gt (128 * 1024)) {
-    throw "Source file size must be 1–131072 bytes."
+    throw "Source file size must be 1-131072 bytes."
 }
 # Reject malformed text. A text file imported here is NOT a precompiled .bin.
 $decoder = [System.Text.UTF8Encoding]::new($false, $true)
