@@ -11,6 +11,7 @@
 #include "../config/FactoryProvisioning.h"
 #include <WiFi.h>
 #include <WiFiProv.h>
+#include <Preferences.h>
 #if defined(CORE_DEBUG_LEVEL) && CORE_DEBUG_LEVEL >= 3
 #error "Provisioning firmware may print PoP via library info logs: use Core Debug Level None/Errors/Warnings"
 #endif
@@ -35,6 +36,23 @@ inline void onProvisionEvent(arduino_event_t* event) {
 inline bool beginIfPhysicalRequest() {
   if (esp_reset_reason() != ESP_RST_SW || softBootMarker != kMagic) return false;
   softBootMarker = 0; // Single-use marker, even when provisioning fails.
+  // Physical recovery explicitly rotates legacy lab AP/key to the credentials
+  // printed on THIS board's private factory label, without clearing RGB or ID.
+  // Never attempt a secret migration from an untrusted BLE/HTTP command.
+  Preferences lab;
+  if (!lab.begin("rgb-lab-v2", false)) {
+    Serial.println("ERROR: Cannot access lab NVS during physical recovery");
+    return false;
+  }
+  const bool migrated =
+      lab.putString("ap", esp32factory::kLabApPassword) == 16 &&
+      lab.putString("key", esp32factory::kLabAccessKey) == 16;
+  lab.end();
+  if (!migrated) {
+    Serial.println("ERROR: Factory lab credential migration failed");
+    return false;
+  }
+  Serial.println("Physical recovery: laboratory credentials synchronized to private label");
   WiFi.onEvent(onProvisionEvent);
   WiFi.begin();
   // Reset only Wi-Fi STA provisioning state, and ONLY after a long physical
