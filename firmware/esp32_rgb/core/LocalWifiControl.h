@@ -67,6 +67,22 @@ class LocalWifiControl final {
         ",\"experimentActive\":" + String(experiment_.active() ? "true":"false") + "}";
       server_.send(200, "application/json", json);
     });
+    // Read-only, authenticated and bound to the local lab SoftAP interface.
+    // No MAC, SSID, keys or credentials are included in this diagnostic payload.
+    server_.on("/v2/diagnostics", HTTP_GET, [this]() {
+      if (!authorized()) return;
+      const int32_t signal = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
+      String body = "{\"version\":2,\"chip\":\"" + escape(ESP.getChipModel()) + "\"";
+      body += ",\"chipRevision\":" + String(ESP.getChipRevision());
+      body += ",\"flashBytes\":" + String(ESP.getFlashChipSize());
+      body += ",\"freeHeap\":" + String(ESP.getFreeHeap());
+      body += ",\"minFreeHeap\":" + String(ESP.getMinFreeHeap());
+      body += ",\"uptimeMs\":" + String(millis());
+      body += ",\"resetReason\":" + String(static_cast<int>(esp_reset_reason()));
+      body += ",\"wifiRssi\":" + String(signal);
+      body += ",\"leasedPins\":" + String(pins_.leasedCount()) + "}";
+      server_.send(200, "application/json", body);
+    });
     server_.on("/v2/firmware", HTTP_GET, [this]() {
       if (!authorized()) return;
       const esp_partition_t* current = esp_ota_get_running_partition();
