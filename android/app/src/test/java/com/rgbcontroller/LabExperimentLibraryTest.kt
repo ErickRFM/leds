@@ -27,7 +27,7 @@ class LabExperimentLibraryTest {
         assertNull(LabExperimentLibrary.append("1:2000,".repeat(10).dropLast(1), LabStep(true, 2000)))
         assertNull(LabExperimentLibrary.append("1:500,".repeat(16).dropLast(1), LabStep(true, 500)))
         assertNull(LabExperimentLibrary.removeAt("1:500", 2))
-        assertNull(LabExperimentLibrary.parse("1:0500"))
+        assertNull(LabExperimentLibrary.parse("1:050"))
         assertNull(LabExperimentLibrary.parse("1:500\n0:500"))
         assertNull(LabExperimentLibrary.parse("1:500,2:500"))
     }
