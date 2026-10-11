@@ -1,6 +1,7 @@
 package com.rgbcontroller.core.wifi
 
 import com.rgbcontroller.core.lab.LabExperimentLibrary
+import com.rgbcontroller.core.hardware.Esp32BoardPinout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -12,9 +13,9 @@ import java.net.URLEncoder
 class LocalLabClient {
     companion object {
         const val BASE = "http://192.168.4.1"
-        fun allowedOutput(pin: Int) = pin in setOf(18,19,21,22,23)
-        fun allowedInput(pin: Int) = allowedOutput(pin) || pin in setOf(34,35,36,39)
-        fun allowedAnalog(pin: Int) = pin in setOf(32,33,34,35,36,39)
+        fun allowedOutput(pin: Int) = Esp32BoardPinout.canWrite(pin)
+        fun allowedInput(pin: Int) = Esp32BoardPinout.canRead(pin)
+        fun allowedAnalog(pin: Int) = Esp32BoardPinout.canReadAdc1(pin)
         fun validKey(key: String) = Regex("[a-fA-F0-9]{16}").matches(key)
         fun validSequence(steps: String) = LabExperimentLibrary.parse(steps) != null
         fun validSsid(ssid: String) = ssid.isNotBlank() && ssid.toByteArray(Charsets.UTF_8).size <= 32

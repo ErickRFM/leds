@@ -14,6 +14,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.lab.LabExperimentLibrary
+import com.rgbcontroller.core.hardware.Esp32BoardPinout
+import com.rgbcontroller.core.hardware.PinKind
 import com.rgbcontroller.core.lab.LabStep
 import com.rgbcontroller.core.ui.SectionHeader
 import com.rgbcontroller.core.wifi.LocalLabClient
@@ -156,11 +158,29 @@ fun LabHubScreen() {
         Spacer(Modifier.height(20.dp))
         Text("Entradas y salidas GPIO", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(18, 19, 21, 22, 23).forEach { pin ->
-                FilterChip(selected = selectedPin == pin, onClick = { selectedPin = pin },
-                    label = { Text(pin.toString()) })
+        Text("Solo GPIO 18, 19, 21, 22, 23 permiten salidas temporales de laboratorio. " +
+            "RGB 27/25/26 está reservado.", style = MaterialTheme.typography.bodySmall)
+        listOf(listOf(18, 19, 21), listOf(22, 23)).forEach { rowPins ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                rowPins.forEach { pin ->
+                    FilterChip(selected = selectedPin == pin, onClick = { selectedPin = pin },
+                        label = { Text("GPIO " + pin) })
+                }
             }
+        }
+        Text("Mapa de pines · ESP32 clásico verificado", style = MaterialTheme.typography.titleSmall)
+        Text("Inventario informativo; no demuestra cableado físico ni reserva en vivo.",
+            style = MaterialTheme.typography.bodySmall)
+        Esp32BoardPinout.pins.forEach { pin ->
+            val label = when (pin.kind) {
+                PinKind.LAB_OUTPUT -> "Lab"
+                PinKind.RGB_RESERVED -> "RGB reservado"
+                PinKind.ADC1_INPUT -> "ADC1"
+                PinKind.SYSTEM_RESERVED -> "Protegido"
+            }
+            Text("GPIO " + pin.number + " · " + label + " · " + pin.note,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(enabled = debug && !busy && LocalLabClient.validKey(secret),
