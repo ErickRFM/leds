@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(bleManager: BleManager, preferencesRepository: PreferencesRepository, onOpenHub: () -> Unit) {
+fun SettingsScreen(bleManager: BleManager, preferencesRepository: PreferencesRepository, onOpenHub: () -> Unit, onOpenPrograms: () -> Unit) {
     val connection by bleManager.connectionState.collectAsState()
     val frame by bleManager.deviceState.collectAsState()
     val theme by preferencesRepository.themeMode.collectAsState(initial = "SYSTEM")
@@ -68,6 +68,10 @@ fun SettingsScreen(bleManager: BleManager, preferencesRepository: PreferencesRep
         Spacer(Modifier.height(8.dp))
         OutlinedButton(onClick = onOpenHub, modifier = Modifier.fillMaxWidth()) {
             Text("Abrir Wi-Fi, GPIO y Laboratorio")
+        }
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(onClick = onOpenPrograms, modifier = Modifier.fillMaxWidth()) {
+            Text("Programas · importar TXT e INO")
         }
         Spacer(Modifier.height(22.dp))
         Text("Si no aparece tu dispositivo", style = MaterialTheme.typography.titleMedium)
