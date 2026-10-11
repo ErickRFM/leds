@@ -53,6 +53,15 @@ android {
     }
 }
 
+
+// Until bonded/authorized BLE writes, secure enrollment and physical QA are proven,
+// no distributable Android release artifact may be assembled. Debug lab remains available.
+androidComponents {
+    beforeVariants(selector().withBuildType("release")) { builder ->
+        builder.enable = false
+    }
+}
+
 dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
