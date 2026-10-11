@@ -42,12 +42,15 @@ class CodeProjectStore(context: Context) {
     }
 
     private fun readLocked(): List<CodeProject> {
-        if (!atomicFile.baseFile.exists()) return emptyList()
+        // openRead() restores a backup left by an interrupted AtomicFile write.
+        val stream = try { atomicFile.openRead() } catch (_: java.io.FileNotFoundException) {
+            return emptyList()
+        }
         val bytes = ByteArrayOutputStream()
-        atomicFile.openRead().use { stream ->
+        stream.use { input ->
             val buffer = ByteArray(4096)
             while (true) {
-                val n = stream.read(buffer)
+                val n = input.read(buffer)
                 if (n < 0) break
                 if (n == 0) continue
                 require(bytes.size() + n <= CodeProjectLibrary.MAX_STORAGE_BYTES) {
