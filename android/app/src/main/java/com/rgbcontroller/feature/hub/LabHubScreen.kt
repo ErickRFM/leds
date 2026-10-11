@@ -36,7 +36,7 @@ import org.json.JSONObject
 fun LabHubScreen() {
     val context = LocalContext.current
     val debug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
-    val client = remember { LocalLabClient() }
+    val client = remember(context) { LocalLabClient(context.applicationContext) }
     val preferences = remember(context) { PreferencesRepository(context.applicationContext) }
     val savedProjects by preferences.experimentProjects.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
@@ -107,7 +107,7 @@ fun LabHubScreen() {
                     else "Control Wi-Fi deshabilitado en release",
                     style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(6.dp))
-                Text("Conecta a ESP32-Control-Lab. Su contraseña y la clave de control " +
+                Text("Conecta a ESP32-Control-Lab y acepta usar Wi-Fi sin Internet. Su contraseña y la clave de control " +
                     "están en el monitor serie USB (115200). Este transporte no usa TLS; solo pruebas.",
                     style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(10.dp))
