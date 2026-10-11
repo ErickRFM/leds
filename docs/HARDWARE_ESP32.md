@@ -61,3 +61,7 @@ inaccesibles los datos previos guardados en flash; respaldar antes de sobrescrib
 ## Source of truth for automated builds
 
 The verified FQBN and pinned Arduino-ESP32 core live in [`config/esp32-board.env`](../config/esp32-board.env). The GitHub Actions workflow and `scripts/verify-local.ps1` use exactly this profile. The local verifier now rejects unsafe FQBN overrides; changing the flash/partition scheme requires a documented migration, partition backup and tested USB recovery. The check `python3 scripts/check-board-profile.py` runs in CI. Hardware flashing remains **opt-in only** with an explicit port.
+
+## Compiled firmware size budget (automated)
+
+GitHub Actions builds the exact app binary with `--output-dir build/firmware` and checks `esp32_rgb.ino.bin` using `scripts/check-firmware-budget.py`. The verified Minimal SPIFFS partition scheme has two nominal app slots of `0x1E0000` bytes (1,966,080 bytes each). The gate requires at least 64 KiB left in an app slot; enlarging the firmware beyond this limit fails CI. This is **only a binary size check**: it is not proof of flash layout already installed, firmware authentication, OTA rollback, BLE security or field recovery.
