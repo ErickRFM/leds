@@ -6,7 +6,9 @@ param(
     [string]$Port = "",
     [switch]$UploadFirmware,
     [switch]$SkipAndroid,
-    [switch]$ValidateProfileOnly
+    [switch]$ValidateProfileOnly,
+    [switch]$CheckToolchainOnly,
+    [string]$ArduinoCliPath = ""
 )
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
@@ -41,6 +43,56 @@ if ($ValidateProfileOnly) {
     Write-Host "PASS: ESP32 board profile validation (no build, no flash)"
     return
 }
+# Resolve Arduino CLI before the (potentially expensive) Android build.
+# Reuse an official installation in PATH or from Arduino IDE where available.
+$cliPath = $null
+if (-not [string]::IsNullOrWhiteSpace($ArduinoCliPath)) {
+    if (-not (Test-Path -LiteralPath $ArduinoCliPath -PathType Leaf)) {
+        throw "Arduino CLI path does not exist: $ArduinoCliPath"
+    }
+    $cliPath = (Resolve-Path -LiteralPath $ArduinoCliPath).Path
+} elseif (-not [string]::IsNullOrWhiteSpace($env:ARDUINO_CLI_PATH)) {
+    if (-not (Test-Path -LiteralPath $env:ARDUINO_CLI_PATH -PathType Leaf)) {
+        throw "ARDUINO_CLI_PATH does not exist: $env:ARDUINO_CLI_PATH"
+    }
+    $cliPath = (Resolve-Path -LiteralPath $env:ARDUINO_CLI_PATH).Path
+} else {
+    $command = Get-Command "arduino-cli.exe" -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($command) { $cliPath = $command.Source }
+    if (-not $cliPath) {
+        $candidates = @(
+            (Join-Path $repo ".tools\arduino-cli.exe"),
+            (Join-Path $repo ".tools\arduino-cli\arduino-cli.exe")
+        )
+        if ($env:ProgramFiles) {
+            $candidates += Join-Path $env:ProgramFiles "Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe"
+            $candidates += Join-Path $env:ProgramFiles "Arduino CLI\arduino-cli.exe"
+        }
+        if ($env:LOCALAPPDATA) {
+            $candidates += Join-Path $env:LOCALAPPDATA "Programs\Arduino CLI\arduino-cli.exe"
+        }
+        foreach ($candidate in $candidates) {
+            if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                $cliPath = $candidate
+                break
+            }
+        }
+    }
+}
+if (-not $cliPath) {
+    throw "Arduino CLI not found. Install with: winget install --id ArduinoSA.CLI --exact ; reopen PowerShell and run: arduino-cli version ; or pass -ArduinoCliPath 'C:\path\arduino-cli.exe'. Your Android APK is already built; rerun this script with -SkipAndroid to compile firmware only. Nothing was flashed."
+}
+Write-Host "Arduino CLI: $cliPath"
+if ($CheckToolchainOnly) {
+    & $cliPath version
+    if ($LASTEXITCODE -ne 0) { throw "Arduino CLI could not start: $cliPath" }
+    Write-Host "PASS: Arduino CLI executable located and runnable (no build, no flash)"
+    return
+}
+if ($UploadFirmware -and [string]::IsNullOrWhiteSpace($Port)) {
+    throw "Pass -Port COMx together with -UploadFirmware; do not guess the hardware port."
+}
 New-Item -ItemType Directory -Force -Path $reports | Out-Null
 
 if (-not $SkipAndroid) {
@@ -56,17 +108,13 @@ if (-not $SkipAndroid) {
 }
 
 Write-Host "[2/3] ESP32: compilation using Arduino-ESP32 $coreVersion"
-$cli = Get-Command "arduino-cli" -ErrorAction SilentlyContinue
-if (-not $cli) {
-    throw "arduino-cli is not installed or not in PATH. Install the official Arduino CLI, then rerun."
-}
-& arduino-cli core update-index --additional-urls $arduinoUrl
+& $cliPath core update-index --additional-urls $arduinoUrl
 if ($LASTEXITCODE -ne 0) { throw "Cannot update Espressif board index" }
-& arduino-cli core install "esp32:esp32@$coreVersion" --additional-urls $arduinoUrl
+& $cliPath core install "esp32:esp32@$coreVersion" --additional-urls $arduinoUrl
 if ($LASTEXITCODE -ne 0) { throw "Arduino ESP32 core install failed" }
 $firmwareOutput = Join-Path $reports "firmware"
 New-Item -ItemType Directory -Force -Path $firmwareOutput | Out-Null
-& arduino-cli compile --fqbn $Board --output-dir $firmwareOutput $firmwareDir
+& $cliPath compile --fqbn $Board --output-dir $firmwareOutput $firmwareDir
 if ($LASTEXITCODE -ne 0) { throw "ESP32 firmware compile failed" }
 Write-Host "ESP32 firmware compiled: $firmwareOutput"
 
@@ -75,7 +123,7 @@ if ($UploadFirmware) {
         throw "Pass -Port COMx together with -UploadFirmware. Do not guess the hardware port."
     }
     Write-Host "[3/3] Uploading to explicitly selected port $Port"
-    & arduino-cli upload --fqbn $Board --port $Port --input-dir $firmwareOutput $firmwareDir
+    & $cliPath upload --fqbn $Board --port $Port --input-dir $firmwareOutput $firmwareDir
     if ($LASTEXITCODE -ne 0) { throw "ESP32 upload failed" }
 } else {
     Write-Host "[3/3] Firmware NOT flashed (pass -UploadFirmware -Port COMx after checking wiring)"
