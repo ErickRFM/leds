@@ -45,5 +45,28 @@ int main() {
   assert(pins.acquire(18, "other", PinFunction::DigitalOutput));
   assert(!runtime.startSequence(pins, 18, steps, 3, 3000));
   assert(pins.release(18, "other"));
-  std::cout << "PASS: bounded declarative experiments, ownership, rollback, timeout safety\n";
+
+  // A blocked WebServer must NOT stretch intervals or replay missed HIGH pulses.
+  assert(runtime.startSequence(pins, 18, steps, 3, 4000));
+  runtime.tick(pins, 4750); // Missed first two boundaries: third step is HIGH.
+  assert(runtime.active() && runtime.currentStep() == 2);
+  assert(testPinValues[18] == HIGH);
+  runtime.tick(pins, 4900); // Sum of durations reached, stop and release.
+  assert(!runtime.active() && testPinValues[18] == LOW);
+  assert(testPinModes[18] == INPUT && pins.leasedCount() == 0);
+
+  // If the loop resumes after the entire program, it should stop immediately.
+  assert(runtime.startSequence(pins, 18, steps, 3, 5000));
+  runtime.tick(pins, 8500);
+  assert(!runtime.active() && pins.leasedCount() == 0 && testPinValues[18] == LOW);
+
+  // millis() wraparound must preserve deadlines without claiming negative durations.
+  const uint32_t nearWrap = 0xFFFFFF00u;
+  assert(runtime.startSequence(pins, 18, steps, 3, nearWrap));
+  runtime.tick(pins, static_cast<uint32_t>(nearWrap + 600u));
+  assert(runtime.active() && runtime.currentStep() == 2 && testPinValues[18] == HIGH);
+  runtime.tick(pins, static_cast<uint32_t>(nearWrap + 900u));
+  assert(!runtime.active() && pins.leasedCount() == 0 && testPinValues[18] == LOW);
+
+  std::cout << "PASS: bounded declarative experiments, timing catch-up, ownership, rollback and timeout safety\n";
 }
