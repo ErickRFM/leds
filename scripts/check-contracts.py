@@ -22,7 +22,9 @@ for mode in ("RAINBOW", "BREATHE", "FADE"):
     assert f'EffectItem("{mode}"' in effects, f"Missing {mode} Android action"
     assert f'"{mode}"' in firmware, f"Missing {mode} ESP32 parser"
 assert 'writeCommand("FX,${effect.id},' in effects, "Dynamic FX action missing"
-assert "FX,STOP" in effects and "FX,STOP" in firmware
+codec = (root / "firmware/esp32_rgb/core/RgbCommandCodec.h").read_text(encoding="utf-8")
+assert "FX,STOP" in effects and "FX,STOP" in codec
+assert "esp32core::parseRgbCommand" in firmware, "Firmware must route RGB through shared codec"
 assert "requestMtu(128)" in android and "BLEDevice::setMTU(128)" in firmware, "MTU negotiation missing"
 assert "completeInitialRead" in android and "connectionTimeout" in android, "BLE readiness checks missing"
 assert "PROPERTY_READ" in firmware and "PROPERTY_NOTIFY" in firmware
