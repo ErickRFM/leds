@@ -48,6 +48,12 @@ jobs:
         run: python3 scripts/check-release-safety.py
       - name: OTA slot budget logic regression
         run: python3 scripts/check-firmware-budget.py --self-test
+      - name: V4 identity and truthful security capability gate
+        run: python3 scripts/check-v4-identity.py
+      - name: V4 device identity codec host tests
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/device_identity_test.cpp -o /tmp/device_identity_test
+          /tmp/device_identity_test
       - name: RGB command codec host regression
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/rgb_command_codec_test.cpp -o /tmp/rgb_command_codec_test
