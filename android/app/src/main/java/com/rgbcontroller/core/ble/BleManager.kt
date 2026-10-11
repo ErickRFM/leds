@@ -23,6 +23,7 @@ import android.os.Looper
 import android.os.ParcelUuid
 import androidx.core.content.ContextCompat
 import com.rgbcontroller.core.model.RgbDeviceState
+import com.rgbcontroller.core.model.RgbDeviceCommand
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,6 +41,7 @@ class BleManager(private val context: Context) {
         val COMMAND_CHAR_UUID: UUID = UUID.fromString("4b9d0002-7a5e-4d4c-ae88-c8c70d3ab211")
         val STATE_CHAR_UUID: UUID = UUID.fromString("4b9d0003-7a5e-4d4c-ae88-c8c70d3ab211")
         private val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+        const val WRITE_TIMEOUT_MS = 5000L
     }
 
     private val adapter: BluetoothAdapter? =
@@ -64,6 +66,14 @@ class BleManager(private val context: Context) {
     private var scanning = false
     private val pending = ArrayDeque<String>()
     private var writeInFlight = false
+    private val writeTimeout = Runnable {
+        val stalled = synchronized(pending) { writeInFlight }
+        if (stalled && _connectionState.value == BleConnectionState.Ready) {
+            // A missing GATT callback must not freeze the sliders indefinitely.
+            // The next connection must read authoritative RGB state again.
+            lostLink("ESP32 no confirmó escritura BLE en 5 s")
+        }
+    }
     private var activeDevice: BluetoothDevice? = null
     private var manualDisconnect = false
     private var retries = 0
@@ -298,7 +308,8 @@ class BleManager(private val context: Context) {
         override fun onCharacteristicWrite(
             remote: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int
         ) {
-            if (remote !== gatt) return
+            if (remote !== gatt || characteristic.uuid != COMMAND_CHAR_UUID) return
+            handler.removeCallbacks(writeTimeout)
             synchronized(pending) { writeInFlight = false }
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 lostLink("Falló escritura GATT: $status")
@@ -330,7 +341,9 @@ class BleManager(private val context: Context) {
     }
 
     fun writeCommand(text: String) {
-        if (_connectionState.value != BleConnectionState.Ready) return
+        // Reject malformed/unknown operations before they enter the GATT queue.
+        if (!RgbDeviceCommand.allowed(text) ||
+            _connectionState.value != BleConnectionState.Ready) return
         synchronized(pending) {
             if (text.startsWith("SET,")) pending.removeAll { it.startsWith("SET,") }
             if (pending.size >= 16) pending.removeFirst()
@@ -348,22 +361,32 @@ class BleManager(private val context: Context) {
             val message = pending.removeFirst()
             val bytes = message.toByteArray(Charsets.UTF_8)
             writeInFlight = true
-            val ok = if (Build.VERSION.SDK_INT >= 33) {
-                remote.writeCharacteristic(
-                    characteristic, bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                ) == BluetoothStatusCodes.SUCCESS
-            } else {
-                @Suppress("DEPRECATION")
-                characteristic.value = bytes
-                @Suppress("DEPRECATION")
-                characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                @Suppress("DEPRECATION")
-                remote.writeCharacteristic(characteristic)
+            val ok = try {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    remote.writeCharacteristic(
+                        characteristic, bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                    ) == BluetoothStatusCodes.SUCCESS
+                } else {
+                    @Suppress("DEPRECATION")
+                    characteristic.value = bytes
+                    @Suppress("DEPRECATION")
+                    characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                    @Suppress("DEPRECATION")
+                    remote.writeCharacteristic(characteristic)
+                }
+            } catch (_: SecurityException) {
+                false
+            } catch (_: IllegalStateException) {
+                false
             }
             if (!ok) {
                 writeInFlight = false
-                _connectionState.value = BleConnectionState.Error("No se pudo iniciar escritura GATT")
                 pending.clear()
+                // Must close and recover: a failed GATT operation may poison its queue.
+                lostLink("No se pudo iniciar escritura GATT")
+            } else {
+                handler.removeCallbacks(writeTimeout)
+                handler.postDelayed(writeTimeout, WRITE_TIMEOUT_MS)
             }
         }
     }
@@ -381,6 +404,7 @@ class BleManager(private val context: Context) {
     }
 
     private fun closeConnection() {
+        handler.removeCallbacks(writeTimeout)
         synchronized(pending) {
             pending.clear()
             writeInFlight = false
