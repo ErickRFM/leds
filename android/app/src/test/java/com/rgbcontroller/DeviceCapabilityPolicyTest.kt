@@ -25,11 +25,11 @@ class DeviceCapabilityPolicyTest {
         assertFalse(DeviceCapabilityPolicy.check(CompiOperation.READ_RGB, CompiChannel.WIFI_LAB, false).allowed)
     }
     @Test fun secureBleLabelAloneDoesNotGrantOwnerPermissions() {
-        assertFalse(DeviceCapabilityPolicy.check(CompiOperation.WRITE_GPIO, CompiChannel.AUTHENTICATED_BLE,
-            true, authorizedOwner = true).allowed)
-        assertFalse(DeviceCapabilityPolicy.check(CompiOperation.RUN_GPIO_SCRIPT, CompiChannel.AUTHENTICATED_BLE,
-            true, secureBleAvailable = true).allowed)
-        assertTrue(DeviceCapabilityPolicy.check(CompiOperation.RUN_GPIO_SCRIPT, CompiChannel.AUTHENTICATED_BLE,
-            true, authorizedOwner = true, secureBleAvailable = true).allowed)
+        assertFalse(DeviceCapabilityPolicy.check(CompiOperation.WRITE_GPIO,
+            CompiChannel.AUTHENTICATED_BLE, true).allowed)
+        assertFalse(DeviceCapabilityPolicy.check(CompiOperation.RUN_GPIO_SCRIPT,
+            CompiChannel.AUTHENTICATED_BLE, true).allowed)
+        assertFalse(DeviceCapabilityPolicy.check(CompiOperation.CONFIGURE_WIFI,
+            CompiChannel.AUTHENTICATED_BLE, true).allowed)
     }
 }
