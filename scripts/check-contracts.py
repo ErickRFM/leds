@@ -27,6 +27,11 @@ assert '"FX," + name + "," + speed' in android_rgb_contract, "Shared effect seri
 codec = (root / "firmware/esp32_rgb/core/RgbCommandCodec.h").read_text(encoding="utf-8")
 assert "FX,STOP" in effects and "FX,STOP" in codec
 assert "esp32core::parseRgbCommand" in firmware, "Firmware must route RGB through shared codec"
+ble_gpio_block = firmware.split('gpioStatusCharacteristic = service->createCharacteristic(', 1)[1].split('service->start();', 1)[0]
+assert "GPIO_STATUS_UUID, BLECharacteristic::PROPERTY_READ" in ble_gpio_block
+assert "PROPERTY_WRITE" not in ble_gpio_block, "GPIO BLE telemetry MUST stay read-only"
+assert '"4b9d0005-7a5e-4d4c-ae88-c8c70d3ab211"' in android, "Optional GPIO BLE UUID mismatch"
+assert "gpioReadInFlight" in android and "gpioPollingDisabled" in android, "GATT read must not collide with RGB writes"
 assert "requestMtu(128)" in android and "BLEDevice::setMTU(128)" in firmware, "MTU negotiation missing"
 assert "completeInitialRead" in android and "connectionTimeout" in android, "BLE readiness checks missing"
 assert "PROPERTY_READ" in firmware and "PROPERTY_NOTIFY" in firmware
