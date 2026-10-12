@@ -3,68 +3,101 @@ package com.rgbcontroller.feature.home
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.ColorLens
+import androidx.compose.material.icons.filled.DeveloperBoard
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.SettingsInputComponent
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.rgbcontroller.core.ble.BleConnectionState
+import com.rgbcontroller.core.ble.BleManager
+import com.rgbcontroller.core.ui.CompiModuleCard
+import com.rgbcontroller.core.ui.CompiInlineMessage
 import com.rgbcontroller.core.ui.SectionHeader
 
 @Composable
 fun DashboardScreen(
+    bleManager: BleManager,
     onLed: () -> Unit,
     onCode: () -> Unit,
     onCenter: () -> Unit
 ) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-        .padding(horizontal = 18.dp, vertical = 20.dp)) {
-        SectionHeader("ESP32 Control Center", "Una plataforma modular para controlar, crear y probar")
-        Spacer(Modifier.height(20.dp))
-        FeatureCard("LED RGB", "Color, brillo, favoritos y efectos. Cambia entre Bluetooth y Wi-Fi desde el módulo.",
-            "Abrir módulo LED", onLed)
-        Spacer(Modifier.height(12.dp))
-        FeatureCard("Código", "Importa, pega, copia y exporta TXT/INO; conserva el flujo de firmware seguro.",
-            "Abrir editor", onCode)
-        Spacer(Modifier.height(12.dp))
-        FeatureCard("Centro ESP32", "Equipos, conectividad, diagnóstico, GPIO, sensores y experimentos.",
-            "Ir al centro", onCenter)
-        Spacer(Modifier.height(12.dp))
-        Text("La conexión Wi-Fi es de laboratorio en APK debug; el flasheo desde Android aún no está habilitado.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val bleConnection by bleManager.connectionState.collectAsState()
+    val status = when (val state = bleConnection) {
+        BleConnectionState.Ready -> "Bluetooth listo"
+        BleConnectionState.Scanning -> "Buscando dispositivos"
+        BleConnectionState.Connecting -> "Conectando ESP32"
+        BleConnectionState.Discovering -> "Sincronizando ESP32"
+        BleConnectionState.Disconnected -> "Sin dispositivo conectado"
+        is BleConnectionState.Error -> "Bluetooth necesita atención"
+    }
+    val details = when (val state = bleConnection) {
+        BleConnectionState.Ready -> "Tu ESP32 está listo para recibir controles RGB."
+        BleConnectionState.Scanning -> "Buscando controladores compatibles cercanos."
+        BleConnectionState.Connecting, BleConnectionState.Discovering -> "Espera a que termine la conexión."
+        BleConnectionState.Disconnected -> "Puedes trabajar en Código o abrir LED para conectarte."
+        is BleConnectionState.Error -> state.message
+    }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(horizontal = 18.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        SectionHeader("Compi", "Controla, crea y experimenta con tu ESP32")
+        Card(
+            onClick = onLed,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        ) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("Dispositivo actual · Bluetooth", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Text(status, style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Text(details, style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Text("Abrir controles y conexión  →", style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer)
+            }
+        }
+        Text("Herramientas", style = MaterialTheme.typography.titleMedium)
+        CompiModuleCard("LED RGB", "Color, brillo, favoritos y efectos",
+            Icons.Default.ColorLens, onClick = onLed)
+        CompiModuleCard("Compi Studio", "Editar código, proyectos y scripts",
+            Icons.Default.Code, onClick = onCode)
+        CompiModuleCard("Centro ESP32", "Equipos, Wi-Fi, GPIO, sensores y pruebas",
+            Icons.Default.DeveloperBoard, onClick = onCenter)
+        CompiInlineMessage(
+            "La conexión Wi-Fi está disponible solo para pruebas en APK debug. " +
+                "La edición de código no flashea automáticamente la placa."
+        )
+        Spacer(Modifier.height(8.dp))
     }
 }
 
 @Composable
 fun CenterLandingScreen(onDevices: () -> Unit, onLab: () -> Unit, onCode: () -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-        .padding(horizontal = 18.dp, vertical = 20.dp)) {
-        SectionHeader("Centro", "El resto de herramientas vive aquí, no dentro del módulo LED")
-        Spacer(Modifier.height(18.dp))
-        FeatureCard("Dispositivos", "Busca y conecta por BLE. El modo Wi-Fi se selecciona en LED.",
-            "Administrar dispositivos", onDevices)
-        Spacer(Modifier.height(12.dp))
-        FeatureCard("Hardware y laboratorio", "Estado, red, pines seguros, ADC1, diagnóstico y secuencias.",
-            "Abrir laboratorio", onLab)
-        Spacer(Modifier.height(12.dp))
-        FeatureCard("Proyectos de código", "Importa, pega, copia y exporta tus fuentes; el flasheo seguro está pendiente.",
-            "Abrir código", onCode)
-    }
-}
-
-@Composable
-private fun FeatureCard(
-    title: String,
-    summary: String,
-    action: String,
-    onClick: () -> Unit
-) {
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(18.dp)) {
-            Text(title, style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(6.dp))
-            Text(summary, style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(12.dp))
-            Button(onClick = onClick, modifier = Modifier.fillMaxWidth()) { Text(action) }
-        }
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(horizontal = 18.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        SectionHeader("Centro ESP32", "Hardware y herramientas de diagnóstico")
+        CompiModuleCard("Dispositivos", "Buscar y conectar controladores Bluetooth",
+            Icons.Default.Bluetooth, onClick = onDevices)
+        CompiModuleCard("Hardware Lab", "Wi-Fi, GPIO, sensores, recursos y diagnóstico",
+            Icons.Default.SettingsInputComponent, onClick = onLab)
+        CompiModuleCard("Compi Studio", "Volver al editor y a tus proyectos",
+            Icons.Default.Code, onClick = onCode)
     }
 }
