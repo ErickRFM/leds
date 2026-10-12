@@ -27,6 +27,7 @@ import com.rgbcontroller.core.ble.BleConnectionState
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.model.RgbControlLink
 import com.rgbcontroller.core.model.ColorUtils
+import com.rgbcontroller.core.model.RgbAckPolicy
 import com.rgbcontroller.core.ui.SectionHeader
 import kotlinx.coroutines.delay
 import kotlin.math.atan2
@@ -61,9 +62,7 @@ fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null) {
         val state = actual ?: return@LaunchedEffect
         val expected = awaitingState
         if (expected != null &&
-            (deviceRevision <= submittedAtRevision ||
-                state.red != expected.r || state.green != expected.g ||
-                state.blue != expected.b || state.brightness != expected.brightness)) {
+            !RgbAckPolicy.confirmed(expected, submittedAtRevision, deviceRevision, state)) {
             return@LaunchedEffect
         }
         // A late exact readback may clear a timeout; unrelated old states may not.
