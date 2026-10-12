@@ -32,6 +32,7 @@ import com.rgbcontroller.core.lab.LabStep
 import com.rgbcontroller.core.ui.SectionHeader
 import com.rgbcontroller.core.ui.CompiInlineMessage
 import com.rgbcontroller.core.wifi.LocalLabClient
+import com.rgbcontroller.core.wifi.CompiLabSession
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CancellationException
@@ -48,14 +49,14 @@ private enum class LabSection(val title: String) {
 }
 
 @Composable
-fun LabHubScreen() {
+fun LabHubScreen(labSession: CompiLabSession) {
     val context = LocalContext.current
     val debug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     val client = remember(context) { LocalLabClient(context.applicationContext) }
     val preferences = remember(context) { PreferencesRepository(context.applicationContext) }
     val savedProjects by preferences.experimentProjects.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
-    var secret by remember { mutableStateOf("") } // Never persist credentials
+    val secret = labSession.key // Shared volatile session; never saved or exported.
     var status by remember { mutableStateOf<JSONObject?>(null) }
     var firmware by remember { mutableStateOf<JSONObject?>(null) }
     var diagnostics by remember { mutableStateOf<JSONObject?>(null) }
@@ -84,8 +85,11 @@ fun LabHubScreen() {
 
     // Sampling belongs to this Composable lifecycle; navigation away cancels the job.
     // No GPS, no background process, no unbounded retention and no device secrets in CSV.
-    LaunchedEffect(samplingAdc) {
-        if (!samplingAdc) return@LaunchedEffect
+    LaunchedEffect(samplingAdc, section, secret) {
+        if (!samplingAdc || section != LabSection.SENSORS) {
+            if (samplingAdc && section != LabSection.SENSORS) samplingAdc = false
+            return@LaunchedEffect
+        }
         val started = SystemClock.elapsedRealtime()
         try {
             for (i in 0 until 40) {
@@ -111,6 +115,7 @@ fun LabHubScreen() {
         busy = true
         scope.launch {
             try { block() }
+            catch (cancelled: CancellationException) { throw cancelled }
             catch (e: Exception) { message = e.message ?: "No hay respuesta del ESP32." }
             finally { busy = false }
         }
@@ -164,7 +169,7 @@ fun LabHubScreen() {
                 }) { Text("Abrir ajustes Wi-Fi") }
                 Text("SoftAP · 192.168.4.1", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(10.dp))
-                OutlinedTextField(value = secret, onValueChange = { secret = it.trim().take(16) },
+                OutlinedTextField(value = secret, onValueChange = { labSession.setKey(it) },
                     label = { Text("Clave de control del dispositivo") },
                     singleLine = true, visualTransformation = PasswordVisualTransformation(),
                     enabled = debug, modifier = Modifier.fillMaxWidth())
