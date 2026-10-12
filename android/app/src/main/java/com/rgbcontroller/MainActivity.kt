@@ -137,6 +137,7 @@ fun MainAppNavHost(bleManager: BleManager, preferencesRepository: PreferencesRep
             ) {
                 composable(Screen.Home.route) {
                     DashboardScreen(
+                        bleManager = bleManager,
                         onLed = { navController.navigateTopLevel(Screen.Led) },
                         onCode = { navController.navigateTopLevel(Screen.Code) },
                         onCenter = { navController.navigateTopLevel(Screen.Center) }
