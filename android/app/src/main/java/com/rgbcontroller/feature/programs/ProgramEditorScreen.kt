@@ -24,6 +24,8 @@ import com.rgbcontroller.core.programs.ProgramLanguage
 import com.rgbcontroller.core.programs.ProgramSourcePolicy
 import com.rgbcontroller.core.wifi.LocalLabClient
 import com.rgbcontroller.core.wifi.CompiLabSession
+import com.rgbcontroller.core.ble.BleManager
+import com.rgbcontroller.core.ble.BleConnectionState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -41,7 +43,7 @@ private data class PendingEditorReplacement(
 )
 
 @Composable
-fun ProgramEditorScreen(labSession: CompiLabSession) {
+fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val debug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
@@ -52,6 +54,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession) {
     var selected by rememberSaveable { mutableStateOf(ProgramLanguage.LAB_SCRIPT.name) }
     var notice by rememberSaveable { mutableStateOf("Selecciona un archivo o pega tus instrucciones.") }
     val controlKey = labSession.key // Volatile, shared with LED and Hardware Lab.
+    val bleConnection = bleManager?.connectionState?.collectAsState()?.value
     var experimentBusy by remember { mutableStateOf(false) }
     var laboratoryMode by rememberSaveable { mutableStateOf("GPIO") }
     var gpioDraft by rememberSaveable { mutableStateOf("") }
@@ -496,6 +499,23 @@ fun ProgramEditorScreen(labSession: CompiLabSession) {
                                 }
                             }
                         ) { Text("Detener") }
+                    }
+                    Text(
+                        "Bluetooth permite efectos RGB integrados, no ejecutar este archivo ni operar GPIO.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (bleConnection == BleConnectionState.Ready && bleManager != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = {
+                                bleManager.writeCommand("FX,BREATHE,120")
+                                notice = "Respiración BLE enviada. Comprueba el estado RGB recibido."
+                            }) { Text("Respirar por BLE") }
+                            TextButton(onClick = {
+                                bleManager.writeCommand("FX,STOP")
+                                notice = "Detención de efecto BLE enviada. Esperando estado."
+                            }) { Text("Parar BLE") }
+                        }
                     }
                     OutlinedButton(
                         enabled = debug && !experimentBusy && LocalLabClient.validKey(controlKey),
