@@ -12,6 +12,7 @@ import com.rgbcontroller.core.ui.CompiInlineMessage
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -137,6 +138,15 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                 (error.message ?: "error de almacenamiento")
             draftRecoveryError = true
         }
+    }
+
+    // Do not let the user type before the disk snapshot has been restored:
+    // otherwise a fast edit could overwrite the other engines' previous drafts.
+    if (!draftsLoaded && !draftRecoveryError) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
     }
 
     fun rememberCurrentDraft() {
