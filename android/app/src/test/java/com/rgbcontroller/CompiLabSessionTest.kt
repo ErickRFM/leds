@@ -12,11 +12,11 @@ class CompiLabSessionTest {
     @Test fun keysStayInMemoryAndInvalidateReadiness() {
         val session = CompiLabSession()
         session.selectTransport(LabTransport.WIFI_LAB)
-        session.setKey("1234567890abcdef")
+        session.updateKey("1234567890abcdef")
         val (epoch, key) = session.beginVerification()
         assertTrue(session.verified(epoch, key, red))
         assertTrue(session.wifiReady)
-        session.setKey("abcdef1234567890")
+        session.updateKey("abcdef1234567890")
         assertFalse(session.wifiReady)
         assertNull(session.rgbState)
         assertFalse(session.verified(epoch, key, red))
@@ -29,7 +29,7 @@ class CompiLabSessionTest {
     @Test fun lateTransportResponsesCannotReconnectWifi() {
         val session = CompiLabSession()
         session.selectTransport(LabTransport.WIFI_LAB)
-        session.setKey("1234567890abcdef")
+        session.updateKey("1234567890abcdef")
         val (epoch, key) = session.beginVerification()
         session.selectTransport(LabTransport.BLUETOOTH)
         assertFalse(session.verified(epoch, key, red))
