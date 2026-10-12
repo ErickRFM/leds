@@ -22,6 +22,7 @@ import com.rgbcontroller.core.programs.EditorReplacementPolicy
 import com.rgbcontroller.core.programs.ProgramLanguage
 import com.rgbcontroller.core.programs.ProgramSourcePolicy
 import com.rgbcontroller.core.wifi.LocalLabClient
+import com.rgbcontroller.core.wifi.CompiLabSession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -39,7 +40,7 @@ private data class PendingEditorReplacement(
 )
 
 @Composable
-fun ProgramEditorScreen() {
+fun ProgramEditorScreen(labSession: CompiLabSession) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val debug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
@@ -49,7 +50,7 @@ fun ProgramEditorScreen() {
     var fileName by rememberSaveable { mutableStateOf("Sin archivo") }
     var selected by rememberSaveable { mutableStateOf(ProgramLanguage.LAB_SCRIPT.name) }
     var notice by rememberSaveable { mutableStateOf("Selecciona un archivo o pega tus instrucciones.") }
-    var controlKey by remember { mutableStateOf("") } // RAM only. Never persisted or exported.
+    val controlKey = labSession.key // Volatile, shared with LED and Hardware Lab.
     var experimentBusy by remember { mutableStateOf(false) }
     var laboratoryMode by rememberSaveable { mutableStateOf("GPIO") }
     val language = ProgramLanguage.valueOf(selected)
@@ -279,7 +280,7 @@ fun ProgramEditorScreen() {
                     )
                     OutlinedTextField(
                         value = controlKey,
-                        onValueChange = { if (it.length <= 16) controlKey = it },
+                        onValueChange = { labSession.setKey(it) },
                         label = { Text("Clave de control del ESP32 (16 caracteres)") },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
@@ -379,7 +380,7 @@ fun ProgramEditorScreen() {
                             else MaterialTheme.colorScheme.error)
                     OutlinedTextField(
                         value = controlKey,
-                        onValueChange = { if (it.length <= 16) controlKey = it },
+                        onValueChange = { labSession.setKey(it) },
                         label = { Text("Clave de control del ESP32 (16 caracteres)") },
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth(), singleLine = true,
