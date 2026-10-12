@@ -121,6 +121,7 @@ fun LedModuleScreen(
         transport = if (isWifi) "WIFI_LAB" else "BLUETOOTH",
         ready = connected,
         state = state,
+        stateRevision = if (isWifi) labSession.stateRevision else 0L,
         sendCommand = { command ->
             if (isWifi) {
                 if (wifiReady && !wifiCommands.trySend(command).isSuccess) {
