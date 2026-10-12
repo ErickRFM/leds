@@ -21,6 +21,8 @@ import com.rgbcontroller.feature.control.ControlScreen
 import com.rgbcontroller.feature.effects.EffectsScreen
 import com.rgbcontroller.feature.presets.PresetsScreen
 import com.rgbcontroller.core.ui.SectionHeader
+import com.rgbcontroller.core.ui.CompiV9Segment
+import com.rgbcontroller.core.ui.CompiV9Panel
 import com.rgbcontroller.core.ui.CompiInlineMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
@@ -141,28 +143,30 @@ fun LedModuleScreen(
         ) {
             Text("LED RGB", style = MaterialTheme.typography.headlineSmall)
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                FilterChip(
+                CompiV9Segment(
+                    text = "Bluetooth",
                     selected = !isWifi,
+                    modifier = Modifier.weight(1f),
                     onClick = {
                         if (isWifi) {
                             labSession.selectTransport(LabTransport.BLUETOOTH)
                             wifiBusy = false
                         }
-                    },
-                    label = { Text("Bluetooth") }
+                    }
                 )
-                FilterChip(
+                CompiV9Segment(
+                    text = "Wi-Fi",
                     selected = isWifi,
+                    modifier = Modifier.weight(1f),
                     onClick = {
                         if (!isWifi) {
                             labSession.selectTransport(LabTransport.WIFI_LAB)
                             wifiBusy = false
                         }
-                    },
-                    label = { Text("Wi-Fi") }
+                    }
                 )
             }
             if (!isWifi) {
