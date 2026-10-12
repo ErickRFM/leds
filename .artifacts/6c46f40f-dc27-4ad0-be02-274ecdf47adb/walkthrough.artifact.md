@@ -1,15 +1,14 @@
-# Walkthrough - Compi V9 Reference UI & V12 Automation Integration (Definitive Execution)
+# Walkthrough - Compi V9 Reference UI & V12/V13 Integration (Definitive)
 
-This walkthrough summarizes the definitive execution and integration of the **Compi V9 Reference UI** and **V12 Automations** into `main`.
+This walkthrough summarizes the definitive execution, unifications, local testing, and push to `origin/main` for the **Compi V9 Reference UI** and **V12/V13 Automations**.
 
 ## Changes Made
 
-### 1. Compi V9 Reference UI & V12 Integration
-- **Design System & Components:** Updated `RgbTheme.kt`, `CompiComponents.kt`, and `CompiV9Surface.kt` for dark matte surfaces (`#17171C`), purple primary accents (`#D0B9FF`), and clean card styling matching the 4 reference UI screenshots.
-- **Dashboard / Inicio Screen (`DashboardScreen.kt`):** Implemented Compi header with settings icon, ESP32 status card with illustration, connection status, Bluetooth/Wi-Fi indicators, quick access buttons (LED RGB, Compi Studio, Hardware Lab, Dispositivos), main tool cards, and recent activity feed.
-- **LED RGB Module (`LedModuleScreen.kt`):** Integrated Bluetooth/Wi-Fi transport toggles, connected device card, color wheel, R/G/B sliders, brightness control, power toggle, favorites pills, and effects selector (Rainbow, Breathe, Fade) with speed adjustment in a unified scrollable layout.
-- **Compi Studio (`ProgramEditorScreen.kt`):** Implemented local editor card with toolbar (Import, Paste, Export, Copy), project type selector (Laboratorio vs Arduino C++), code editor with line numbers and syntax highlighting, size/line counters, Run RGB / Stop controls, and "Mis proyectos" list.
-- **Hardware Lab (`LabHubScreen.kt`):** Implemented top tab selector (Conexión, GPIO, Sensores, Diagnóstico), Laboratory Wi-Fi connection card with secure key, device state card (Chip, Flash, RAM, RSSI), GPIO control card, ADC1 sensors real-time waveform chart, and autodiagnostics.
+### 1. Unified Compi V9 Reference UI & V12/V13 Integration
+- **LED RGB Module (`LedModuleScreen.kt`):** Refactored to eliminate tab separation (`LedPage.entries`), presenting Control (Wheel + Sliders), Power switch, Favorites, and Effects together in a single scrollable vertical view matching Reference Image 2.
+- **Dashboard / Inicio (`DashboardScreen.kt`):** Implemented Compi header with settings icon, ESP32 status card with illustration, connection status, Bluetooth/Wi-Fi indicators, quick access buttons, main tool cards, and recent activity feed.
+- **Compi Studio (`ProgramEditorScreen.kt`):** Local editor card with toolbar (Import, Paste, Export, Copy), project type selector (Laboratorio vs Arduino C++), code editor with line numbers and syntax highlighting, size/line counters, Run RGB / Stop controls, and "Mis proyectos" list.
+- **Hardware Lab (`LabHubScreen.kt`):** Top tab selector (Conexión, GPIO, Sensores, Diagnóstico), Laboratory Wi-Fi connection card with secure key, device state card (Chip, Flash, RAM, RSSI), GPIO control card, ADC1 sensors real-time waveform chart, and autodiagnostics.
 - **Navigation (`MainActivity.kt`):** Unified bottom navigation bar to display exactly 4 tabs: Inicio, LED, Studio, Hardware.
 
 ### 2. Local Android Verification & APK Generation
@@ -17,10 +16,10 @@ This walkthrough summarizes the definitive execution and integration of the **Co
 - **Generated APK Path:**
   `android/app/build/outputs/apk/debug/app-debug.apk`
 - **APK SHA-256 Hash:**
-  `3356712AC59AB3E3920A67EC70806A048DFA4BA8D4D279F759536BE69AFB132E`
+  `2FA8BE989880467570A52EE87A77C2265AD5B60E88B751096228E544B21F7816`
 
 ### 3. Git & Integration
-- Successfully merged Compi V9 reference UI screens and V12 automations onto `main` and pushed to `origin/main` (Commit SHA: `8ee1704`).
+- Successfully merged and pushed definitive Compi V9 reference UI screens and V12/V13 automations to `origin/main` (Commit SHA: `bafb692`).
 
 ## Verification Results
 
