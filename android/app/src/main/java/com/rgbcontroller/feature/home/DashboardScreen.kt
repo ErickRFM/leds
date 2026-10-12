@@ -12,6 +12,9 @@ import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.DeveloperBoard
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,7 +40,8 @@ fun DashboardScreen(
     onLed: () -> Unit,
     onCode: () -> Unit,
     onDevices: () -> Unit,
-    onHardware: () -> Unit
+    onHardware: () -> Unit,
+    onSettings: () -> Unit = {}
 ) {
     val connection by bleManager.connectionState.collectAsState()
     val ready = connection == BleConnectionState.Ready
@@ -59,11 +63,17 @@ fun DashboardScreen(
     }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("Compi", style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Compi", style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+            IconButton(onClick = onSettings, modifier = Modifier.testTag("home_settings")) {
+                Icon(Icons.Default.Settings, contentDescription = "Ajustes")
+            }
+        }
         Card(
             onClick = onDevices,
             shape = RoundedCornerShape(24.dp),
@@ -98,10 +108,10 @@ fun DashboardScreen(
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            QuickAction("LED RGB", onLed, Modifier.weight(1f))
-            QuickAction("Studio", onCode, Modifier.weight(1f))
-            QuickAction("Hardware", onHardware, Modifier.weight(1f))
-            QuickAction("Equipos", onDevices, Modifier.weight(1f))
+            QuickAction("LED RGB", Icons.Default.ColorLens, onLed, Modifier.weight(1f))
+            QuickAction("Studio", Icons.Default.Code, onCode, Modifier.weight(1f))
+            QuickAction("Hardware", Icons.Default.Memory, onHardware, Modifier.weight(1f))
+            QuickAction("Equipos", Icons.Default.Devices, onDevices, Modifier.weight(1f))
         }
 
         Text("Herramientas principales", style = MaterialTheme.typography.titleLarge,
@@ -131,16 +141,20 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun QuickAction(title: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun QuickAction(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit, modifier: Modifier = Modifier) {
     Card(
         onClick = onClick,
-        modifier = modifier.heightIn(min = 80.dp),
+        modifier = modifier.heightIn(min = 76.dp),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Box(Modifier.fillMaxWidth().heightIn(min = 80.dp).padding(6.dp),
-            contentAlignment = Alignment.Center) {
-            Text(title, style = MaterialTheme.typography.labelMedium,
+        Column(Modifier.fillMaxWidth().heightIn(min = 76.dp).padding(6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.height(6.dp))
+            Text(title, style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold, maxLines = 2)
         }
     }
