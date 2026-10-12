@@ -18,7 +18,7 @@ import com.rgbcontroller.core.ui.SectionHeader
 private data class EffectItem(val id: String, val name: String, val description: String)
 
 @Composable
-fun EffectsScreen(bleManager: BleManager, link: RgbControlLink? = null) {
+fun EffectsScreen(bleManager: BleManager, link: RgbControlLink? = null, embedded: Boolean = false) {
     val connection by bleManager.connectionState.collectAsState()
     val bleState by bleManager.rgbState.collectAsState()
     val state = if (link != null) link.state else bleState
@@ -34,7 +34,7 @@ fun EffectsScreen(bleManager: BleManager, link: RgbControlLink? = null) {
         EffectItem("FADE", "Fundido RGB", "Variación de color y luminosidad")
     )
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+    Column((if (embedded) Modifier.fillMaxWidth() else Modifier.fillMaxSize().verticalScroll(rememberScrollState()))
         .padding(horizontal = 18.dp, vertical = 20.dp)) {
         SectionHeader("Efectos", "Ambientes de luz controlados desde el ESP32")
         Spacer(Modifier.height(20.dp))
