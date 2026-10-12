@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -105,6 +106,11 @@ private fun NavHostController.navigateTopLevel(screen: Screen) {
 @Composable
 fun MainAppNavHost(bleManager: BleManager, preferencesRepository: PreferencesRepository) {
     val theme by preferencesRepository.themeMode.collectAsState(initial = "SYSTEM")
+    val verifiedAddress by bleManager.connectedAddress.collectAsState()
+    // Persist the successful connection regardless of which Compi module is visible.
+    LaunchedEffect(verifiedAddress) {
+        verifiedAddress?.let { preferencesRepository.saveLastDeviceMac(it) }
+    }
     RgbTheme(theme) {
         val navController = rememberNavController()
         val items = listOf(Screen.Home, Screen.Led, Screen.Code, Screen.Center, Screen.Settings)
