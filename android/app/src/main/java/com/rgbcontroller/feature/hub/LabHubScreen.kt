@@ -150,7 +150,7 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
         if (!debug || busy) return
         busy = true
         scope.launch {
-            try { labSession.serialized { block() } }
+            try { labSession.userOperation("Hardware Lab") { block() } }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (e: Exception) { message = e.message ?: "No hay respuesta del ESP32." }
             finally { busy = false }
@@ -176,6 +176,13 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
         }
         Spacer(Modifier.height(8.dp))
         if (busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        if (labSession.operationStatus.name.isNotBlank()) {
+            val progress = labSession.operationStatus
+            Text("${progress.name}: ${progress.phase.name.lowercase()}" +
+                (if (progress.details.isBlank()) "" else " · ${progress.details}"),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         CompiInlineMessage(message, isError =
             message.startsWith("Error", ignoreCase = true) ||
             message.startsWith("No hay", ignoreCase = true) ||
