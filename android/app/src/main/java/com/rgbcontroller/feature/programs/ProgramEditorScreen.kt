@@ -21,6 +21,8 @@ import androidx.compose.ui.text.font.FontFamily
 import com.rgbcontroller.core.programs.LabGpioScriptCompiler
 import com.rgbcontroller.core.programs.LabRgbScriptPolicy
 import com.rgbcontroller.core.programs.EditorReplacementPolicy
+import com.rgbcontroller.core.programs.EditorDraftSnapshot
+import com.rgbcontroller.core.data.EditorDraftStore
 import com.rgbcontroller.core.programs.ProgramLanguage
 import com.rgbcontroller.core.programs.ProgramSourcePolicy
 import com.rgbcontroller.core.wifi.LocalLabClient
@@ -29,6 +31,7 @@ import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.ble.BleConnectionState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -49,6 +52,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
     val clipboard = LocalClipboardManager.current
     val debug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     val labClient = remember(context) { LocalLabClient(context.applicationContext) }
+    val draftStore = remember(context) { EditorDraftStore(context.applicationContext) }
     val scope = rememberCoroutineScope()
     var source by rememberSaveable { mutableStateOf("") }
     var fileName by rememberSaveable { mutableStateOf("Sin archivo") }
@@ -64,6 +68,76 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
     var gpioFileName by rememberSaveable { mutableStateOf("Sin archivo") }
     var rgbFileName by rememberSaveable { mutableStateOf("Sin archivo") }
     var cppFileName by rememberSaveable { mutableStateOf("Sin archivo") }
+    var draftsLoaded by remember { mutableStateOf(false) }
+    var draftStatus by remember { mutableStateOf("Preparando recuperación local…") }
+    var draftRecoveryError by remember { mutableStateOf(false) }
+
+    // Files are private to Android; credentials from CompiLabSession are never serialized.
+    // Do not overwrite the disk snapshot if loading detected corruption or a newer version.
+    LaunchedEffect(draftStore) {
+        try {
+            val saved = draftStore.load()
+            if (saved != null && source.isBlank() && gpioDraft.isBlank() &&
+                rgbDraft.isBlank() && cppDraft.isBlank()) {
+                gpioDraft = saved.gpio
+                rgbDraft = saved.rgb
+                cppDraft = saved.arduino
+                gpioFileName = saved.gpioName
+                rgbFileName = saved.rgbName
+                cppFileName = saved.arduinoName
+                selected = saved.selected.name
+                laboratoryMode = saved.engine
+                source = when (saved.selected) {
+                    ProgramLanguage.ARDUINO_CPP -> saved.arduino
+                    ProgramLanguage.LAB_SCRIPT -> if (saved.engine == "RGB") saved.rgb else saved.gpio
+                }
+                fileName = when (saved.selected) {
+                    ProgramLanguage.ARDUINO_CPP -> saved.arduinoName
+                    ProgramLanguage.LAB_SCRIPT -> if (saved.engine == "RGB") saved.rgbName else saved.gpioName
+                }
+                notice = "Borradores locales recuperados. No se enviaron al ESP32."
+            }
+            draftStatus = if (saved == null) "Guardado automático local activo"
+                else "Borradores locales restaurados"
+            draftsLoaded = true
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            draftRecoveryError = true
+            draftStatus = "No se pudo recuperar el archivo local. " +
+                "Se ha protegido contra sobrescritura; exporta tu código antes de repararlo."
+        }
+    }
+    LaunchedEffect(
+        draftsLoaded, source, fileName, selected, laboratoryMode,
+        gpioDraft, rgbDraft, cppDraft, gpioFileName, rgbFileName, cppFileName
+    ) {
+        if (!draftsLoaded || draftRecoveryError) return@LaunchedEffect
+        delay(500)
+        val snapshot = EditorDraftSnapshot(
+            gpio = if (selected == ProgramLanguage.LAB_SCRIPT.name && laboratoryMode == "GPIO")
+                source else gpioDraft,
+            rgb = if (selected == ProgramLanguage.LAB_SCRIPT.name && laboratoryMode == "RGB")
+                source else rgbDraft,
+            arduino = if (selected == ProgramLanguage.ARDUINO_CPP.name) source else cppDraft,
+            gpioName = if (selected == ProgramLanguage.LAB_SCRIPT.name && laboratoryMode == "GPIO")
+                fileName else gpioFileName,
+            rgbName = if (selected == ProgramLanguage.LAB_SCRIPT.name && laboratoryMode == "RGB")
+                fileName else rgbFileName,
+            arduinoName = if (selected == ProgramLanguage.ARDUINO_CPP.name) fileName else cppFileName,
+            selected = ProgramLanguage.valueOf(selected), engine = laboratoryMode
+        )
+        try {
+            draftStore.save(snapshot)
+            draftStatus = "Borradores guardados localmente · sin subir al ESP32"
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            draftStatus = "No se guardaron los borradores: " +
+                (error.message ?: "error de almacenamiento")
+            draftRecoveryError = true
+        }
+    }
 
     fun rememberCurrentDraft() {
         if (selected == ProgramLanguage.ARDUINO_CPP.name) {
@@ -103,8 +177,8 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
     }
 
     val language = ProgramLanguage.valueOf(selected)
-    val compiled = remember(source, selected) {
-        if (selected == ProgramLanguage.LAB_SCRIPT.name) {
+    val compiled = remember(source, selected, laboratoryMode) {
+        if (selected == ProgramLanguage.LAB_SCRIPT.name && laboratoryMode == "GPIO") {
             runCatching { LabGpioScriptCompiler.compile(source) }
         } else null
     }
@@ -126,8 +200,20 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
     }
 
     fun requestReplacement(item: PendingEditorReplacement) {
-        if (EditorReplacementPolicy.requiresConfirmation(source, item.text)) pendingReplacement = item
-        else applyReplacement(item)
+        val nextMode = if (item.language == ProgramLanguage.LAB_SCRIPT &&
+            LabRgbScriptPolicy.validate(item.text).accepted) "RGB" else "GPIO"
+        val target = when (item.language) {
+            ProgramLanguage.ARDUINO_CPP ->
+                if (selected == item.language.name) source else cppDraft
+            ProgramLanguage.LAB_SCRIPT -> if (nextMode == "RGB") {
+                if (selected == item.language.name && laboratoryMode == "RGB") source else rgbDraft
+            } else {
+                if (selected == item.language.name && laboratoryMode == "GPIO") source else gpioDraft
+            }
+        }
+        if (EditorReplacementPolicy.requiresConfirmation(target, item.text)) {
+            pendingReplacement = item
+        } else applyReplacement(item)
     }
 
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -198,6 +284,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text("Programas", style = MaterialTheme.typography.headlineMedium)
+        CompiInlineMessage(draftStatus, isError = draftRecoveryError)
         Text("Importa un TXT/INO, pega código o escribe un programa. El núcleo RGB y la conexión no se modifican.",
             color = MaterialTheme.colorScheme.onSurfaceVariant)
 
@@ -313,7 +400,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
             source = source,
             language = language,
             onOpen = { project ->
-                applyReplacement(PendingEditorReplacement(
+                requestReplacement(PendingEditorReplacement(
                     project.source, project.name, project.language,
                     "Proyecto abierto: ${project.name}. No se envió código a la placa."
                 ))
