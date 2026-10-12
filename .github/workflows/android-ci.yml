@@ -7,6 +7,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Only the newest version of a PR branch needs an expensive Android/ESP32 build.
+# Different branches and main retain their independent CI records.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
