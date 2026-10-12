@@ -194,7 +194,7 @@ fun MainAppNavHost(
                     DevicesScreen(bleManager, preferencesRepository,
                         onInspectSecurity = { navController.navigate(Screen.Hub.route) })
                 }
-                composable(Screen.Hub.route) { LabHubScreen(session) }
+                composable(Screen.Hub.route) { LabHubScreen(session, bleManager) }
             }
         }
     }
