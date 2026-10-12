@@ -33,16 +33,6 @@ fun DevicesScreen(
     val publicId by bleManager.publicDeviceId.collectAsState()
     val lastMac by preferencesRepository.lastDeviceMac.collectAsState(initial = null)
     var searched by rememberSaveable { mutableStateOf(false) }
-    var requestedAddress by remember { mutableStateOf<String?>(null) }
-
-    // Remember only a device that actually reached READY, not a failed attempt.
-    LaunchedEffect(connection, requestedAddress) {
-        val address = requestedAddress
-        if (connection == BleConnectionState.Ready && address != null) {
-            preferencesRepository.saveLastDeviceMac(address)
-            requestedAddress = null
-        }
-    }
     val busy = connection is BleConnectionState.Connecting || connection is BleConnectionState.Discovering
     val ready = connection == BleConnectionState.Ready
     val searching = connection == BleConnectionState.Scanning
@@ -182,7 +172,6 @@ fun DevicesScreen(
                         }
                         Spacer(Modifier.width(8.dp))
                         Button(onClick = {
-                            requestedAddress = device.address
                             bleManager.connect(device)
                         }, enabled = !busy && !ready) { Text("Conectar") }
                     }
