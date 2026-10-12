@@ -39,7 +39,9 @@ import kotlin.math.cos
 fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null) {
     val connection by bleManager.connectionState.collectAsState()
     val bleActual by bleManager.rgbState.collectAsState()
+    val bleRevision by bleManager.stateRevision.collectAsState()
     val actual = if (link != null) link.state else bleActual
+    val deviceRevision = link?.stateRevision ?: bleRevision
     val ready = link?.ready ?: (connection == BleConnectionState.Ready)
     fun send(command: String) {
         if (link != null) link.sendCommand(command) else bleManager.writeCommand(command)
@@ -51,14 +53,16 @@ fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null) {
     var dirty by remember { mutableStateOf(false) }
     var awaitingState by remember { mutableStateOf<ColorUtils.RgbColor?>(null) }
     var confirmationError by remember { mutableStateOf<String?>(null) }
+    var submittedAtRevision by remember { mutableLongStateOf(-1L) }
 
     // Never replace an in-progress local edit with an older BLE notification.
     // Only accept the device state once the last submitted RGB command is acknowledged.
-    LaunchedEffect(actual, awaitingState, dirty) {
+    LaunchedEffect(actual, awaitingState, dirty, deviceRevision) {
         val state = actual ?: return@LaunchedEffect
         val expected = awaitingState
         if (expected != null &&
-            (state.red != expected.r || state.green != expected.g ||
+            (deviceRevision <= submittedAtRevision ||
+                state.red != expected.r || state.green != expected.g ||
                 state.blue != expected.b || state.brightness != expected.brightness)) {
             return@LaunchedEffect
         }
@@ -85,6 +89,7 @@ fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null) {
                 val sent = ColorUtils.RgbColor(
                     red.toInt(), green.toInt(), blue.toInt(), brightness.toInt()
                 )
+                submittedAtRevision = deviceRevision
                 awaitingState = sent
                 confirmationError = null
                 send(
