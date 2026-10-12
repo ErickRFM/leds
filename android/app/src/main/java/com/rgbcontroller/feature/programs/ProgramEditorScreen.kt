@@ -18,6 +18,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.programs.LabGpioScriptCompiler
 import com.rgbcontroller.core.programs.LabRgbScriptPolicy
+import com.rgbcontroller.core.programs.EditorReplacementPolicy
 import com.rgbcontroller.core.programs.ProgramLanguage
 import com.rgbcontroller.core.programs.ProgramSourcePolicy
 import com.rgbcontroller.core.wifi.LocalLabClient
@@ -72,7 +73,7 @@ fun ProgramEditorScreen() {
     }
 
     fun requestReplacement(item: PendingEditorReplacement) {
-        if (source.isNotBlank() && source != item.text) pendingReplacement = item
+        if (EditorReplacementPolicy.requiresConfirmation(source, item.text)) pendingReplacement = item
         else applyReplacement(item)
     }
 
