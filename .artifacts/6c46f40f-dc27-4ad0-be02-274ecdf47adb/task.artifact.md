@@ -1,9 +1,11 @@
-# Tasks - PR #7 Integration & Local Verification
+# Tasks - Compi V9 Reference UI & V12 Automation Integration
 
-- [/] Sync branch `fix/android-ci-ble-rgb-integration` and preserve local changes `[id: 1]`
-- [ ] Verify local environment (JDK 17, Android SDK 34, Gradle 8.7, Arduino CLI) `[id: 2]`
-- [ ] Execute `scripts/verify-local.ps1` and fix any build/test errors `[id: 3]`
-- [ ] Generate and verify `app-debug.apk` with SHA-256 calculation `[id: 4]`
-- [ ] Perform physical BLE hardware testing (or note status) `[id: 5]`
-- [ ] Commit, push changes, and merge PR #7 into `main` `[id: 6]`
-- [ ] Final audit walkthrough and delivery report `[id: 7]`
+- [x] Sync git branch `feat/compi-v9-reference-ui` with `origin/main` and resolve V12 integration conflicts `[id: 1]`
+- [/] Implement Design System & Compi Components (`core/ui/CompiComponents.kt`, `RgbTheme.kt`) `[id: 2]`
+- [ ] Implement Dashboard / Inicio screen matching reference image 1 (`DashboardScreen.kt`) `[id: 3]`
+- [ ] Implement LED RGB Module screen matching reference image 2 (`LedModuleScreen.kt`) `[id: 4]`
+- [ ] Implement Compi Studio screen matching reference image 4 (`ProgramEditorScreen.kt`) `[id: 5]`
+- [ ] Implement Hardware Lab screen matching reference image 3 (`LabHubScreen.kt`) `[id: 6]`
+- [ ] Unify navigation and bottom bar in `MainActivity.kt` (4 tabs: Inicio, LED, Studio, Hardware) `[id: 7]`
+- [ ] Execute local Gradle tests, lint checks, and assemble debug APK (`app-debug.apk`) with SHA-256 calculation `[id: 8]`
+- [ ] Merge PR #79 into `main`, verify CI, and output final delivery report `[id: 9]`

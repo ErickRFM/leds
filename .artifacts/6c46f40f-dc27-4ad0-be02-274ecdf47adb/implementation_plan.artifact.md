@@ -1,37 +1,47 @@
-# Implementation Plan - RGB Controller V1 (PR #7 Integration & Local Verification)
+# Implementation Plan - Compi V9 Reference UI & V12 Automation Integration
 
-This plan details the steps to sync branch `fix/android-ci-ble-rgb-integration`, verify local environments (JDK 17, Android SDK 34, Arduino CLI), run the verification script `scripts/verify-local.ps1`, build the debug APK locally, calculate its SHA-256 hash, and merge PR #7 into `main`.
+This plan outlines the complete execution of **Compi V9 Reference UI** integration across all four core screens (`DashboardScreen`, `LedModuleScreen`, `ProgramEditorScreen`, `LabHubScreen`) matching the 4 reference UI screenshots, while fully unifying V12 automation capabilities, Bluetooth, Wi-Fi, GPIO, ADC telemetry, and Compi Studio scripting.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> - **Local Build & Verification:** Since GitHub Actions is blocked by billing, builds will be executed locally via `scripts/verify-local.ps1` using the Gradle wrapper and local Android SDK 34.
-> - **Hardware Testing:** Physical BLE tests (`READY_FOR_PHYSICAL_TEST`) will be noted as pending or executed depending on whether an ESP32 and phone are physically connected.
+> - **Pixel-Perfect Reference UI:** All four views (Inicio, LED RGB, Studio, Hardware Lab) will be meticulously styled using Jetpack Compose and `RgbTheme` (`core/ui/RgbTheme.kt`, `core/ui/CompiComponents.kt`) to match the 4 reference screenshots.
+> - **V12 Automations Integration:** Hardware Lab (`LabHubScreen.kt`) and Compi Studio (`ProgramEditorScreen.kt`) will preserve and integrate all V12 automation logic, GPIO controls, ADC sensors, script compilers, and local Wi-Fi client policies.
 
 ## Proposed Changes
 
-### Branch Synchronization & Environment Setup
-#### [MODIFY] [git checkout](file:///)
-- Checkout and pull `fix/android-ci-ble-rgb-integration` from origin.
-- Ensure Gradle wrapper scripts (`gradlew`, `gradlew.bat`) and `scripts/verify-local.ps1` are active in the local workspace.
+### Design System & Compi Components
+#### [MODIFY] [CompiComponents.kt](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/android/app/src/main/java/com/rgbcontroller/core/ui/CompiComponents.kt)
+- Enhance or refine dark mate card containers, purple accent buttons, bottom navigation bar with V9 icons (Inicio, LED, Studio, Hardware), status indicators, and headers.
 
-### Local Verification & APK Generation
-#### [NEW] [verify-local.ps1 execution](file:///scripts/verify-local.ps1)
-- Run `powershell -ExecutionPolicy Bypass -File .\scripts\verify-local.ps1` to execute unit tests, lint checks, and APK compilation (`assembleDebug`).
-- Verify output APK at `android/app/build/outputs/apk/debug/app-debug.apk`.
-- Calculate SHA-256 hash of the generated APK.
+### Screen 1: Dashboard / Inicio
+#### [MODIFY] [DashboardScreen.kt](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/android/app/src/main/java/com/rgbcontroller/feature/home/DashboardScreen.kt)
+- Implement exact V9 Home layout: Compi header, ESP32 status card with illustration, quick access buttons (LED RGB, Compi Studio, Hardware Lab, Dispositivos), main tools cards, and recent activity feed.
 
-### Merge PR #7 & Main Synchronization
-#### [MODIFY] [main branch](file:///)
-- Merge `fix/android-ci-ble-rgb-integration` into `main` (closing PR #7).
-- Push `main` to origin.
+### Screen 2: LED RGB Module
+#### [MODIFY] [LedModuleScreen.kt](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/android/app/src/main/java/com/rgbcontroller/feature/led/LedModuleScreen.kt)
+- Implement exact V9 LED RGB layout: Bluetooth/Wi-Fi toggle header, connected device card, Color control panel with interactive color wheel and hex preview, R/G/B sliders with numeric text fields, Brightness slider, Power toggle with active status, Favorites color pills, and Effects selector (Rainbow, Breathe, Fade) with speed slider.
+
+### Screen 3: Compi Studio
+#### [MODIFY] [ProgramEditorScreen.kt](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/android/app/src/main/java/com/rgbcontroller/feature/programs/ProgramEditorScreen.kt)
+- Implement exact V9 Compi Studio layout: Header with subtitle, Local Editor card with toolbar (Import, Paste, Export, Copy), Project type selector (Laboratorio vs Arduino C++), code editor with line numbers and syntax highlighting, size/line counters, Run RGB / Stop controls, and "Mis proyectos" list with open/delete actions.
+
+### Screen 4: Hardware Lab
+#### [MODIFY] [LabHubScreen.kt](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/android/app/src/main/java/com/rgbcontroller/feature/hub/LabHubScreen.kt)
+- Implement exact V9 Hardware Lab layout: Top tab selector (Conexión, GPIO, Sensores, Diagnóstico), Laboratory Wi-Fi connection card with secure key and status, Device state card (Chip, Flash, RAM, RSSI), GPIO control card with pin selector and HIGH/LOW/Read actions, Sensors ADC1 card with real-time waveform chart, and Autodiagnostic execution card.
+
+### Navigation & ViewModel Unification
+#### [MODIFY] [MainActivity.kt](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/android/app/src/main/java/com/rgbcontroller/MainActivity.kt)
+- Unify bottom navigation bar to display exactly 4 tabs (Inicio, LED, Studio, Hardware) corresponding to the reference design without duplication.
+#### [MODIFY] [RgbControllerViewModel.kt](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/android/app/src/main/java/com/rgbcontroller/RgbControllerViewModel.kt)
+- Ensure all states (BLE connection, RGB colors, effects, GPIO, ADC telemetry, script execution, Wi-Fi lab session) are robustly managed and synchronized.
 
 ## Verification Plan
 
-### Automated Tests & Local Build
-- Run `powershell -ExecutionPolicy Bypass -File .\scripts\verify-local.ps1`
-- Verify unit tests and APK generation.
-- Check SHA-256 hash of `app-debug.apk`.
+### Automated Tests
+- Run unit tests and instrumentation tests:
+  `cd android && ./gradlew testDebugUnitTest lintDebug assembleDebug`
+- Calculate SHA-256 of `app-debug.apk`.
 
-### Manual Verification
-- Physical BLE verification with ESP32 & Android phone (if connected).
+### Manual / Visual Verification
+- Compare composable screens against the 4 reference UI screenshots (Dashboard, LED RGB, Hardware Lab, Compi Studio).
