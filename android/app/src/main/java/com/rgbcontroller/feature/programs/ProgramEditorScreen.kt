@@ -12,6 +12,7 @@ import com.rgbcontroller.core.ui.CompiInlineMessage
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -21,6 +22,8 @@ import androidx.compose.ui.text.font.FontFamily
 import com.rgbcontroller.core.programs.LabGpioScriptCompiler
 import com.rgbcontroller.core.programs.LabRgbScriptPolicy
 import com.rgbcontroller.core.programs.EditorReplacementPolicy
+import com.rgbcontroller.core.programs.EditorDraftSnapshot
+import com.rgbcontroller.core.data.EditorDraftStore
 import com.rgbcontroller.core.programs.ProgramLanguage
 import com.rgbcontroller.core.programs.ProgramSourcePolicy
 import com.rgbcontroller.core.wifi.LocalLabClient
@@ -29,6 +32,7 @@ import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.ble.BleConnectionState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -49,6 +53,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
     val clipboard = LocalClipboardManager.current
     val debug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     val labClient = remember(context) { LocalLabClient(context.applicationContext) }
+    val draftStore = remember(context) { EditorDraftStore(context.applicationContext) }
     val scope = rememberCoroutineScope()
     var source by rememberSaveable { mutableStateOf("") }
     var fileName by rememberSaveable { mutableStateOf("Sin archivo") }
@@ -64,6 +69,85 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
     var gpioFileName by rememberSaveable { mutableStateOf("Sin archivo") }
     var rgbFileName by rememberSaveable { mutableStateOf("Sin archivo") }
     var cppFileName by rememberSaveable { mutableStateOf("Sin archivo") }
+    var draftsLoaded by remember { mutableStateOf(false) }
+    var draftStatus by remember { mutableStateOf("Preparando recuperación local…") }
+    var draftRecoveryError by remember { mutableStateOf(false) }
+
+    // Files are private to Android; credentials from CompiLabSession are never serialized.
+    // Do not overwrite the disk snapshot if loading detected corruption or a newer version.
+    LaunchedEffect(draftStore) {
+        try {
+            val saved = draftStore.load()
+            if (saved != null && source.isBlank() && gpioDraft.isBlank() &&
+                rgbDraft.isBlank() && cppDraft.isBlank()) {
+                gpioDraft = saved.gpio
+                rgbDraft = saved.rgb
+                cppDraft = saved.arduino
+                gpioFileName = saved.gpioName
+                rgbFileName = saved.rgbName
+                cppFileName = saved.arduinoName
+                selected = saved.selected.name
+                laboratoryMode = saved.engine
+                source = when (saved.selected) {
+                    ProgramLanguage.ARDUINO_CPP -> saved.arduino
+                    ProgramLanguage.LAB_SCRIPT -> if (saved.engine == "RGB") saved.rgb else saved.gpio
+                }
+                fileName = when (saved.selected) {
+                    ProgramLanguage.ARDUINO_CPP -> saved.arduinoName
+                    ProgramLanguage.LAB_SCRIPT -> if (saved.engine == "RGB") saved.rgbName else saved.gpioName
+                }
+                notice = "Borradores locales recuperados. No se enviaron al ESP32."
+            }
+            draftStatus = if (saved == null) "Guardado automático local activo"
+                else "Borradores locales restaurados"
+            draftsLoaded = true
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            draftRecoveryError = true
+            draftStatus = "No se pudo recuperar el archivo local. " +
+                "Se ha protegido contra sobrescritura; exporta tu código antes de repararlo."
+        }
+    }
+    LaunchedEffect(
+        draftsLoaded, source, fileName, selected, laboratoryMode,
+        gpioDraft, rgbDraft, cppDraft, gpioFileName, rgbFileName, cppFileName
+    ) {
+        if (!draftsLoaded || draftRecoveryError) return@LaunchedEffect
+        delay(500)
+        val snapshot = EditorDraftSnapshot(
+            gpio = if (selected == ProgramLanguage.LAB_SCRIPT.name && laboratoryMode == "GPIO")
+                source else gpioDraft,
+            rgb = if (selected == ProgramLanguage.LAB_SCRIPT.name && laboratoryMode == "RGB")
+                source else rgbDraft,
+            arduino = if (selected == ProgramLanguage.ARDUINO_CPP.name) source else cppDraft,
+            gpioName = if (selected == ProgramLanguage.LAB_SCRIPT.name && laboratoryMode == "GPIO")
+                fileName else gpioFileName,
+            rgbName = if (selected == ProgramLanguage.LAB_SCRIPT.name && laboratoryMode == "RGB")
+                fileName else rgbFileName,
+            arduinoName = if (selected == ProgramLanguage.ARDUINO_CPP.name) fileName else cppFileName,
+            selected = ProgramLanguage.valueOf(selected), engine = laboratoryMode
+        )
+        try {
+            draftStore.save(snapshot)
+            draftStatus = "Borradores guardados localmente · sin subir al ESP32"
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            draftStatus = "No se guardaron los borradores: " +
+                (error.message ?: "error de almacenamiento")
+            draftRecoveryError = true
+        }
+    }
+
+    // Do not let the user type before the disk snapshot has been restored:
+    // otherwise a fast edit could overwrite the other engines' previous drafts.
+    if (!draftsLoaded && !draftRecoveryError) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
 
     fun rememberCurrentDraft() {
         if (selected == ProgramLanguage.ARDUINO_CPP.name) {
@@ -103,8 +187,8 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
     }
 
     val language = ProgramLanguage.valueOf(selected)
-    val compiled = remember(source, selected) {
-        if (selected == ProgramLanguage.LAB_SCRIPT.name) {
+    val compiled = remember(source, selected, laboratoryMode) {
+        if (selected == ProgramLanguage.LAB_SCRIPT.name && laboratoryMode == "GPIO") {
             runCatching { LabGpioScriptCompiler.compile(source) }
         } else null
     }
@@ -126,8 +210,20 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
     }
 
     fun requestReplacement(item: PendingEditorReplacement) {
-        if (EditorReplacementPolicy.requiresConfirmation(source, item.text)) pendingReplacement = item
-        else applyReplacement(item)
+        val nextMode = if (item.language == ProgramLanguage.LAB_SCRIPT &&
+            LabRgbScriptPolicy.validate(item.text).accepted) "RGB" else "GPIO"
+        val target = when (item.language) {
+            ProgramLanguage.ARDUINO_CPP ->
+                if (selected == item.language.name) source else cppDraft
+            ProgramLanguage.LAB_SCRIPT -> if (nextMode == "RGB") {
+                if (selected == item.language.name && laboratoryMode == "RGB") source else rgbDraft
+            } else {
+                if (selected == item.language.name && laboratoryMode == "GPIO") source else gpioDraft
+            }
+        }
+        if (EditorReplacementPolicy.requiresConfirmation(target, item.text)) {
+            pendingReplacement = item
+        } else applyReplacement(item)
     }
 
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -198,6 +294,22 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text("Programas", style = MaterialTheme.typography.headlineMedium)
+        CompiInlineMessage(draftStatus, isError = draftRecoveryError)
+        val operation = labSession.operationStatus
+        if (operation.name.isNotBlank()) {
+            CompiInlineMessage(
+                "${operation.name}: ${when (operation.phase) {
+                    com.rgbcontroller.core.wifi.LabOperationPhase.IDLE -> "sin iniciar"
+                    com.rgbcontroller.core.wifi.LabOperationPhase.QUEUED -> "en espera"
+                    com.rgbcontroller.core.wifi.LabOperationPhase.RUNNING -> "ejecutando"
+                    com.rgbcontroller.core.wifi.LabOperationPhase.CONFIRMED -> "respondió"
+                    com.rgbcontroller.core.wifi.LabOperationPhase.FAILED -> "falló"
+                    com.rgbcontroller.core.wifi.LabOperationPhase.CANCELLED -> "cancelado"
+                }}" +
+                    (if (operation.details.isBlank()) "" else " · ${operation.details}"),
+                isError = operation.phase == com.rgbcontroller.core.wifi.LabOperationPhase.FAILED
+            )
+        }
         Text("Importa un TXT/INO, pega código o escribe un programa. El núcleo RGB y la conexión no se modifican.",
             color = MaterialTheme.colorScheme.onSurfaceVariant)
 
@@ -313,7 +425,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
             source = source,
             language = language,
             onOpen = { project ->
-                applyReplacement(PendingEditorReplacement(
+                requestReplacement(PendingEditorReplacement(
                     project.source, project.name, project.language,
                     "Proyecto abierto: ${project.name}. No se envió código a la placa."
                 ))
@@ -377,7 +489,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                                 if (plan != null) scope.launch {
                                     experimentBusy = true
                                     try {
-                                        labSession.serialized { labClient.sequence(controlKey, plan.pin, plan.sequence) }
+                                        labSession.userOperation("Secuencia GPIO") { labClient.sequence(controlKey, plan.pin, plan.sequence) }
                                         notice = "ESP32 aceptó el inicio de la secuencia en GPIO " + plan.pin +
                                             ". Confirmación lógica; revisa el circuito físico."
                                     } catch (cancelled: CancellationException) {
@@ -396,7 +508,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                                 scope.launch {
                                     experimentBusy = true
                                     try {
-                                        labSession.serialized { labClient.stopExperiment(controlKey) }
+                                        labSession.userOperation("Detener GPIO") { labClient.stopExperiment(controlKey) }
                                         notice = "El ESP32 confirmó la orden de detener el experimento."
                                     } catch (cancelled: CancellationException) {
                                         throw cancelled
@@ -479,7 +591,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                                 scope.launch {
                                     experimentBusy = true
                                     try {
-                                        labSession.serialized { labClient.runRgbScript(controlKey, source) }
+                                        labSession.userOperation("Script RGB") { labClient.runRgbScript(controlKey, source) }
                                         notice = "ESP32 aceptó el script RGB. Consulta estado y verifica LED físico."
                                     } catch (cancelled: CancellationException) { throw cancelled
                                     } catch (error: Exception) {
@@ -494,7 +606,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                                 scope.launch {
                                     experimentBusy = true
                                     try {
-                                        labSession.serialized { labClient.stopRgbScript(controlKey) }
+                                        labSession.userOperation("Detener RGB") { labClient.stopRgbScript(controlKey) }
                                         notice = "Detención confirmada; el último color se conserva."
                                     } catch (cancelled: CancellationException) { throw cancelled
                                     } catch (error: Exception) {
@@ -527,7 +639,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                             scope.launch {
                                 experimentBusy = true
                                 try {
-                                    val state = labSession.serialized { labClient.rgbScriptStatus(controlKey) }
+                                    val state = labSession.userOperation("Consultar script RGB") { labClient.rgbScriptStatus(controlKey) }
                                     notice = if (state.optBoolean("active")) {
                                         "RGB ejecutando paso ${state.optInt("step") + 1} de ${state.optInt("total")}."
                                     } else "RGB sin script en ejecución."
