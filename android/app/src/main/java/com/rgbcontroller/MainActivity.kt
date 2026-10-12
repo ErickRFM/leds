@@ -137,6 +137,7 @@ fun MainAppNavHost(bleManager: BleManager, preferencesRepository: PreferencesRep
             ) {
                 composable(Screen.Home.route) {
                     DashboardScreen(
+                        bleManager = bleManager,
                         onLed = { navController.navigateTopLevel(Screen.Led) },
                         onCode = { navController.navigateTopLevel(Screen.Code) },
                         onCenter = { navController.navigateTopLevel(Screen.Center) }
@@ -157,7 +158,7 @@ fun MainAppNavHost(bleManager: BleManager, preferencesRepository: PreferencesRep
                 composable(Screen.Settings.route) {
                     SettingsScreen(bleManager, preferencesRepository,
                         onOpenHub = { navController.navigate(Screen.Hub.route) },
-                        onOpenPrograms = { navController.navigate(Screen.Code.route) })
+                        onOpenPrograms = { navController.navigateTopLevel(Screen.Code) })
                 }
                 composable(Screen.Devices.route) {
                     DevicesScreen(bleManager, preferencesRepository,

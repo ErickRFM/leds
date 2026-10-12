@@ -6,11 +6,15 @@ import android.provider.Settings
 import android.os.SystemClock
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -26,6 +30,7 @@ import com.rgbcontroller.core.qa.LabSnapshot
 import com.rgbcontroller.core.qa.LabSelfCheck
 import com.rgbcontroller.core.lab.LabStep
 import com.rgbcontroller.core.ui.SectionHeader
+import com.rgbcontroller.core.ui.CompiInlineMessage
 import com.rgbcontroller.core.wifi.LocalLabClient
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -33,6 +38,14 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
+
+private enum class LabSection(val title: String) {
+    CONNECTION("Conexión"),
+    DIAGNOSTICS("Diagnóstico"),
+    GPIO("GPIO"),
+    SENSORS("Sensores"),
+    EXPERIMENTS("Experimentos")
+}
 
 @Composable
 fun LabHubScreen() {
@@ -61,6 +74,13 @@ fun LabHubScreen() {
     var nextHigh by remember { mutableStateOf(true) }
     var nextDuration by remember { mutableStateOf("500") }
     var projectName by remember { mutableStateOf("") }
+    var section by rememberSaveable { mutableStateOf(LabSection.CONNECTION) }
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(message) {
+        if (message != "Conéctate a ESP32-Control-Lab para comenzar.") {
+            snackbar.showSnackbar(message, duration = SnackbarDuration.Short)
+        }
+    }
 
     // Sampling belongs to this Composable lifecycle; navigation away cancels the job.
     // No GPS, no background process, no unbounded retention and no device secrets in CSV.
@@ -96,10 +116,38 @@ fun LabHubScreen() {
         }
     }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+    Box(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding()
         .padding(horizontal = 18.dp, vertical = 20.dp)) {
-        SectionHeader("Centro ESP32", "Wi-Fi, GPIO, sensores y laboratorio")
+        SectionHeader("Hardware Lab", "Herramientas locales del ESP32")
         Spacer(Modifier.height(12.dp))
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(LabSection.entries) { item ->
+                FilterChip(
+                    selected = section == item,
+                    onClick = { section = item },
+                    label = { Text(item.title) }
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        if (busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        CompiInlineMessage(message, isError =
+            message.startsWith("Error", ignoreCase = true) ||
+            message.startsWith("No hay", ignoreCase = true) ||
+            message.contains("rechazó", ignoreCase = true))
+        if (section != LabSection.CONNECTION && !LocalLabClient.validKey(secret)) {
+            CompiInlineMessage("Configura primero la clave local del ESP32 en Conexión. " +
+                "Puedes explorar estas herramientas sin conectarte.")
+            TextButton(onClick = { section = LabSection.CONNECTION }) {
+                Text("Configurar conexión")
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        if (section == LabSection.CONNECTION) {
         Card(Modifier.fillMaxWidth(), colors =
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
             Column(Modifier.padding(16.dp)) {
@@ -142,6 +190,8 @@ fun LabHubScreen() {
                 }
             }
         }
+        }
+        if (section == LabSection.DIAGNOSTICS) {
         Spacer(Modifier.height(20.dp))
         Text("Identidad V4 del ESP32", style = MaterialTheme.typography.titleMedium)
         Text("ID público persistente, NO es contraseña, QR de vinculación ni prueba de propiedad.",
@@ -244,6 +294,8 @@ fun LabHubScreen() {
             Text("Partición candidata: " + if (data.optBoolean("otaSlotPresent")) "Sí" else "No")
             Text("Subir firmware OTA: DESHABILITADO", color = MaterialTheme.colorScheme.error)
         }
+        }
+        if (section == LabSection.CONNECTION) {
         Spacer(Modifier.height(20.dp))
         Text("Wi-Fi del ESP32", style = MaterialTheme.typography.titleMedium)
         Text("La búsqueda la realiza el ESP32, no el teléfono.",
@@ -281,6 +333,8 @@ fun LabHubScreen() {
                 message = "ESP32 conectando al router. Consulta Estado para confirmar."
             } }) { Text("Conectar ESP32 al router") }
 
+        }
+        if (section == LabSection.GPIO) {
         Spacer(Modifier.height(20.dp))
         Text("Entradas y salidas GPIO", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
@@ -330,6 +384,8 @@ fun LabHubScreen() {
                 client.resetPins(secret)
                 message = "Salidas manuales restauradas a LOW."
             } }) { Text("Liberar salidas") }
+        }
+        if (section == LabSection.SENSORS) {
         Spacer(Modifier.height(18.dp))
         Text("Sensores / ADC1", style = MaterialTheme.typography.titleMedium)
         Text("GPIO34 (entrada analógica, máximo 3.3 V). Valor sin calibrar.",
@@ -383,6 +439,8 @@ fun LabHubScreen() {
                 context.startActivity(Intent.createChooser(send, "Compartir datos ADC1"))
             }, enabled = !samplingAdc) { Text("Exportar CSV") }
         }
+        }
+        if (section == LabSection.EXPERIMENTS) {
         Spacer(Modifier.height(20.dp))
         Text("Laboratorio protegido", style = MaterialTheme.typography.titleMedium)
         Text("Prueba declarativa: GPIO19 se alterna 5 veces, cada 500 ms.",
@@ -493,11 +551,10 @@ fun LabHubScreen() {
                 client.sequence(secret, 19, steps)
                 message = "Secuencia declarativa iniciada en GPIO19."
             } }) { Text("Ejecutar secuencia") }
-        Spacer(Modifier.height(20.dp))
+        }
         // RGB Wi-Fi controls live in the LED module. Laboratory stays focused on GPIO, network and sensors.
-        if (busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-        Text(message, style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(30.dp))
+    }
+    SnackbarHost(hostState = snackbar, modifier = Modifier.align(Alignment.BottomCenter))
     }
 }
