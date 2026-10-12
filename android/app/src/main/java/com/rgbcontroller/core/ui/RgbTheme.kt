@@ -15,18 +15,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 private val DarkPalette = darkColorScheme(
-    primary = Color(0xFFD0B9FF),
-    onPrimary = Color(0xFF2B1850),
-    primaryContainer = Color(0xFF4B3B66),
-    onPrimaryContainer = Color(0xFFF0E8FF),
-    secondary = Color(0xFFBFC1D0),
-    background = Color(0xFF17171C),
+    primary = Color(0xFFAE94FF),
+    onPrimary = Color(0xFF181027),
+    primaryContainer = Color(0xFF332454),
+    onPrimaryContainer = Color(0xFFF7F0FF),
+    secondary = Color(0xFF6FE2D7),
+    background = Color(0xFF0C0E15),
     onBackground = Color(0xFFF3F0F7),
-    surface = Color(0xFF222128),
+    surface = Color(0xFF1A1E2B),
     onSurface = Color(0xFFF3F0F7),
-    surfaceVariant = Color(0xFF302F39),
-    onSurfaceVariant = Color(0xFFC6C3CE),
-    outline = Color(0xFF706C7B),
+    surfaceVariant = Color(0xFF222638),
+    onSurfaceVariant = Color(0xFFB1B5CF),
+    outline = Color(0xFF444862),
     error = Color(0xFFFFB4AB)
 )
 private val LightPalette = lightColorScheme(
