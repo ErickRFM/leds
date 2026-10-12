@@ -10,6 +10,7 @@
 #include "ExperimentRuntime.h"
 #include "RgbScriptRuntime.h"
 #include "RgbCommandCodec.h"
+#include "GpioTelemetryCodec.h"
 #include "CompiCapabilities.h"
 
 namespace esp32core {
@@ -386,6 +387,11 @@ class LocalWifiControl final {
   }
 
   void stopScriptFromBle() { script_.stop(); }
+
+  /** Compact read-only BLE GPIO snapshot, computed on Arduino loop only. */
+  bool writeBlePinSnapshot(char (&output)[96]) const {
+    return GpioTelemetryCodec::encode(pins_, manualLevels_, output, sizeof(output));
+  }
 
  private:
   static constexpr const char* kManual = "gpio.manual";
