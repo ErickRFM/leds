@@ -95,7 +95,7 @@ fun LabHubScreen(labSession: CompiLabSession) {
             for (i in 0 until 40) {
                 val elapsed = SystemClock.elapsedRealtime() - started
                 if (elapsed >= 20_000L) break
-                val reading = client.readAnalog(secret, 34).optInt("raw", -1)
+                val reading = labSession.serialized { client.readAnalog(secret, 34) }.optInt("raw", -1)
                 adcHistory = AdcTelemetry.append(adcHistory, AdcSample(elapsed, reading))
                 adcValue = reading
                 delay(500L)
@@ -114,7 +114,7 @@ fun LabHubScreen(labSession: CompiLabSession) {
         if (!debug || busy) return
         busy = true
         scope.launch {
-            try { block() }
+            try { labSession.serialized { block() } }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (e: Exception) { message = e.message ?: "No hay respuesta del ESP32." }
             finally { busy = false }
