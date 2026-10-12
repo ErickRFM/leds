@@ -7,8 +7,15 @@ import zipfile
 from hashlib import sha256
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "scripts"))
-from package_esp32_source import package  # noqa: E402
+# The user-facing CLI filename intentionally has a hyphen; import by path.
+import importlib.util
+spec = importlib.util.spec_from_file_location(
+    "compi_firmware_packager", ROOT / "scripts" / "package-esp32-source.py"
+)
+assert spec and spec.loader
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+package = module.package
 
 
 class PackageArduinoSketchTests(unittest.TestCase):
