@@ -14,6 +14,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.programs.LabGpioScriptCompiler
@@ -242,12 +243,14 @@ fun ProgramEditorScreen(labSession: CompiLabSession) {
                 FilterChip(
                     selected = laboratoryMode == "GPIO",
                     onClick = { chooseEngine("GPIO") },
-                    label = { Text("GPIO · salidas 18–23") }
+                    modifier = Modifier.testTag("studio_engine_gpio"),
+                    label = { Text("GPIO") }
                 )
                 FilterChip(
                     selected = laboratoryMode == "RGB",
                     onClick = { chooseEngine("RGB") },
-                    label = { Text("LED RGB · 27/25/26") }
+                    modifier = Modifier.testTag("studio_engine_rgb"),
+                    label = { Text("LED RGB") }
                 )
             }
             Text(
@@ -268,7 +271,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession) {
             },
             label = { Text("Código fuente") },
             placeholder = { Text("Escribe código o importa un archivo .txt / .ino") },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().testTag("studio_source"),
             minLines = 9,
             maxLines = 16,
             textStyle = MaterialTheme.typography.bodyMedium
