@@ -50,6 +50,7 @@ fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null) {
     var brightness by remember { mutableFloatStateOf(255f) }
     var dirty by remember { mutableStateOf(false) }
     var awaitingState by remember { mutableStateOf<ColorUtils.RgbColor?>(null) }
+    var confirmationError by remember { mutableStateOf<String?>(null) }
 
     // Never replace an in-progress local edit with an older BLE notification.
     // Only accept the device state once the last submitted RGB command is acknowledged.
@@ -61,12 +62,15 @@ fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null) {
                 state.blue != expected.b || state.brightness != expected.brightness)) {
             return@LaunchedEffect
         }
-        if (!dirty) {
+        if (!dirty && confirmationError == null) {
             red = state.red.toFloat()
             green = state.green.toFloat()
             blue = state.blue.toFloat()
             brightness = state.brightness.toFloat()
-            if (expected != null) awaitingState = null
+            if (expected != null) {
+                awaitingState = null
+                confirmationError = null
+            }
         }
     }
 
@@ -81,6 +85,7 @@ fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null) {
                     red.toInt(), green.toInt(), blue.toInt(), brightness.toInt()
                 )
                 awaitingState = sent
+                confirmationError = null
                 send(
                     ColorUtils.serializeSetCommand(sent.r, sent.g, sent.b, sent.brightness)
                 )
@@ -94,12 +99,17 @@ fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null) {
         val pending = awaitingState
         if (pending != null) {
             delay(3000)
-            if (awaitingState == pending) awaitingState = null
+            if (awaitingState == pending) {
+                // Do not turn a timeout into a fake successful synchronization.
+                // The request remains pending until a matching readback or disconnect.
+                confirmationError = "El ESP32 no confirmó este color. Comprueba la conexión."
+            }
         }
     }
     LaunchedEffect(ready, link?.transport) {
         if (!ready) {
             awaitingState = null
+            confirmationError = null
             dirty = false
         }
     }
@@ -120,8 +130,10 @@ fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null) {
         Text(
             when {
                 !ready -> "Conecta el ESP32 para habilitar la rueda y los deslizadores."
+                confirmationError != null -> confirmationError!!
                 awaitingState != null -> "Aplicando ajustes, esperando confirmación del ESP32…"
                 dirty -> "Preparando nuevo color…"
+                actual == null -> "Esperando un estado RGB confirmado del ESP32…"
                 actual?.power == false -> "LED apagado · muestra del color seleccionado"
                 else -> "Ajustes sincronizados con el ESP32"
             },
