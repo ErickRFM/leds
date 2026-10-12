@@ -103,6 +103,7 @@ private fun NavHostController.navigateTopLevel(screen: Screen) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainAppNavHost(
     bleManager: BleManager,
