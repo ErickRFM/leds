@@ -102,7 +102,16 @@ assert 'automationEdges_ = static_cast<uint8_t>(cycles * 2)' in automation_start
 assert 'automation_.stop()' in manual_http
 assert manual_http.index('parseRgbCommand(cmd.c_str(), parsed)') < manual_http.index('automation_.stop()')
 assert 'void stopScriptFromBle() { script_.stop(); automation_.stop();' in lab
-assert 'if (--automationEdges_ == 0)' in lab and 'rgbCommand_(String("OFF"))' in lab
+assert 'automation_.advancedIntervals()' in lab, "Delayed ticks must consume elapsed transitions"
+assert 'consumed >= automationEdges_' in lab, "Automation must finish when time budget elapsed"
+assert 'rgbRuntime_(String("OFF"))' in lab, "Temporary automation must end safely"
+assert 'rgbRuntime_(String(command))' in lab, "Automation must not persist transient changes"
+assert 'self->rgbRuntime_(String(command))' in lab, "Script changes must not persist transient state"
+assert 'rgbPendingPersist = {' in firmware, "Manual RGB choices need a separate snapshot"
+assert 'rgbStorage.save(rgbPendingPersist)' in firmware, "Persist a manual snapshot, not the current temporary effect"
+assert 'applyRgbCommandInternal(cmd, false)' in firmware, "Runtime commands must avoid NVS writes"
+assert 'applyRgbCommandInternal(cmd, true)' in firmware, "Manual commands must remain persistent"
+assert 'rgbRuntime_' in lab, "Keep runtime and manual callbacks separate"
 print("PASS V12: automation bounded, authenticated and cancelled only by valid manual RGB commands")
 
 print("PASS: RGB V1 compatibility, core leases, local SoftAP endpoint and lab limits.")
