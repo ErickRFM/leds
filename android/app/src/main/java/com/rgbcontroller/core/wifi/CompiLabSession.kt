@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.rgbcontroller.core.model.RgbDeviceState
+import kotlinx.coroutines.sync.Mutex
 
 /**
  * One app-scoped, volatile session for LED, Studio and Hardware Lab.
@@ -14,6 +15,15 @@ import com.rgbcontroller.core.model.RgbDeviceState
 enum class LabTransport { BLUETOOTH, WIFI_LAB }
 
 class CompiLabSession {
+    private val networkMutex = Mutex()
+
+    /** Serialize authenticated SoftAP operations across LED, Studio and Lab. */
+    suspend fun <T> serialized(block: suspend () -> T): T {
+        networkMutex.lock()
+        try { return block() }
+        finally { networkMutex.unlock() }
+    }
+
     var transport by mutableStateOf(LabTransport.BLUETOOTH)
         private set
     var key by mutableStateOf("")
