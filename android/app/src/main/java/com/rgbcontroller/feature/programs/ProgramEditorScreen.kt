@@ -19,6 +19,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CardDefaults
+import com.rgbcontroller.core.ui.CompiV9
 import com.rgbcontroller.core.programs.LabGpioScriptCompiler
 import com.rgbcontroller.core.programs.LabRgbScriptPolicy
 import com.rgbcontroller.core.programs.EditorReplacementPolicy
@@ -293,7 +296,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
             .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("Programas", style = MaterialTheme.typography.headlineMedium)
+        Text("Compi Studio", style = MaterialTheme.typography.headlineLarge, color = CompiV9.title)
         CompiInlineMessage(draftStatus, isError = draftRecoveryError)
         val operation = labSession.operationStatus
         if (operation.name.isNotBlank()) {
@@ -310,10 +313,14 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                 isError = operation.phase == com.rgbcontroller.core.wifi.LabOperationPhase.FAILED
             )
         }
-        Text("Importa un TXT/INO, pega código o escribe un programa. El núcleo RGB y la conexión no se modifican.",
+        Text("Edita código, importa archivos y ejecuta scripts compatibles.",
             color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-        ElevatedCard(Modifier.fillMaxWidth()) {
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.elevatedCardColors(containerColor = CompiV9.surface)
+        ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Editor local", style = MaterialTheme.typography.titleMedium)
                 Text("Los archivos se abren en el teléfono; nada se instala automáticamente en la placa.",
