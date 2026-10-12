@@ -42,35 +42,35 @@ class HomeNavigationTest {
 
     @Test
     fun homeReturnsFromLedWithoutConnectingToEsp32() {
-        composeRule.onNodeWithText("Abrir módulo LED").performClick()
+        composeRule.onNodeWithTag("open_led").performClick()
         composeRule.onNodeWithText("LED RGB").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
-        composeRule.onNodeWithText("ESP32 Control Center").assertExists()
+        composeRule.onNodeWithText("Compi").assertExists()
 
         // Re-entry must work too: no restored LED route may replace Home.
-        composeRule.onNodeWithText("Abrir módulo LED").performClick()
+        composeRule.onNodeWithTag("open_led").performClick()
         composeRule.onNodeWithText("LED RGB").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
-        composeRule.onNodeWithText("ESP32 Control Center").assertExists()
+        composeRule.onNodeWithText("Compi").assertExists()
     }
 
     @Test
     fun homeReturnsFromNestedBluetoothDevices() {
-        composeRule.onNodeWithText("Abrir módulo LED").performClick()
+        composeRule.onNodeWithTag("open_led").performClick()
         composeRule.onNodeWithText("Buscar dispositivo Bluetooth").performClick()
         composeRule.onNodeWithText("Mis dispositivos").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
-        composeRule.onNodeWithText("ESP32 Control Center").assertExists()
+        composeRule.onNodeWithText("Compi").assertExists()
     }
 
     @Test
     fun homeReturnsFromOtherPrimaryModules() {
-        composeRule.onNodeWithText("Abrir editor").performClick()
+        composeRule.onNodeWithTag("open_code").performClick()
         composeRule.onNodeWithTag("nav_home").performClick()
-        composeRule.onNodeWithText("ESP32 Control Center").assertExists()
+        composeRule.onNodeWithText("Compi").assertExists()
 
-        composeRule.onNodeWithText("Ir al centro").performClick()
+        composeRule.onNodeWithTag("open_center").performClick()
         composeRule.onNodeWithTag("nav_home").performClick()
-        composeRule.onNodeWithText("ESP32 Control Center").assertExists()
+        composeRule.onNodeWithText("Compi").assertExists()
     }
 }
