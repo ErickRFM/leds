@@ -14,8 +14,7 @@ object DeviceCapabilityPolicy {
     fun check(
         operation: CompiOperation, channel: CompiChannel,
         connected: Boolean, debugBuild: Boolean = true,
-        authorizedOwner: Boolean = false, gpioTelemetryAvailable: Boolean = false,
-        secureBleAvailable: Boolean = false
+        gpioTelemetryAvailable: Boolean = false
     ): OperationPermission {
         if (!connected) return OperationPermission(false, "Conecta el ESP32 antes de realizar esta operación.")
         if (operation == CompiOperation.FIRMWARE_UPDATE) return OperationPermission(
@@ -38,9 +37,10 @@ object DeviceCapabilityPolicy {
                     else "Solo permitido en compilación de laboratorio.")
             }
             CompiChannel.AUTHENTICATED_BLE -> {
-                OperationPermission(secureBleAvailable && authorizedOwner,
-                    if (secureBleAvailable && authorizedOwner) "Sesión BLE autorizada."
-                    else "Bloqueado hasta completar enrolamiento criptográfico y autorización en firmware.")
+                // Future transport type is NOT proof that a secure session exists.
+                // V10 firmware has no cryptographic enrollment/verifier. DENY all.
+                OperationPermission(false,
+                    "Sin autorización BLE verificable en firmware. Requiere enrolamiento criptográfico.")
             }
         }
     }
