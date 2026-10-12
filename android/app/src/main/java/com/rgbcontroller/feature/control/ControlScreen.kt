@@ -39,7 +39,7 @@ import kotlin.math.sin
 import kotlin.math.cos
 
 @Composable
-fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null) {
+fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null, embedded: Boolean = false) {
     val connection by bleManager.connectionState.collectAsState()
     val bleActual by bleManager.rgbState.collectAsState()
     val bleRevision by bleManager.stateRevision.collectAsState()
@@ -130,7 +130,8 @@ fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null) {
     val preview by animateColorAsState(targetPreview, label = "RGB preview")
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
+        (if (embedded) Modifier.fillMaxWidth() else Modifier.fillMaxSize().verticalScroll(rememberScrollState()))
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         CompiV9SectionTitle("Control de color")
