@@ -103,6 +103,22 @@ class HomeNavigationTest {
     }
 
     @Test
+    fun v9FourPrimaryDestinationsAndSettingsAreReachable() {
+        composeRule.onNodeWithTag("nav_led").performClick()
+        composeRule.onNodeWithText("LED RGB").assertExists()
+        composeRule.onNodeWithTag("nav_code").performClick()
+        composeRule.onNodeWithText("Programas").assertExists()
+        composeRule.onNodeWithTag("nav_hub").performClick()
+        composeRule.onNodeWithText("Hardware Lab").assertExists()
+        composeRule.onNodeWithTag("nav_settings").performClick()
+        composeRule.onNodeWithText("Ajustes").assertExists()
+        composeRule.onNodeWithTag("nav_back").performClick()
+        composeRule.onNodeWithText("Hardware Lab").assertExists()
+        composeRule.onNodeWithTag("nav_home").performClick()
+        composeRule.onNodeWithText("Compi").assertExists()
+    }
+
+    @Test
     fun homeReturnsFromOtherPrimaryModules() {
         composeRule.onNodeWithTag("open_code").performClick()
         composeRule.onNodeWithTag("nav_home").performClick()
@@ -113,7 +129,7 @@ class HomeNavigationTest {
         composeRule.onNodeWithText("Compi").assertExists()
 
         composeRule.onNodeWithTag("open_hardware").performClick()
-        composeRule.onNodeWithTag("nav_back").performClick()
+        composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
     }
 }
