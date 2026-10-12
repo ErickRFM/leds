@@ -72,10 +72,10 @@ private sealed class Screen(
 ) {
     data object Home : Screen("home", "Inicio", Icons.Default.Home)
     data object Led : Screen("led", "LED", Icons.Default.ColorLens)
-    data object Code : Screen("code", "Código", Icons.Default.Code)
+    data object Code : Screen("code", "Studio", Icons.Default.Code)
     data object Settings : Screen("settings", "Ajustes", Icons.Default.Settings)
     data object Devices : Screen("devices", "Equipos", Icons.Default.Bluetooth)
-    data object Hub : Screen("hub", "Laboratorio", Icons.Default.Memory)
+    data object Hub : Screen("hub", "Hardware", Icons.Default.Memory)
 }
 
 /**
@@ -119,15 +119,16 @@ fun MainAppNavHost(
     }
     RgbTheme(theme) {
         val navController = rememberNavController()
-        val items = listOf(Screen.Home, Screen.Led, Screen.Code, Screen.Settings)
+        val items = listOf(Screen.Home, Screen.Led, Screen.Code, Screen.Hub)
         val entry by navController.currentBackStackEntryAsState()
         val route = entry?.destination?.route
-        val nested = route == Screen.Devices.route || route == Screen.Hub.route
+        val nested = route == Screen.Devices.route || route == Screen.Settings.route
         Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 if (nested) {
                     TopAppBar(
-                        title = { Text(if (route == Screen.Devices.route) "Dispositivos" else "Laboratorio") },
+                        title = { Text(if (route == Screen.Devices.route) "Dispositivos" else "Ajustes") },
                         navigationIcon = {
                             IconButton(
                                 modifier = Modifier.testTag("nav_back"),
@@ -145,6 +146,17 @@ fun MainAppNavHost(
                                 Text("Inicio")
                             }
                         }
+                    )
+                } else {
+                    TopAppBar(
+                        title = { Text("") },
+                        actions = {
+                            IconButton(
+                                modifier = Modifier.testTag("nav_settings"),
+                                onClick = { navController.navigate(Screen.Settings.route) }
+                            ) { Icon(Icons.Default.Settings, contentDescription = "Ajustes") }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
                     )
                 }
             },
@@ -178,7 +190,7 @@ fun MainAppNavHost(
                         onLed = { navController.navigateTopLevel(Screen.Led) },
                         onCode = { navController.navigateTopLevel(Screen.Code) },
                         onDevices = { navController.navigate(Screen.Devices.route) },
-                        onHardware = { navController.navigate(Screen.Hub.route) }
+                        onHardware = { navController.navigateTopLevel(Screen.Hub) }
                     )
                 }
                 // Retain a migration route for back stacks saved by Compi V8.
