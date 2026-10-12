@@ -39,3 +39,10 @@ Contrato visual: las cuatro imágenes suministradas por el usuario (Inicio, LED 
 - Hardware Lab: encabezado y chips de selección adaptados a V9; GPIO/ADC y diagnósticos existentes intactos.
 - Se actualizó el test de navegación que esperaba el nombre antiguo de Studio.
 - Falta desarrollar las tarjetas compactas integradas LED, las superficies internas Studio/Hardware, capturas instrumentadas comparativas y QA físico. No declarar pixel-perfect.
+
+## Actualización de continuidad (2026-10-12)
+- CI del commit `f77d1b7` completado correctamente en GitHub Actions; un CI verde no sustituye las capturas ni pruebas físicas.
+- El PR #71 se cerró sin merge por duplicación con #77; los dos PR activos son #77 (automatizaciones V12) y #79 (UI V9).
+- Ajustado `ControlScreen`: jerarquía de Control de color, márgenes y tarjeta de energía, sin cambiar lógica de comandos, ACK, timeouts ni RGB.
+- Sigue pendiente la composición totalmente integrada LED (rueda/sliders/favoritos/efectos), layouts Studio y Hardware fieles, compatibilidad visual en dispositivos, e integración V12 con `LabHubScreen.kt` compartido.
+- Esta rama debe continuar como draft hasta cumplir QA visual y funcional; no distribuir versión release con las garantías BLE actuales.
