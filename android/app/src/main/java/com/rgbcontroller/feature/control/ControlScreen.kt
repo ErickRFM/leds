@@ -29,6 +29,8 @@ import com.rgbcontroller.core.model.RgbControlLink
 import com.rgbcontroller.core.model.ColorUtils
 import com.rgbcontroller.core.model.RgbAckPolicy
 import com.rgbcontroller.core.ui.SectionHeader
+import com.rgbcontroller.core.ui.CompiV9SectionTitle
+import com.rgbcontroller.core.ui.CompiV9
 import kotlinx.coroutines.delay
 import kotlin.math.atan2
 import kotlin.math.hypot
@@ -128,10 +130,10 @@ fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null) {
     val preview by animateColorAsState(targetPreview, label = "RGB preview")
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Color y brillo", style = MaterialTheme.typography.titleMedium)
+        CompiV9SectionTitle("Control de color")
         Text(
             when {
                 !ready -> "Conecta el ESP32 para habilitar la rueda y los deslizadores."
@@ -208,14 +210,14 @@ fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null) {
             style = MaterialTheme.typography.labelLarge
         )
         Spacer(Modifier.height(16.dp))
-        Card(Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        Card(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = CompiV9.surface)) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("Encender / apagar")
+            Text("Encender / apagar", style = MaterialTheme.typography.titleMedium)
             Switch(
                 checked = actual?.power == true,
                 enabled = ready,
