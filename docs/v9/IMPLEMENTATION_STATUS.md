@@ -31,3 +31,11 @@ Contrato visual: las cuatro imágenes suministradas por el usuario (Inicio, LED 
 - Pruebas de navegación instrumentadas exitosas cuando haya Android conectado.
 - Revisión de las cuatro capturas y funcionalidad real.
 - No degradar garantías BLE V8/V10 y Wi-Fi local ni los bloqueos de release existentes.
+
+## Seguimiento de implementación incremental (12 oct 2026)
+- Nuevos componentes reutilizables `CompiV9Panel`, `CompiV9SectionTitle`, `CompiV9Segment` y paleta de tokens en `core/ui/CompiV9Surface.kt`.
+- LED: chips de transporte sustituidos por segmentos fieles a la referencia; controles RGB y política de confirmación originales conservados.
+- Studio: título y tarjeta de editor adaptados a la referencia, sin alterar autosalvado y recuperación V10.
+- Hardware Lab: encabezado y chips de selección adaptados a V9; GPIO/ADC y diagnósticos existentes intactos.
+- Se actualizó el test de navegación que esperaba el nombre antiguo de Studio.
+- Falta desarrollar las tarjetas compactas integradas LED, las superficies internas Studio/Hardware, capturas instrumentadas comparativas y QA físico. No declarar pixel-perfect.
