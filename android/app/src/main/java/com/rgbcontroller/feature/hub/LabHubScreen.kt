@@ -31,6 +31,8 @@ import com.rgbcontroller.core.qa.LabSnapshot
 import com.rgbcontroller.core.qa.LabSelfCheck
 import com.rgbcontroller.core.lab.LabStep
 import com.rgbcontroller.core.ui.SectionHeader
+import com.rgbcontroller.core.ui.CompiV9
+import com.rgbcontroller.core.ui.CompiV9Segment
 import com.rgbcontroller.core.ui.CompiInlineMessage
 import com.rgbcontroller.core.wifi.LocalLabClient
 import com.rgbcontroller.core.wifi.CompiLabSession
@@ -186,17 +188,17 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding()
         .padding(horizontal = 18.dp, vertical = 20.dp)) {
-        SectionHeader("Hardware Lab", "Herramientas locales del ESP32")
+        Text("Hardware Lab", style = MaterialTheme.typography.headlineLarge, color = CompiV9.title)
         Spacer(Modifier.height(12.dp))
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(LabSection.entries) { item ->
-                FilterChip(
+                CompiV9Segment(
+                    text = item.title,
                     selected = section == item,
-                    onClick = { section = item },
-                    label = { Text(item.title) }
+                    onClick = { section = item }
                 )
             }
         }
