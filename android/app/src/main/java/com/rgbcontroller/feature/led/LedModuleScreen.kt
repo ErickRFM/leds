@@ -286,13 +286,13 @@ fun LedModuleScreen(
         key(mode) {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 // 1. Control de color (Wheel + Sliders)
-                ControlScreen(bleManager, link)
+                ControlScreen(bleManager, link, embedded = true)
 
                 // 2. Favoritos
-                PresetsScreen(bleManager, preferencesRepository, link)
+                PresetsScreen(bleManager, preferencesRepository, link, embedded = true)
 
                 // 3. Efectos
-                EffectsScreen(bleManager, link)
+                EffectsScreen(bleManager, link, embedded = true)
             }
         }
     }
