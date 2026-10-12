@@ -4,6 +4,10 @@ import com.rgbcontroller.core.model.RgbDeviceState
 import com.rgbcontroller.core.wifi.CompiLabSession
 import com.rgbcontroller.core.wifi.LabTransport
 import org.junit.Assert.*
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.junit.Test
 
 class CompiLabSessionTest {
@@ -41,6 +45,26 @@ class CompiLabSessionTest {
         session.failed(epoch, "obsolete failure")
         assertTrue(session.wifiReady)
         assertEquals(red, session.rgbState)
+    }
+
+    @Test fun labNetworkOperationsNeverRunConcurrently() = runBlocking {
+        val session = CompiLabSession()
+        var active = 0
+        var overlap = false
+        coroutineScope {
+            repeat(8) {
+                launch {
+                    session.serialized {
+                        active++
+                        if (active > 1) overlap = true
+                        delay(5)
+                        active--
+                    }
+                }
+            }
+        }
+        assertFalse("HTTP calls must be serialized across modules", overlap)
+        assertEquals(0, active)
     }
 
     @Test fun cancelledOrFailedRequestNeverClaimsReady() {
