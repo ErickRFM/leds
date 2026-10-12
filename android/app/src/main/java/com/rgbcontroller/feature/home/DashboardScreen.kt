@@ -8,22 +8,29 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ColorLens
-import androidx.compose.material.icons.filled.DeveloperBoard
 import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.SettingsInputComponent
+import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.ui.CompiModuleCard
 import com.rgbcontroller.core.ui.CompiInlineMessage
-import com.rgbcontroller.core.ui.SectionHeader
 
+/**
+ * Compi V9 home: the visual reference is the layout contract, but device states
+ * always originate in BleManager. Never display fabricated Wi-Fi telemetry.
+ */
 @Composable
 fun DashboardScreen(
     bleManager: BleManager,
@@ -32,62 +39,109 @@ fun DashboardScreen(
     onDevices: () -> Unit,
     onHardware: () -> Unit
 ) {
-    val bleConnection by bleManager.connectionState.collectAsState()
-    val status = when (val state = bleConnection) {
-        BleConnectionState.Ready -> "Bluetooth listo"
-        BleConnectionState.Scanning -> "Buscando dispositivos"
+    val connection by bleManager.connectionState.collectAsState()
+    val ready = connection == BleConnectionState.Ready
+    val status = when (connection) {
+        BleConnectionState.Ready -> "ESP32 listo"
+        BleConnectionState.Scanning -> "Buscando ESP32"
         BleConnectionState.Connecting -> "Conectando ESP32"
         BleConnectionState.Discovering -> "Sincronizando ESP32"
-        BleConnectionState.Disconnected -> "Sin dispositivo conectado"
-        is BleConnectionState.Error -> "Bluetooth necesita atención"
+        BleConnectionState.Disconnected -> "ESP32 sin conexión"
+        is BleConnectionState.Error -> "Conexión necesita atención"
     }
-    val details = when (val state = bleConnection) {
-        BleConnectionState.Ready -> "Tu ESP32 está listo para recibir controles RGB."
-        BleConnectionState.Scanning -> "Buscando controladores compatibles cercanos."
-        BleConnectionState.Connecting, BleConnectionState.Discovering -> "Espera a que termine la conexión."
-        BleConnectionState.Disconnected -> "Puedes trabajar en Código o abrir LED para conectarte."
-        is BleConnectionState.Error -> state.message
+    val subtitle = when (val current = connection) {
+        BleConnectionState.Ready -> "Bluetooth conectado y confirmado"
+        BleConnectionState.Scanning -> "Buscando dispositivos cercanos"
+        BleConnectionState.Connecting -> "Estableciendo conexión Bluetooth"
+        BleConnectionState.Discovering -> "Verificando servicios y estado"
+        BleConnectionState.Disconnected -> "Conecta tu ESP32 para usar los controles"
+        is BleConnectionState.Error -> current.message
     }
-
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = 18.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        SectionHeader("Compi", "Controla, crea y experimenta con tu ESP32")
+        Text("Compi", style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
         Card(
-            onClick = onLed,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            onClick = onDevices,
+            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier.fillMaxWidth().testTag("home_device_status"),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
         ) {
-            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("Estado Bluetooth", style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer)
-                Text(status, style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer)
-                Text(details, style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer)
-                Text("Abrir controles y conexión  →", style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer)
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("CONEXIÓN Y DISPOSITIVO", style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null,
+                        tint = if (ready) Color(0xFF27D987) else MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(12.dp))
+                    Text(status, style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Icon(Icons.Default.ChevronRight, contentDescription = null)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Bluetooth, contentDescription = null, tint = Color(0xFF57A4FF))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Bluetooth", fontWeight = FontWeight.SemiBold)
+                        Text(subtitle, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+                Text("Wi-Fi de laboratorio: consulta su estado desde Hardware",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        Text("Herramientas", style = MaterialTheme.typography.titleMedium)
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            QuickAction("LED RGB", onLed, Modifier.weight(1f))
+            QuickAction("Studio", onCode, Modifier.weight(1f))
+            QuickAction("Hardware", onHardware, Modifier.weight(1f))
+            QuickAction("Equipos", onDevices, Modifier.weight(1f))
+        }
+
+        Text("Herramientas principales", style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold)
         CompiModuleCard("LED RGB", "Color, brillo, favoritos y efectos",
             Icons.Default.ColorLens, onClick = onLed, modifier = Modifier.testTag("open_led"))
-        CompiModuleCard("Compi Studio", "Editar código, proyectos y scripts",
+        CompiModuleCard("Compi Studio", "Editar código, importar y ejecutar scripts compatibles",
             Icons.Default.Code, onClick = onCode, modifier = Modifier.testTag("open_code"))
-        Text("Dispositivo y laboratorio", style = MaterialTheme.typography.titleMedium)
-        CompiModuleCard("Mis dispositivos", "Conectar, desconectar e identificar por Bluetooth",
-            Icons.Default.Bluetooth, onClick = onDevices, modifier = Modifier.testTag("open_devices"))
-        CompiModuleCard("Hardware Lab", "Wi-Fi local, GPIO, pines activos, sensores y diagnóstico",
-            Icons.Default.SettingsInputComponent, onClick = onHardware,
-            modifier = Modifier.testTag("open_hardware"))
-        CompiInlineMessage(
-            "La conexión Wi-Fi está disponible solo para pruebas en APK debug. " +
-                "La edición de código no flashea automáticamente la placa."
-        )
-        Spacer(Modifier.height(8.dp))
+        CompiModuleCard("Hardware Lab", "GPIO, sensores, Wi-Fi y diagnóstico",
+            Icons.Default.Memory, onClick = onHardware, modifier = Modifier.testTag("open_hardware"))
+
+        Text("Actividad reciente", style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold)
+        Card(shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                Text(if (ready) "Dispositivo Bluetooth sincronizado" else "Sin actividad verificada",
+                    fontWeight = FontWeight.Medium)
+                Text("Los eventos de hardware se mostrarán cuando sean confirmados; no se simulan registros.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        CompiInlineMessage("Wi-Fi local y las operaciones de hardware requieren un ESP32 compatible. " +
+            "El editor no instala firmware automáticamente.")
     }
 }
 
+@Composable
+private fun QuickAction(title: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Card(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = 80.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Box(Modifier.fillMaxWidth().heightIn(min = 80.dp).padding(6.dp),
+            contentAlignment = Alignment.Center) {
+            Text(title, style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold, maxLines = 2)
+        }
+    }
+}
