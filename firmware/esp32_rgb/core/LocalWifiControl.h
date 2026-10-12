@@ -12,6 +12,7 @@
 #include "RgbCommandCodec.h"
 #include "GpioTelemetryCodec.h"
 #include "CompiCapabilities.h"
+#include "RgbAutomationClock.h"
 
 namespace esp32core {
 
@@ -316,6 +317,40 @@ class LocalWifiControl final {
       experiment_.stop(pins_);
       server_.send(200, "application/json", "{\"status\":\"STOPPED\"}");
     });
+    // Bounded laboratory automation. No persistence, no native code, no public LAN.
+    // Up to 10 on/off cycles and at most 20 minutes. No endless GPIO activity.
+    server_.on("/v2/automation/status", HTTP_GET, [this]() {
+      if (!authorized()) return;
+      String body = "{\"version\":1,\"active\":" +
+        String(automation_.active() ? "true" : "false") +
+        ",\"intervalMs\":" + String(automation_.intervalMs()) +
+        ",\"remainingTransitions\":" + String(automationEdges_) + "}";
+      server_.send(200, "application/json", body);
+    });
+    server_.on("/v2/automation/start", HTTP_POST, [this]() {
+      if (!authorized()) return;
+      int seconds = 0, cycles = 0, startOn = 0;
+      if (!parseInt("intervalSeconds", 1, 60, seconds) ||
+          !parseInt("cycles", 1, 10, cycles) ||
+          !parseInt("startOn", 0, 1, startOn)) {
+        jsonError(400, "invalid_automation"); return;
+      }
+      if (script_.active() || experiment_.active() || hasManual() || automation_.active()) {
+        jsonError(409, "another_operation_active"); return;
+      }
+      if (!automation_.configure(static_cast<uint32_t>(seconds) * 1000U,
+                                 millis(), startOn == 1)) {
+        jsonError(400, "invalid_automation"); return;
+      }
+      automationEdges_ = static_cast<uint8_t>(cycles * 2);
+      server_.send(202, "application/json", "{\"status\":\"RUNNING\"}");
+    });
+    server_.on("/v2/automation/stop", HTTP_POST, [this]() {
+      if (!authorized()) return;
+      automation_.stop();
+      automationEdges_ = 0;
+      server_.send(200, "application/json", "{\"status\":\"STOPPED\"}");
+    });
     // V4 bounded RGB scripts: no native code, direct GPIO or firmware writes.
     // Lab SoftAP only. A physical/manual RGB command interrupts the script.
     server_.on("/v2/script/status", HTTP_GET, [this]() {
@@ -327,7 +362,7 @@ class LocalWifiControl final {
     });
     server_.on("/v2/script/run", HTTP_POST, [this]() {
       if (!authorized()) return;
-      if (script_.active() || experiment_.active()) {
+      if (script_.active() || experiment_.active() || automation_.active()) {
         jsonError(409, "script_or_gpio_experiment_active"); return;
       }
       const String source = server_.arg("source");
@@ -359,6 +394,8 @@ class LocalWifiControl final {
       // Invalid commands, including malformed FX/SET, must not cancel scripts.
       if (parsed.action != esp32core::RgbAction::Get) {
         script_.stop(); // A VALID manual RGB operation takes priority.
+        automation_.stop();
+        automationEdges_ = 0;
       }
       if (!rgbCommand_(cmd)) {
         jsonError(409, "rgb_command_not_applied"); return;
@@ -380,13 +417,28 @@ class LocalWifiControl final {
     if (!active_) return;
     server_.handleClient();
     script_.tick(nowMs, sendScriptRgb, this);
+    if (automation_.active()) {
+      const auto action = automation_.tick(nowMs);
+      if (action != RgbAutomationClock::Result::None) {
+        const char* command = action == RgbAutomationClock::Result::TurnOn ? "ON" : "OFF";
+        if (!rgbCommand_(String(command))) {
+          automation_.stop();
+          automationEdges_ = 0;
+        } else if (automationEdges_ > 0) {
+          if (--automationEdges_ == 0) {
+            automation_.stop();
+            rgbCommand_(String("OFF")); // Finish with a safe dark LED state.
+          }
+        }
+      }
+    }
     experiment_.tick(pins_, nowMs);
     if (hasManual() && static_cast<uint32_t>(nowMs - manualTouched_) >= 30000U) {
       releaseManual();  // Fail-safe bench timeout for manually controlled pins.
     }
   }
 
-  void stopScriptFromBle() { script_.stop(); }
+  void stopScriptFromBle() { script_.stop(); automation_.stop(); automationEdges_ = 0; }
 
   /** Compact read-only BLE GPIO snapshot, computed on Arduino loop only. */
   bool writeBlePinSnapshot(char (&output)[96]) const {
@@ -408,6 +460,8 @@ class LocalWifiControl final {
   RgbState rgbState_;
   RgbCommand rgbCommand_;
   RgbScriptRuntime script_;
+  RgbAutomationClock automation_;
+  uint8_t automationEdges_ = 0;
   DeviceId deviceId_;
   Preferences prefs_;
   WebServer server_{80};

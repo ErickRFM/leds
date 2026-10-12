@@ -21,6 +21,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.lab.LabExperimentLibrary
+import com.rgbcontroller.core.lab.RgbAutomationPolicy
 import com.rgbcontroller.core.model.DeviceIdentityInfo
 import com.rgbcontroller.core.sensors.AdcSample
 import com.rgbcontroller.core.sensors.AdcTelemetry
@@ -47,7 +48,8 @@ private enum class LabSection(val title: String) {
     DIAGNOSTICS("Diagnóstico"),
     GPIO("GPIO"),
     SENSORS("Sensores"),
-    EXPERIMENTS("Experimentos")
+    EXPERIMENTS("Experimentos"),
+    AUTOMATIONS("Automatizar")
 }
 
 @Composable
@@ -62,6 +64,11 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
     val blePins = bleManager?.gpioPins?.collectAsState()?.value
     val bleConnection = bleManager?.connectionState?.collectAsState()?.value
     var status by remember { mutableStateOf<JSONObject?>(null) }
+    var automationStatus by remember { mutableStateOf<JSONObject?>(null) }
+    var automationAvailable by remember { mutableStateOf(false) }
+    var automationInterval by rememberSaveable { mutableStateOf("2") }
+    var automationCycles by rememberSaveable { mutableStateOf("3") }
+    var automationStartOn by rememberSaveable { mutableStateOf(true) }
     var firmware by remember { mutableStateOf<JSONObject?>(null) }
     var diagnostics by remember { mutableStateOf<JSONObject?>(null) }
     var qaReport by remember { mutableStateOf<String?>(null) }
@@ -143,6 +150,25 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
                 gpioPolling = false
             }
             delay(3000)
+        }
+    }
+
+    LaunchedEffect(section, secret) {
+        automationStatus = null
+        automationAvailable = false
+        if (section != LabSection.AUTOMATIONS || !debug || !LocalLabClient.validKey(secret))
+            return@LaunchedEffect
+        try {
+            val state = labSession.serialized { client.automationStatus(secret) }
+            if (state.optInt("version") == 1) {
+                automationStatus = state
+                automationAvailable = true
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Firmware V9 and older lack the bounded automation endpoint.
+            automationAvailable = false
         }
     }
 
@@ -493,6 +519,80 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
                 client.resetPins(secret)
                 message = "Salidas manuales restauradas a LOW."
             } }) { Text("Liberar salidas") }
+        }
+        if (section == LabSection.AUTOMATIONS) {
+            Spacer(Modifier.height(16.dp))
+            Text("Automatización RGB por intervalos", style = MaterialTheme.typography.titleMedium)
+            Text("Alterna ON/OFF sin modificar el firmware. Máximo 10 ciclos y 20 minutos. " +
+                "Es temporal, no se guarda tras reiniciar y al completarse apaga el LED. " +
+                "Solo funciona por Wi-Fi de laboratorio con clave.",
+                style = MaterialTheme.typography.bodySmall)
+            if (!automationAvailable) {
+                CompiInlineMessage("No se confirmó el módulo de automatización. " +
+                    "Conecta a ESP32-Control-Lab y carga el firmware compatible para habilitar controles.")
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = automationInterval,
+                    onValueChange = { if (it.length <= 2 && it.all(Char::isDigit)) automationInterval = it },
+                    label = { Text("Segundos (1–60)") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = automationCycles,
+                    onValueChange = { if (it.length <= 2 && it.all(Char::isDigit)) automationCycles = it },
+                    label = { Text("Ciclos (1–10)") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = automationStartOn,
+                    onClick = { automationStartOn = true }, label = { Text("ON primero") })
+                FilterChip(selected = !automationStartOn,
+                    onClick = { automationStartOn = false }, label = { Text("OFF primero") })
+            }
+            val seconds = automationInterval.toIntOrNull() ?: 0
+            val cycles = automationCycles.toIntOrNull() ?: 0
+            val valid = RgbAutomationPolicy.valid(seconds, cycles)
+            if (valid) Text("Duración máxima: ${RgbAutomationPolicy.durationSeconds(seconds, cycles)} s",
+                style = MaterialTheme.typography.bodySmall)
+            else CompiInlineMessage("Intervalo o ciclos fuera del límite permitido.", isError = true)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    enabled = debug && automationAvailable && valid && !busy &&
+                        LocalLabClient.validKey(secret),
+                    onClick = { action {
+                        client.startAutomation(secret, seconds, cycles, automationStartOn)
+                        automationStatus = client.automationStatus(secret)
+                        message = "Automatización aceptada por el ESP32. Verifica el LED físico."
+                    } }
+                ) { Text("Iniciar") }
+                OutlinedButton(
+                    enabled = debug && automationAvailable && !busy && LocalLabClient.validKey(secret),
+                    onClick = { action {
+                        client.stopAutomation(secret)
+                        automationStatus = client.automationStatus(secret)
+                        message = "Orden de detener recibida. Revisa el estado físico."
+                    } }
+                ) { Text("Detener") }
+                TextButton(
+                    enabled = debug && !busy && LocalLabClient.validKey(secret),
+                    onClick = { action {
+                        automationStatus = client.automationStatus(secret)
+                        automationAvailable = automationStatus?.optInt("version") == 1
+                        message = "Estado de automatización actualizado."
+                    } }
+                ) { Text("Consultar") }
+            }
+            automationStatus?.let { state ->
+                Text(
+                    if (state.optBoolean("active")) "Ejecutando · quedan ${state.optInt("remainingTransitions")} cambios"
+                    else "Automatización inactiva",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
         }
         if (section == LabSection.SENSORS) {
         Spacer(Modifier.height(18.dp))
