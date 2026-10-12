@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -18,6 +19,7 @@ import com.rgbcontroller.feature.control.ControlScreen
 import com.rgbcontroller.feature.effects.EffectsScreen
 import com.rgbcontroller.feature.presets.PresetsScreen
 import com.rgbcontroller.core.ui.SectionHeader
+import com.rgbcontroller.core.ui.CompiInlineMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
@@ -43,6 +45,7 @@ fun LedModuleScreen(
     var wifiSecret by remember { mutableStateOf("") } // Memory only; never DataStore or logs.
     var wifiReady by remember { mutableStateOf(false) }
     var wifiBusy by remember { mutableStateOf(false) }
+    var connectionEpoch by remember { mutableIntStateOf(0) }
     var wifiState by remember { mutableStateOf<RgbDeviceState?>(null) }
     var wifiMessage by remember { mutableStateOf("Conecta al SoftAP ESP32-Control-Lab para usar Wi-Fi.") }
 
@@ -108,96 +111,137 @@ fun LedModuleScreen(
     )
 
     Column(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp)) {
-            SectionHeader("LED RGB", "Un solo control, dos formas de conectarte")
-            Spacer(Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Text("LED RGB", style = MaterialTheme.typography.headlineSmall)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 FilterChip(
                     selected = !isWifi,
                     onClick = {
-                        mode = ConnectionMode.BLUETOOTH
-                        wifiReady = false
-                        wifiState = null
-                        wifiSecret = ""
+                        if (isWifi) {
+                            connectionEpoch++
+                            mode = ConnectionMode.BLUETOOTH
+                            wifiReady = false
+                            wifiBusy = false
+                            wifiState = null
+                            wifiSecret = ""
+                        }
                     },
                     label = { Text("Bluetooth") }
                 )
                 FilterChip(
                     selected = isWifi,
                     onClick = {
-                        mode = ConnectionMode.WIFI_LAB
-                        wifiReady = false
-                        wifiState = null
-                        wifiSecret = ""
+                        if (!isWifi) {
+                            connectionEpoch++
+                            mode = ConnectionMode.WIFI_LAB
+                            wifiReady = false
+                            wifiBusy = false
+                            wifiState = null
+                            wifiSecret = ""
+                        }
                     },
                     label = { Text("Wi-Fi") }
                 )
             }
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(Modifier.padding(14.dp)) {
+            if (!isWifi) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     Text(
-                        if (connected) "●  Conectado por " + (if (isWifi) "Wi-Fi" else "Bluetooth")
-                        else "○  " + (if (isWifi) "Wi-Fi sin conectar" else "Bluetooth sin conectar"),
-                        style = MaterialTheme.typography.titleSmall
+                        if (connected) "●  ESP32 conectado" else "○  Bluetooth sin conectar",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (connected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    if (isWifi) {
-                        Spacer(Modifier.height(6.dp))
+                    TextButton(onClick = onOpenDevices) {
+                        Text(if (connected) "Cambiar" else "Buscar ESP32")
+                    }
+                }
+            } else {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
                         Text(
-                            if (isDebug) "Modo laboratorio (debug). SoftAP local 192.168.4.1; sin TLS ni Internet."
-                            else "Wi-Fi no disponible en versiones de distribución hasta completar seguridad y QA.",
+                            if (connected) "●  Wi-Fi de laboratorio conectado"
+                            else "○  Wi-Fi de laboratorio sin conectar",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        Text(
+                            if (isDebug) "Red ESP32-Control-Lab · 192.168.4.1 · sin Internet ni TLS."
+                            else "Wi-Fi no habilitado en versiones de distribución.",
                             style = MaterialTheme.typography.bodySmall
                         )
                         if (isDebug) {
-                            Spacer(Modifier.height(10.dp))
                             OutlinedTextField(
                                 value = wifiSecret,
                                 onValueChange = {
+                                    connectionEpoch++
                                     wifiSecret = it.trim().take(16)
                                     wifiReady = false
                                     wifiState = null
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Clave local de control (monitor USB)") },
+                                label = { Text("Clave local (monitor serie USB)") },
                                 visualTransformation = PasswordVisualTransformation(),
                                 singleLine = true,
                                 enabled = !wifiBusy
                             )
-                            Spacer(Modifier.height(8.dp))
                             Button(
                                 enabled = !wifiBusy && LocalLabClient.validKey(wifiSecret),
                                 onClick = {
+                                    connectionEpoch++
+                                    val attempt = connectionEpoch
+                                    val key = wifiSecret
                                     wifiReady = false
                                     wifiBusy = true
                                     scope.launch {
                                         try {
-                                            val response = wifiClient.status(wifiSecret)
-                                            wifiState = RgbDeviceState.parse(response.optString("rgb"))
+                                            val response = wifiClient.status(key)
+                                            val fresh = RgbDeviceState.parse(response.optString("rgb"))
                                                 ?: error("Estado RGB no reconocido.")
-                                            wifiReady = true
-                                            wifiMessage = "Conectado al ESP32 local. Sin fallback a datos móviles."
-                                        } catch (e: Exception) {
-                                            wifiState = null
-                                            wifiMessage = e.message ?: "No se pudo abrir la sesión Wi-Fi."
+                                            if (connectionEpoch == attempt && mode == ConnectionMode.WIFI_LAB) {
+                                                wifiState = fresh
+                                                wifiReady = true
+                                                wifiMessage = "Estado sincronizado con el ESP32."
+                                            }
+                                        } catch (cancelled: CancellationException) {
+                                            throw cancelled
+                                        } catch (error: Exception) {
+                                            if (connectionEpoch == attempt && mode == ConnectionMode.WIFI_LAB) {
+                                                wifiState = null
+                                                wifiMessage = error.message ?: "No se pudo conectar."
+                                            }
                                         } finally {
-                                            wifiBusy = false
+                                            if (connectionEpoch == attempt) wifiBusy = false
                                         }
                                     }
                                 }
-                            ) { Text(if (wifiReady) "Actualizar estado" else "Conectar Wi-Fi") }
-                            Text(wifiMessage, style = MaterialTheme.typography.bodySmall)
-                        }
-                    } else {
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedButton(onClick = onOpenDevices) {
-                            Text(if (connected) "Cambiar dispositivo" else "Buscar dispositivo Bluetooth")
+                            ) { Text(if (wifiBusy) "Conectando…" else if (wifiReady) "Sincronizar" else "Conectar Wi-Fi") }
+                            CompiInlineMessage(
+                                wifiMessage,
+                                isError = wifiMessage.startsWith("No se pudo") ||
+                                    wifiMessage.startsWith("Se perdió") ||
+                                    wifiMessage.contains("inválid", ignoreCase = true)
+                            )
                         }
                     }
                 }
             }
-            Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 LedPage.entries.forEach { item ->
                     FilterChip(
