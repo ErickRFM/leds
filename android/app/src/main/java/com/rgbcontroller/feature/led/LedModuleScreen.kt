@@ -2,10 +2,15 @@ package com.rgbcontroller.feature.led
 
 import android.content.pm.ApplicationInfo
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -20,17 +25,13 @@ import com.rgbcontroller.core.wifi.LabTransport
 import com.rgbcontroller.feature.control.ControlScreen
 import com.rgbcontroller.feature.effects.EffectsScreen
 import com.rgbcontroller.feature.presets.PresetsScreen
-import com.rgbcontroller.core.ui.SectionHeader
 import com.rgbcontroller.core.ui.CompiV9Segment
-import com.rgbcontroller.core.ui.CompiV9Panel
 import com.rgbcontroller.core.ui.CompiInlineMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 
-private enum class LedPage { CONTROL, COLORS, EFFECTS }
-
-/** One LED feature with equivalent commands; Wi-Fi remains an explicitly gated debug lab. */
+/** Unified LED screen: Control, Color, Favorites, and Effects presented together in a single scrollable view matching V9 reference UI. */
 @Composable
 fun LedModuleScreen(
     bleManager: BleManager,
@@ -50,10 +51,8 @@ fun LedModuleScreen(
     val wifiReady = labSession.wifiReady
     val wifiState = labSession.rgbState
     val wifiMessage = labSession.message
-    var page by remember { mutableStateOf(LedPage.CONTROL) }
     var wifiBusy by remember { mutableStateOf(false) }
 
-    // Navigation or Activity recreation must not display an old 'connected' state.
     LaunchedEffect(Unit) {
         if (labSession.transport == LabTransport.WIFI_LAB && labSession.wifiReady) {
             val (epoch, key) = labSession.beginVerification()
@@ -70,14 +69,12 @@ fun LedModuleScreen(
         }
     }
 
-    // A separate queue for each connection epoch prevents replay after switching transport.
     val wifiCommands = remember(mode, wifiReady) { Channel<String>(capacity = 32) }
     LaunchedEffect(mode, wifiReady, wifiCommands) {
         if (mode != LabTransport.WIFI_LAB || !wifiReady) return@LaunchedEffect
         val key = wifiSecret
         val epoch = labSession.revision
         try {
-            // Coalesce superseded slider SET commands, never discard ON/OFF or FX.
             var pending: String? = null
             while (true) {
                 var command = pending ?: wifiCommands.receive()
@@ -136,139 +133,166 @@ fun LedModuleScreen(
         }
     )
 
-    Column(Modifier.fillMaxSize()) {
-        Column(
-            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp)
+    Column(
+        Modifier.fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Top Header and Transport Toggles matching Reference Image 2
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("LED RGB", style = MaterialTheme.typography.headlineSmall)
+            Text("LED RGB", style = MaterialTheme.typography.headlineMedium)
+            IconButton(onClick = { /* Settings action */ }) {
+                Icon(
+                    imageVector = androidx.compose.material.icons.Icons.Default.Settings,
+                    contentDescription = "Ajustes"
+                )
+            }
+        }
+
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            CompiV9Segment(
+                text = "Bluetooth",
+                selected = !isWifi,
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    if (isWifi) {
+                        labSession.selectTransport(LabTransport.BLUETOOTH)
+                        wifiBusy = false
+                    }
+                }
+            )
+            CompiV9Segment(
+                text = "Wi-Fi",
+                selected = isWifi,
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    if (!isWifi) {
+                        labSession.selectTransport(LabTransport.WIFI_LAB)
+                        wifiBusy = false
+                    }
+                }
+            )
+        }
+
+        // ESP32 Connected Card with "Cambiar" action
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                Modifier.fillMaxWidth().padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                CompiV9Segment(
-                    text = "Bluetooth",
-                    selected = !isWifi,
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        if (isWifi) {
-                            labSession.selectTransport(LabTransport.BLUETOOTH)
-                            wifiBusy = false
-                        }
-                    }
-                )
-                CompiV9Segment(
-                    text = "Wi-Fi",
-                    selected = isWifi,
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        if (!isWifi) {
-                            labSession.selectTransport(LabTransport.WIFI_LAB)
-                            wifiBusy = false
-                        }
-                    }
-                )
-            }
-            if (!isWifi) {
                 Row(
-                    Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(
-                        if (connected) "●  ESP32 conectado" else "○  Bluetooth sin conectar",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (connected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    TextButton(onClick = onOpenDevices) {
-                        Text(if (connected) "Cambiar" else "Buscar ESP32")
-                    }
-                }
-            } else {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Column(
-                        Modifier.fillMaxWidth().padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(7.dp)
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = androidx.compose.foundation.shape.CircleShape
                     ) {
-                        Text(
-                            if (connected) "●  Wi-Fi de laboratorio conectado"
-                            else "○  Wi-Fi de laboratorio sin conectar",
-                            style = MaterialTheme.typography.titleSmall
-                        )
-                        Text(
-                            if (isDebug) "Red ESP32-Control-Lab · 192.168.4.1 · sin Internet ni TLS."
-                            else "Wi-Fi no habilitado en versiones de distribución.",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        if (isDebug) {
-                            OutlinedTextField(
-                                value = wifiSecret,
-                                onValueChange = {
-                                    labSession.updateKey(it)
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Clave local (monitor serie USB)") },
-                                visualTransformation = PasswordVisualTransformation(),
-                                singleLine = true,
-                                enabled = !wifiBusy
-                            )
-                            Button(
-                                enabled = !wifiBusy && LocalLabClient.validKey(wifiSecret),
-                                onClick = {
-                                    val (attempt, key) = labSession.beginVerification()
-                                    wifiBusy = true
-                                    scope.launch {
-                                        try {
-                                            val response = labSession.serialized { wifiClient.status(key) }
-                                            val fresh = RgbDeviceState.parse(response.optString("rgb"))
-                                                ?: error("Estado RGB no reconocido.")
-                                            labSession.verified(attempt, key, fresh)
-                                        } catch (cancelled: CancellationException) {
-                                            throw cancelled
-                                        } catch (error: Exception) {
-                                            labSession.failed(attempt, error.message ?: "No se pudo conectar.")
-                                        } finally {
-                                            wifiBusy = false
-                                        }
-                                    }
-                                }
-                            ) { Text(if (wifiBusy) "Conectando…" else if (wifiReady) "Sincronizar" else "Conectar Wi-Fi") }
-                            CompiInlineMessage(
-                                wifiMessage,
-                                isError = wifiMessage.startsWith("No se pudo") ||
-                                    wifiMessage.startsWith("Se perdió") ||
-                                    wifiMessage.contains("inválid", ignoreCase = true)
-                            )
+                        Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+                            Text("⚡", style = MaterialTheme.typography.bodyLarge)
                         }
                     }
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Surface(
+                                modifier = Modifier.size(8.dp),
+                                shape = androidx.compose.foundation.shape.CircleShape,
+                                color = if (connected) Color(0xFF22C55E) else Color(0xFFEF4444)
+                            ) {}
+                            Text(
+                                if (connected) "ESP32 conectado" else "ESP32 sin conectar",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                            )
+                        }
+                        Text(
+                            if (isWifi) "Red Lab-Red · Wi-Fi" else "Compi-ESP32 · Bluetooth",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                OutlinedButton(
+                    onClick = onOpenDevices,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                ) {
+                    Text("Cambiar >")
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                LedPage.entries.forEach { item ->
-                    FilterChip(
-                        selected = page == item,
-                        onClick = { page = item },
-                        label = { Text(when (item) {
-                            LedPage.CONTROL -> "Control"
-                            LedPage.COLORS -> "Colores"
-                            LedPage.EFFECTS -> "Efectos"
-                        }) }
+        }
+
+        if (isWifi && isDebug) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(
+                    Modifier.fillMaxWidth().padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    OutlinedTextField(
+                        value = wifiSecret,
+                        onValueChange = { labSession.updateKey(it) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Clave local (monitor serie USB)") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        enabled = !wifiBusy
+                    )
+                    Button(
+                        enabled = !wifiBusy && LocalLabClient.validKey(wifiSecret),
+                        onClick = {
+                            val (attempt, key) = labSession.beginVerification()
+                            wifiBusy = true
+                            scope.launch {
+                                try {
+                                    val response = labSession.serialized { wifiClient.status(key) }
+                                    val fresh = RgbDeviceState.parse(response.optString("rgb"))
+                                        ?: error("Estado RGB no reconocido.")
+                                    labSession.verified(attempt, key, fresh)
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (error: Exception) {
+                                    labSession.failed(attempt, error.message ?: "No se pudo conectar.")
+                                } finally {
+                                    wifiBusy = false
+                                }
+                            }
+                        }
+                    ) { Text(if (wifiBusy) "Conectando…" else if (wifiReady) "Sincronizar" else "Conectar Wi-Fi") }
+                    CompiInlineMessage(
+                        wifiMessage,
+                        isError = wifiMessage.startsWith("No se pudo") || wifiMessage.startsWith("Se perdió")
                     )
                 }
             }
         }
-        // Key the content by transport so switching BLE/Wi-Fi never leaks a pending slider command.
+
+        // Key by transport mode to avoid stale commands
         key(mode) {
-            when (page) {
-                LedPage.CONTROL -> ControlScreen(bleManager, link)
-                LedPage.COLORS -> PresetsScreen(bleManager, preferencesRepository, link)
-                LedPage.EFFECTS -> EffectsScreen(bleManager, link)
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                // 1. Control de color (Wheel + Sliders)
+                ControlScreen(bleManager, link)
+
+                // 2. Favoritos
+                PresetsScreen(bleManager, preferencesRepository, link)
+
+                // 3. Efectos
+                EffectsScreen(bleManager, link)
             }
         }
     }
