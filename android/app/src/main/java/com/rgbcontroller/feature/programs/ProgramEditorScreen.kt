@@ -67,7 +67,7 @@ fun ProgramEditorScreen() {
         fileName = item.displayName
         selected = item.language.name
         laboratoryMode = if (item.language == ProgramLanguage.LAB_SCRIPT &&
-            Regex("""(?m)^\\s*RGB\\s+""").containsMatchIn(item.text)) "RGB" else "GPIO"
+            Regex("""(?m)^\s*RGB\s+""").containsMatchIn(item.text)) "RGB" else "GPIO"
         notice = item.notice
     }
 
