@@ -72,7 +72,7 @@ class HomeNavigationTest {
         composeRule.onNodeWithText("Diagnóstico").performClick()
         composeRule.onNodeWithText("Identidad V4 del ESP32").assertExists()
 
-        composeRule.onNodeWithText("GPIO", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithText("GPIO").performClick()
         composeRule.onNodeWithText("Entradas y salidas GPIO").assertExists()
 
         composeRule.onNodeWithText("Sensores").performClick()
