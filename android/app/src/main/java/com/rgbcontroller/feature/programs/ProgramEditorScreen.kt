@@ -288,7 +288,14 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
         val operation = labSession.operationStatus
         if (operation.name.isNotBlank()) {
             CompiInlineMessage(
-                "${operation.name}: ${operation.phase.name.lowercase()}" +
+                "${operation.name}: ${when (operation.phase) {
+                    com.rgbcontroller.core.wifi.LabOperationPhase.IDLE -> "sin iniciar"
+                    com.rgbcontroller.core.wifi.LabOperationPhase.QUEUED -> "en espera"
+                    com.rgbcontroller.core.wifi.LabOperationPhase.RUNNING -> "ejecutando"
+                    com.rgbcontroller.core.wifi.LabOperationPhase.CONFIRMED -> "respondió"
+                    com.rgbcontroller.core.wifi.LabOperationPhase.FAILED -> "falló"
+                    com.rgbcontroller.core.wifi.LabOperationPhase.CANCELLED -> "cancelado"
+                }}" +
                     (if (operation.details.isBlank()) "" else " · ${operation.details}"),
                 isError = operation.phase == com.rgbcontroller.core.wifi.LabOperationPhase.FAILED
             )
