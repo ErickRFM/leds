@@ -61,7 +61,7 @@ fun DashboardScreen(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
         ) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("Dispositivo actual · Bluetooth", style = MaterialTheme.typography.labelMedium,
+                Text("Estado Bluetooth", style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer)
                 Text(status, style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onPrimaryContainer)
@@ -97,7 +97,8 @@ fun CenterLandingScreen(onDevices: () -> Unit, onLab: () -> Unit, onCode: () -> 
         CompiModuleCard("Dispositivos", "Buscar y conectar controladores Bluetooth",
             Icons.Default.Bluetooth, onClick = onDevices)
         CompiModuleCard("Hardware Lab", "Wi-Fi, GPIO, sensores, recursos y diagnóstico",
-            Icons.Default.SettingsInputComponent, onClick = onLab)
+            Icons.Default.SettingsInputComponent, onClick = onLab,
+            modifier = Modifier.testTag("open_hardware"))
         CompiModuleCard("Compi Studio", "Volver al editor y a tus proyectos",
             Icons.Default.Code, onClick = onCode)
     }
