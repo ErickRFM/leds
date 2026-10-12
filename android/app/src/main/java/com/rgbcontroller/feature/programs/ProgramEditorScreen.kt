@@ -305,7 +305,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession) {
                                 if (plan != null) scope.launch {
                                     experimentBusy = true
                                     try {
-                                        labClient.sequence(controlKey, plan.pin, plan.sequence)
+                                        labSession.serialized { labClient.sequence(controlKey, plan.pin, plan.sequence) }
                                         notice = "ESP32 aceptó el inicio de la secuencia en GPIO " + plan.pin +
                                             ". Confirmación lógica; revisa el circuito físico."
                                     } catch (cancelled: CancellationException) {
@@ -324,7 +324,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession) {
                                 scope.launch {
                                     experimentBusy = true
                                     try {
-                                        labClient.stopExperiment(controlKey)
+                                        labSession.serialized { labClient.stopExperiment(controlKey) }
                                         notice = "El ESP32 confirmó la orden de detener el experimento."
                                     } catch (cancelled: CancellationException) {
                                         throw cancelled
@@ -403,7 +403,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession) {
                                 scope.launch {
                                     experimentBusy = true
                                     try {
-                                        labClient.runRgbScript(controlKey, source)
+                                        labSession.serialized { labClient.runRgbScript(controlKey, source) }
                                         notice = "ESP32 aceptó el script RGB. Consulta estado y verifica LED físico."
                                     } catch (cancelled: CancellationException) { throw cancelled
                                     } catch (error: Exception) {
@@ -418,7 +418,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession) {
                                 scope.launch {
                                     experimentBusy = true
                                     try {
-                                        labClient.stopRgbScript(controlKey)
+                                        labSession.serialized { labClient.stopRgbScript(controlKey) }
                                         notice = "Detención confirmada; el último color se conserva."
                                     } catch (cancelled: CancellationException) { throw cancelled
                                     } catch (error: Exception) {
@@ -434,7 +434,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession) {
                             scope.launch {
                                 experimentBusy = true
                                 try {
-                                    val state = labClient.rgbScriptStatus(controlKey)
+                                    val state = labSession.serialized { labClient.rgbScriptStatus(controlKey) }
                                     notice = if (state.optBoolean("active")) {
                                         "RGB ejecutando paso ${state.optInt("step") + 1} de ${state.optInt("total")}."
                                     } else "RGB sin script en ejecución."
