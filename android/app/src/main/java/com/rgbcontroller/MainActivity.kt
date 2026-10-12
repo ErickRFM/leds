@@ -181,6 +181,11 @@ fun MainAppNavHost(
                         onHardware = { navController.navigate(Screen.Hub.route) }
                     )
                 }
+                // Retain a migration route for back stacks saved by Compi V8.
+                // The redundant Centro TAB is gone; legacy state returns to Home.
+                composable("center") {
+                    LaunchedEffect(Unit) { navController.navigateTopLevel(Screen.Home) }
+                }
                 composable(Screen.Led.route) {
                     LedModuleScreen(bleManager, preferencesRepository, session,
                         onOpenDevices = { navController.navigate(Screen.Devices.route) })
