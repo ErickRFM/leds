@@ -126,7 +126,7 @@ class LocalLabClient(private val context: Context) {
         method: String, path: String, key: String, form: Map<String, String> = emptyMap(),
         readTimeout: Int = 7000
     ): JSONObject = withContext(Dispatchers.IO) {
-        require(context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+        require((context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
             "La API Wi-Fi del laboratorio está deshabilitada fuera de compilaciones debug."
         }
         require(validKey(key)) { "Clave inválida (16 caracteres hexadecimales)." }
