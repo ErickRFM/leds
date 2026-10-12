@@ -13,6 +13,7 @@
 #include "modules/LedRgbModule.h"
 #include "core/LocalWifiControl.h"
 #include "core/RgbCommandCodec.h"
+#include "core/RgbCommandInbox.h"
 #include "core/DeviceIdentity.h"
 #include "core/RgbSettingsStore.h"
 #include "core/PhysicalProvisioningMode.h"
@@ -41,6 +42,11 @@ uint32_t effectStarted = 0;
 esp32core::RgbSettingsStore rgbStorage;
 bool rgbDirty = false;
 bool rgbPersistenceAttempted = false;
+// Legacy BLE stack invokes onWrite on a different task. Never mutate the
+// RGB engine/LED state in that callback; the Arduino loop owns all commands.
+portMUX_TYPE bleInboxMux = portMUX_INITIALIZER_UNLOCKED;
+esp32core::RgbCommandInbox bleInbox;
+uint16_t bleRejected = 0;
 uint32_t rgbLastChangedMs = 0;
 uint32_t rgbLastPersistAttemptMs = 0;
 
@@ -183,13 +189,13 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* characteristic) override {
     const String command = characteristic->getValue();
     esp32core::RgbCommand parsed{};
-    if (!esp32core::parseRgbCommand(command.c_str(), parsed)) {
-      reject();
-      return;
-    }
-    // Invalid data must never abort a valid running script.
-    if (parsed.action != esp32core::RgbAction::Get) stopScriptOnManualBle();
-    if (!applyRgbCommand(command)) reject();
+    const bool valid = esp32core::parseRgbCommand(command.c_str(), parsed);
+    portENTER_CRITICAL(&bleInboxMux);
+    const bool accepted = valid && bleInbox.push(command.c_str());
+    if (!accepted && bleRejected < 65535) ++bleRejected;
+    portEXIT_CRITICAL(&bleInboxMux);
+    // The main loop validates again and owns RGB PWM, state notifications,
+    // script interruption and diagnostic replies. Never touch them here.
   }
 };
 
@@ -240,6 +246,31 @@ esp32core::LocalWifiControl wifiLab(pinManager, stateString, applyRgbCommand,
 
 
 void stopScriptOnManualBle() { wifiLab.stopScriptFromBle(); }
+
+void processBleCommands() {
+  uint16_t rejected = 0;
+  portENTER_CRITICAL(&bleInboxMux);
+  rejected = bleRejected;
+  bleRejected = 0;
+  portEXIT_CRITICAL(&bleInboxMux);
+  if (rejected) reject(); // one bounded diagnostic, not a BLE callback-side write.
+  // A bounded budget prevents a flood of BLE commands starving network/ADC.
+  for (uint8_t i = 0; i < 4; ++i) {
+    char buffer[esp32core::RgbCommandInbox::kMaxCommand + 1] = {};
+    portENTER_CRITICAL(&bleInboxMux);
+    const bool found = bleInbox.pop(buffer);
+    portEXIT_CRITICAL(&bleInboxMux);
+    if (!found) break;
+    esp32core::RgbCommand parsed{};
+    if (!esp32core::parseRgbCommand(buffer, parsed)) {
+      reject();
+      continue;
+    }
+    // Only VALID manual operations interrupt an active bounded script.
+    if (parsed.action != esp32core::RgbAction::Get) stopScriptOnManualBle();
+    if (!applyRgbCommand(String(buffer))) reject();
+  }
+}
 
 void setup() {
   Serial.begin(115200);
@@ -329,6 +360,7 @@ void loop() {
   }
   if (connected) connectedPreviously = true;
 
+  processBleCommands();
   moduleRegistry.tickAll(millis());
   wifiLab.tick(millis());
   persistRgbIfDue(millis());
