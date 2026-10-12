@@ -42,6 +42,7 @@ fun LedModuleScreen(
     val scope = rememberCoroutineScope()
     val bleConnection by bleManager.connectionState.collectAsState()
     val bleState by bleManager.rgbState.collectAsState()
+    val bleRevision by bleManager.stateRevision.collectAsState()
     val mode = labSession.transport
     val wifiSecret = labSession.key
     val wifiReady = labSession.wifiReady
@@ -121,7 +122,7 @@ fun LedModuleScreen(
         transport = if (isWifi) "WIFI_LAB" else "BLUETOOTH",
         ready = connected,
         state = state,
-        stateRevision = if (isWifi) labSession.stateRevision else 0L,
+        stateRevision = if (isWifi) labSession.stateRevision else bleRevision,
         sendCommand = { command ->
             if (isWifi) {
                 if (wifiReady && !wifiCommands.trySend(command).isSuccess) {
