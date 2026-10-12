@@ -62,7 +62,8 @@ fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null) {
                 state.blue != expected.b || state.brightness != expected.brightness)) {
             return@LaunchedEffect
         }
-        if (!dirty && confirmationError == null) {
+        // A late exact readback may clear a timeout; unrelated old states may not.
+        if (!dirty && (expected != null || confirmationError == null)) {
             red = state.red.toFloat()
             green = state.green.toFloat()
             blue = state.blue.toFloat()
