@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
 import com.rgbcontroller.core.ble.BleManager
@@ -72,11 +73,11 @@ fun DashboardScreen(
         }
         Text("Herramientas", style = MaterialTheme.typography.titleMedium)
         CompiModuleCard("LED RGB", "Color, brillo, favoritos y efectos",
-            Icons.Default.ColorLens, onClick = onLed)
+            Icons.Default.ColorLens, onClick = onLed, modifier = Modifier.testTag("open_led"))
         CompiModuleCard("Compi Studio", "Editar código, proyectos y scripts",
-            Icons.Default.Code, onClick = onCode)
+            Icons.Default.Code, onClick = onCode, modifier = Modifier.testTag("open_code"))
         CompiModuleCard("Centro ESP32", "Equipos, Wi-Fi, GPIO, sensores y pruebas",
-            Icons.Default.DeveloperBoard, onClick = onCenter)
+            Icons.Default.DeveloperBoard, onClick = onCenter, modifier = Modifier.testTag("open_center"))
         CompiInlineMessage(
             "La conexión Wi-Fi está disponible solo para pruebas en APK debug. " +
                 "La edición de código no flashea automáticamente la placa."
