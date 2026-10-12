@@ -98,6 +98,8 @@ class HomeNavigationTest {
         composeRule.onNodeWithTag("studio_source").assertTextContains("RGB 255 0 0", substring = true)
         composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
+        composeRule.onNodeWithTag("open_code").performClick()
+        composeRule.onNodeWithTag("studio_source").assertTextContains("RGB 255 0 0", substring = true)
     }
 
     @Test
