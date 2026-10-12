@@ -61,6 +61,8 @@ class BleManager(private val context: Context) {
 
     private val _rgbState = MutableStateFlow<RgbDeviceState?>(null)
     val rgbState: StateFlow<RgbDeviceState?> = _rgbState.asStateFlow()
+    private val _stateRevision = MutableStateFlow(0L)
+    val stateRevision: StateFlow<Long> = _stateRevision.asStateFlow()
     private val _publicDeviceId = MutableStateFlow<String?>(null)
     val publicDeviceId: StateFlow<String?> = _publicDeviceId.asStateFlow()
     private val _connectedAddress = MutableStateFlow<String?>(null)
@@ -378,6 +380,7 @@ class BleManager(private val context: Context) {
         }
         _deviceState.value = frame
         _rgbState.value = parsed
+        _stateRevision.value += 1
         val identity = publicIdCharacteristic
         val remote = gatt
         if (identity != null && remote != null) {
@@ -391,7 +394,10 @@ class BleManager(private val context: Context) {
     private fun acceptState(bytes: ByteArray?) {
         val text = bytes?.toString(Charsets.UTF_8) ?: return
         _deviceState.value = text
-        RgbDeviceState.parse(text)?.let { _rgbState.value = it }
+        RgbDeviceState.parse(text)?.let {
+            _rgbState.value = it
+            _stateRevision.value += 1
+        }
     }
 
     fun writeCommand(text: String) {
