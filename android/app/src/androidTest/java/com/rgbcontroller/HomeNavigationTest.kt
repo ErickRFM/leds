@@ -64,6 +64,28 @@ class HomeNavigationTest {
     }
 
     @Test
+    fun hardwareSectionsAreReachableWithoutADevice() {
+        composeRule.onNodeWithTag("open_center").performClick()
+        composeRule.onNodeWithTag("open_hardware").performClick()
+        composeRule.onNodeWithText("Hardware Lab").assertExists()
+
+        composeRule.onNodeWithText("Diagnóstico").performClick()
+        composeRule.onNodeWithText("Identidad V4 del ESP32").assertExists()
+
+        composeRule.onNodeWithText("GPIO", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithText("Entradas y salidas GPIO").assertExists()
+
+        composeRule.onNodeWithText("Sensores").performClick()
+        composeRule.onNodeWithText("Sensores / ADC1").assertExists()
+
+        composeRule.onNodeWithText("Experimentos").performClick()
+        composeRule.onNodeWithText("Laboratorio protegido").assertExists()
+
+        composeRule.onNodeWithTag("nav_home").performClick()
+        composeRule.onNodeWithText("Compi").assertExists()
+    }
+
+    @Test
     fun homeReturnsFromOtherPrimaryModules() {
         composeRule.onNodeWithTag("open_code").performClick()
         composeRule.onNodeWithTag("nav_home").performClick()
