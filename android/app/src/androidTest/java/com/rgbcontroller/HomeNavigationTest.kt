@@ -65,7 +65,6 @@ class HomeNavigationTest {
 
     @Test
     fun hardwareSectionsAreReachableWithoutADevice() {
-        composeRule.onNodeWithTag("open_center").performClick()
         composeRule.onNodeWithTag("open_hardware").performClick()
         composeRule.onNodeWithText("Hardware Lab").assertExists()
 
@@ -91,8 +90,12 @@ class HomeNavigationTest {
         composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
 
-        composeRule.onNodeWithTag("open_center").performClick()
-        composeRule.onNodeWithTag("nav_home").performClick()
+        composeRule.onNodeWithTag("open_devices").performClick()
+        composeRule.onNodeWithTag("nav_back").performClick()
+        composeRule.onNodeWithText("Compi").assertExists()
+
+        composeRule.onNodeWithTag("open_hardware").performClick()
+        composeRule.onNodeWithTag("nav_back").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
     }
 }
