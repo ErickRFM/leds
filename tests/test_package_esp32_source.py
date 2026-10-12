@@ -1,0 +1,43 @@
+"""Tests for secret-free reproducible Arduino package."""
+import sys
+from pathlib import Path
+import tempfile
+import unittest
+import zipfile
+from hashlib import sha256
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+from package_esp32_source import package  # noqa: E402
+
+
+class PackageArduinoSketchTests(unittest.TestCase):
+    def test_contents_preserve_arduino_structure_and_exclude_secrets(self):
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / "firmware.zip"
+            manifest = package(target)
+            with zipfile.ZipFile(target) as archive:
+                names = set(archive.namelist())
+                self.assertIn("esp32_rgb/esp32_rgb.ino", names)
+                self.assertIn("esp32_rgb/core/PinManager.h", names)
+                self.assertIn("esp32_rgb/core/LocalWifiControl.h", names)
+                self.assertIn("esp32_rgb/modules/LedRgbModule.h", names)
+                self.assertIn("esp32_rgb/core/RgbAutomationClock.h", names)
+                self.assertIn("config/esp32-board.env", names)
+                self.assertIn("SHA256-FILES.txt", names)
+                self.assertFalse(any("FactoryProvisioning" in n or "/config/" in n
+                                     for n in names if n.startswith("esp32_rgb/")))
+                self.assertEqual(manifest["esp32_rgb/esp32_rgb.ino"],
+                                 sha256(archive.read("esp32_rgb/esp32_rgb.ino")).hexdigest())
+                self.assertIn(b"min_spiffs", archive.read("config/esp32-board.env"))
+
+    def test_archive_is_reproducible(self):
+        with tempfile.TemporaryDirectory() as temp:
+            a, b = Path(temp) / "a.zip", Path(temp) / "b.zip"
+            package(a)
+            package(b)
+            self.assertEqual(a.read_bytes(), b.read_bytes())
+
+
+if __name__ == "__main__":
+    unittest.main()
