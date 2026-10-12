@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import com.rgbcontroller.core.ui.CompiInlineMessage
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -29,6 +30,13 @@ import kotlinx.coroutines.withContext
  * Offline V4 editor foundation: import, paste and inspect.
  * NO compilation, arbitrary execution, firmware upload or OTA endpoint is exposed.
  */
+private data class PendingEditorReplacement(
+    val text: String,
+    val displayName: String,
+    val language: ProgramLanguage,
+    val notice: String
+)
+
 @Composable
 fun ProgramEditorScreen() {
     val context = LocalContext.current
@@ -52,6 +60,21 @@ fun ProgramEditorScreen() {
     val gpioPlan = compiled?.getOrNull()
     val inspection = remember(source) { ProgramSourcePolicy.inspect(source) }
     val rgbCheck = remember(source) { LabRgbScriptPolicy.validate(source) }
+    var pendingReplacement by remember { mutableStateOf<PendingEditorReplacement?>(null) }
+
+    fun applyReplacement(item: PendingEditorReplacement) {
+        source = item.text
+        fileName = item.displayName
+        selected = item.language.name
+        laboratoryMode = if (item.language == ProgramLanguage.LAB_SCRIPT &&
+            Regex("""(?m)^\\s*RGB\\s+""").containsMatchIn(item.text)) "RGB" else "GPIO"
+        notice = item.notice
+    }
+
+    fun requestReplacement(item: PendingEditorReplacement) {
+        if (source.isNotBlank() && source != item.text) pendingReplacement = item
+        else applyReplacement(item)
+    }
 
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
@@ -69,10 +92,10 @@ fun ProgramEditorScreen() {
                 }
                 val result = ProgramSourcePolicy.inspect(text)
                 if (result.acceptedForEditing) {
-                    source = text
-                    fileName = name
-                    selected = ProgramSourcePolicy.inferLanguage(name, text).name
-                    notice = "Archivo importado. Falta validar sintaxis antes de ejecutar."
+                    requestReplacement(PendingEditorReplacement(
+                        text, name, ProgramSourcePolicy.inferLanguage(name, text),
+                        "Archivo importado. Revisa su sintaxis antes de ejecutar."
+                    ))
                 } else notice = result.explanation
             } catch (error: Exception) {
                 notice = error.message ?: "No fue posible abrir el archivo."
@@ -93,6 +116,26 @@ fun ProgramEditorScreen() {
                 notice = error.message ?: "Error al exportar el documento."
             }
         }
+    }
+
+    pendingReplacement?.let { candidate ->
+        AlertDialog(
+            onDismissRequest = { pendingReplacement = null },
+            title = { Text("¿Reemplazar el código actual?") },
+            text = {
+                Text("El editor contiene código diferente. Si continúas, será reemplazado " +
+                    "por ${candidate.displayName}. Guarda o exporta el contenido actual si deseas conservarlo.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    applyReplacement(candidate)
+                    pendingReplacement = null
+                }) { Text("Reemplazar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingReplacement = null }) { Text("Cancelar") }
+            }
+        )
     }
 
     Column(
@@ -122,10 +165,11 @@ fun ProgramEditorScreen() {
                         } else if (ProgramSourcePolicy.inspect(copied).byteCount > ProgramSourcePolicy.MAX_BYTES) {
                             notice = "El texto copiado supera 32 KiB."
                         } else {
-                            source = copied
-                            fileName = "Portapapeles"
-                            selected = ProgramSourcePolicy.inferLanguage(null, copied).name
-                            notice = "Texto pegado. Revisa su modo antes de continuar."
+                            requestReplacement(PendingEditorReplacement(
+                                copied, "Portapapeles",
+                                ProgramSourcePolicy.inferLanguage(null, copied),
+                                "Texto pegado. Revisa su modo antes de continuar."
+                            ))
                         }
                     }) { Text("Pegar") }
                 }
@@ -179,9 +223,9 @@ fun ProgramEditorScreen() {
                 }
             ) { Text("Copiar") }
         }
-        Text(notice, color = if (inspection.acceptedForEditing)
-            MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodySmall)
+        CompiInlineMessage(notice, isError = notice.startsWith("Error", ignoreCase = true) ||
+            notice.startsWith("No se pudo", ignoreCase = true) ||
+            notice.startsWith("Máximo", ignoreCase = true))
 
         CodeProjectsPanel(
             source = source,
