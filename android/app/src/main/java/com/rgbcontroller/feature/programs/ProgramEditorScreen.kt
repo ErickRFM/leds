@@ -282,7 +282,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession) {
                     )
                     OutlinedTextField(
                         value = controlKey,
-                        onValueChange = { labSession.setKey(it) },
+                        onValueChange = { labSession.updateKey(it) },
                         label = { Text("Clave de control del ESP32 (16 caracteres)") },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
@@ -385,7 +385,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession) {
                             else MaterialTheme.colorScheme.error)
                     OutlinedTextField(
                         value = controlKey,
-                        onValueChange = { labSession.setKey(it) },
+                        onValueChange = { labSession.updateKey(it) },
                         label = { Text("Clave de control del ESP32 (16 caracteres)") },
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth(), singleLine = true,
