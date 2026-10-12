@@ -70,6 +70,8 @@ jobs:
         run: python3 scripts/check-release-safety.py
       - name: V5 local Arduino sketch packaging tests (offline, no flash)
         run: python3 -m unittest discover -s tests -p 'test_build_user_sketch.py' -v
+      - name: Complete Arduino sketch ZIP regression
+        run: python3 -m unittest discover -s tests -p 'test_package_esp32_source.py' -v
       - name: OTA slot budget logic regression
         run: python3 scripts/check-firmware-budget.py --self-test
       - name: V4 read-only BLE identity contract
@@ -178,6 +180,8 @@ jobs:
           echo "V4 personalized provisioning build compiled; NEVER package this CI test image."
       - name: Check firmware fits dual OTA slot
         run: python3 scripts/check-firmware-budget.py build/firmware
+      - name: Package complete Arduino sketch source (no personalization)
+        run: python3 scripts/package-esp32-source.py --out build/firmware/compi-esp32-source.zip
       - name: Prepare firmware test manifest
         run: |
           . ./config/esp32-board.env
@@ -188,7 +192,7 @@ jobs:
             echo "LAB ONLY — no signed OTA, no physical validation"
           ) > build/firmware/build-info.txt
           cd build/firmware
-          sha256sum ./*.bin > SHA256SUMS.txt
+          sha256sum ./*.bin ./compi-esp32-source.zip > SHA256SUMS.txt
       - name: Upload firmware for supervised testing
         uses: actions/upload-artifact@v4
         with:
@@ -196,5 +200,6 @@ jobs:
           if-no-files-found: error
           path: |
             build/firmware/*.bin
+            build/firmware/compi-esp32-source.zip
             build/firmware/SHA256SUMS.txt
             build/firmware/build-info.txt
