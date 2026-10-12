@@ -41,6 +41,24 @@ class LocalLabClient(private val context: Context) {
     }
     /** Actual ownership snapshot from ESP32; a pin being FREE does not prove wiring. */
     suspend fun gpioStatus(key: String): JSONObject = request("GET", "/v2/gpio/status", key)
+    /** Bounded automation only, requires authenticated local SoftAP. Never persistent/OTA. */
+    suspend fun automationStatus(key: String): JSONObject =
+        request("GET", "/v2/automation/status", key)
+    suspend fun startAutomation(
+        key: String, intervalSeconds: Int, cycles: Int, startOn: Boolean
+    ): JSONObject {
+        require(com.rgbcontroller.core.lab.RgbAutomationPolicy.valid(intervalSeconds, cycles)) {
+            "Intervalo/ciclos de automatización fuera de límites."
+        }
+        return request("POST", "/v2/automation/start", key, mapOf(
+            "intervalSeconds" to intervalSeconds.toString(),
+            "cycles" to cycles.toString(),
+            "startOn" to if (startOn) "1" else "0"
+        ))
+    }
+    suspend fun stopAutomation(key: String): JSONObject =
+        request("POST", "/v2/automation/stop", key)
+
     suspend fun writePin(key: String, pin: Int, value: Boolean): JSONObject {
         require(allowedOutput(pin) && pin !in setOf(25,26,27)) // RGB is reserved.
         return request("POST", "/v2/gpio/write", key,
