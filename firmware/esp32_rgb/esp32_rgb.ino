@@ -182,7 +182,13 @@ void stopScriptOnManualBle();
 class CommandCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* characteristic) override {
     const String command = characteristic->getValue();
-    if (command != "GET") stopScriptOnManualBle();
+    esp32core::RgbCommand parsed{};
+    if (!esp32core::parseRgbCommand(command.c_str(), parsed)) {
+      reject();
+      return;
+    }
+    // Invalid data must never abort a valid running script.
+    if (parsed.action != esp32core::RgbAction::Get) stopScriptOnManualBle();
     if (!applyRgbCommand(command)) reject();
   }
 };
