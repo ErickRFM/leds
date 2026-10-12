@@ -53,6 +53,50 @@ fun ProgramEditorScreen(labSession: CompiLabSession) {
     val controlKey = labSession.key // Volatile, shared with LED and Hardware Lab.
     var experimentBusy by remember { mutableStateOf(false) }
     var laboratoryMode by rememberSaveable { mutableStateOf("GPIO") }
+    var gpioDraft by rememberSaveable { mutableStateOf("") }
+    var rgbDraft by rememberSaveable { mutableStateOf("") }
+    var cppDraft by rememberSaveable { mutableStateOf("") }
+    var gpioFileName by rememberSaveable { mutableStateOf("Sin archivo") }
+    var rgbFileName by rememberSaveable { mutableStateOf("Sin archivo") }
+    var cppFileName by rememberSaveable { mutableStateOf("Sin archivo") }
+
+    fun rememberCurrentDraft() {
+        if (selected == ProgramLanguage.ARDUINO_CPP.name) {
+            cppDraft = source
+            cppFileName = fileName
+        } else if (laboratoryMode == "RGB") {
+            rgbDraft = source
+            rgbFileName = fileName
+        } else {
+            gpioDraft = source
+            gpioFileName = fileName
+        }
+    }
+
+    fun chooseEngine(next: String) {
+        if (next == laboratoryMode) return
+        rememberCurrentDraft()
+        laboratoryMode = next
+        source = if (next == "RGB") rgbDraft else gpioDraft
+        fileName = if (next == "RGB") rgbFileName else gpioFileName
+        notice = "Borrador ${if (next == "RGB") "RGB" else "GPIO"} restaurado. " +
+            "Cada motor conserva su propio código."
+    }
+
+    fun chooseLanguage(next: ProgramLanguage) {
+        if (selected == next.name) return
+        rememberCurrentDraft()
+        selected = next.name
+        source = when (next) {
+            ProgramLanguage.ARDUINO_CPP -> cppDraft
+            ProgramLanguage.LAB_SCRIPT -> if (laboratoryMode == "RGB") rgbDraft else gpioDraft
+        }
+        fileName = when (next) {
+            ProgramLanguage.ARDUINO_CPP -> cppFileName
+            ProgramLanguage.LAB_SCRIPT -> if (laboratoryMode == "RGB") rgbFileName else gpioFileName
+        }
+    }
+
     val language = ProgramLanguage.valueOf(selected)
     val compiled = remember(source, selected) {
         if (selected == ProgramLanguage.LAB_SCRIPT.name) {
@@ -65,11 +109,14 @@ fun ProgramEditorScreen(labSession: CompiLabSession) {
     var pendingReplacement by remember { mutableStateOf<PendingEditorReplacement?>(null) }
 
     fun applyReplacement(item: PendingEditorReplacement) {
+        rememberCurrentDraft()
+        val nextMode = if (item.language == ProgramLanguage.LAB_SCRIPT &&
+            LabRgbScriptPolicy.validate(item.text).accepted) "RGB" else "GPIO"
         source = item.text
         fileName = item.displayName
         selected = item.language.name
-        laboratoryMode = if (item.language == ProgramLanguage.LAB_SCRIPT &&
-            Regex("""(?m)^\s*RGB\s+""").containsMatchIn(item.text)) "RGB" else "GPIO"
+        laboratoryMode = nextMode
+        rememberCurrentDraft()
         notice = item.notice
     }
 
@@ -182,18 +229,41 @@ fun ProgramEditorScreen(labSession: CompiLabSession) {
         Text("Tipo de proyecto", style = MaterialTheme.typography.titleSmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = language == ProgramLanguage.LAB_SCRIPT,
-                onClick = { selected = ProgramLanguage.LAB_SCRIPT.name },
+                onClick = { chooseLanguage(ProgramLanguage.LAB_SCRIPT) },
                 label = { Text("Laboratorio") })
             FilterChip(selected = language == ProgramLanguage.ARDUINO_CPP,
-                onClick = { selected = ProgramLanguage.ARDUINO_CPP.name },
+                onClick = { chooseLanguage(ProgramLanguage.ARDUINO_CPP) },
                 label = { Text("Arduino C++") })
         }
 
+        if (language == ProgramLanguage.LAB_SCRIPT) {
+            Text("Motor de ejecución", style = MaterialTheme.typography.titleSmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = laboratoryMode == "GPIO",
+                    onClick = { chooseEngine("GPIO") },
+                    label = { Text("GPIO · salidas 18–23") }
+                )
+                FilterChip(
+                    selected = laboratoryMode == "RGB",
+                    onClick = { chooseEngine("RGB") },
+                    label = { Text("LED RGB · 27/25/26") }
+                )
+            }
+            Text(
+                if (laboratoryMode == "GPIO")
+                    "GPIO19 NO controla el LED RGB de 27/25/26. Conecta otro LED y resistencia al GPIO19 para probar este motor."
+                else "Este motor usa tu LED RGB en 27/25/26 y el Wi-Fi local ESP32-Control-Lab.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         OutlinedTextField(
             value = source,
             onValueChange = { value ->
                 if (value.toByteArray(Charsets.UTF_8).size <= ProgramSourcePolicy.MAX_BYTES) {
                     source = value
+                    rememberCurrentDraft()
                 } else notice = "Máximo 32 KiB por archivo en esta versión."
             },
             label = { Text("Código fuente") },
@@ -233,25 +303,13 @@ fun ProgramEditorScreen(labSession: CompiLabSession) {
             source = source,
             language = language,
             onOpen = { project ->
-                source = project.source
-                selected = project.language.name
-                fileName = project.name
-                if (project.language == ProgramLanguage.LAB_SCRIPT) {
-                    laboratoryMode = if (Regex("""(?m)^\s*RGB\s+""").containsMatchIn(project.source)) "RGB" else "GPIO"
-                }
-                notice = "Proyecto abierto: " + project.name + ". No se envió código a la placa."
+                applyReplacement(PendingEditorReplacement(
+                    project.source, project.name, project.language,
+                    "Proyecto abierto: ${project.name}. No se envió código a la placa."
+                ))
             }
         )
 
-        if (language == ProgramLanguage.LAB_SCRIPT) {
-            Text("Motor de ejecución", style = MaterialTheme.typography.titleSmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = laboratoryMode == "GPIO", onClick = { laboratoryMode = "GPIO" },
-                    label = { Text("GPIO") })
-                FilterChip(selected = laboratoryMode == "RGB", onClick = { laboratoryMode = "RGB" },
-                    label = { Text("LED RGB") })
-            }
-        }
 
         if (language == ProgramLanguage.LAB_SCRIPT && laboratoryMode == "GPIO") ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -296,6 +354,10 @@ fun ProgramEditorScreen(labSession: CompiLabSession) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    if (experimentBusy) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        Text("Esperando respuesta del ESP32…", style = MaterialTheme.typography.labelSmall)
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
                             enabled = debug && !experimentBusy && gpioPlan != null &&
@@ -395,6 +457,10 @@ fun ProgramEditorScreen(labSession: CompiLabSession) {
                         "La clave queda en memoria, no se guarda. API HTTP sin TLS.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (experimentBusy) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        Text("Enviando script al ESP32…", style = MaterialTheme.typography.labelSmall)
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
                             enabled = debug && !experimentBusy && rgbCheck.accepted &&
