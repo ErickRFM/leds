@@ -20,6 +20,9 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import com.rgbcontroller.core.wifi.CompiLabSession
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -51,7 +54,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestBluetoothPermissionsIfNeeded()
-        setContent { MainAppNavHost(model.bleManager, model.preferencesRepository) }
+        setContent { MainAppNavHost(model.bleManager, model.preferencesRepository, model.labSession) }
     }
 
     private fun requestBluetoothPermissionsIfNeeded() {
@@ -103,8 +106,18 @@ private fun NavHostController.navigateTopLevel(screen: Screen) {
 }
 
 @Composable
-fun MainAppNavHost(bleManager: BleManager, preferencesRepository: PreferencesRepository) {
+fun MainAppNavHost(
+    bleManager: BleManager,
+    preferencesRepository: PreferencesRepository,
+    labSession: CompiLabSession? = null
+) {
+    val session = labSession ?: remember { CompiLabSession() }
     val theme by preferencesRepository.themeMode.collectAsState(initial = "SYSTEM")
+    val verifiedAddress by bleManager.connectedAddress.collectAsState()
+    // Persist the successful connection regardless of which Compi module is visible.
+    LaunchedEffect(verifiedAddress) {
+        verifiedAddress?.let { preferencesRepository.saveLastDeviceMac(it) }
+    }
     RgbTheme(theme) {
         val navController = rememberNavController()
         val items = listOf(Screen.Home, Screen.Led, Screen.Code, Screen.Center, Screen.Settings)
@@ -144,10 +157,10 @@ fun MainAppNavHost(bleManager: BleManager, preferencesRepository: PreferencesRep
                     )
                 }
                 composable(Screen.Led.route) {
-                    LedModuleScreen(bleManager, preferencesRepository,
+                    LedModuleScreen(bleManager, preferencesRepository, session,
                         onOpenDevices = { navController.navigate(Screen.Devices.route) })
                 }
-                composable(Screen.Code.route) { ProgramEditorScreen() }
+                composable(Screen.Code.route) { ProgramEditorScreen(session) }
                 composable(Screen.Center.route) {
                     CenterLandingScreen(
                         onDevices = { navController.navigate(Screen.Devices.route) },
@@ -164,7 +177,7 @@ fun MainAppNavHost(bleManager: BleManager, preferencesRepository: PreferencesRep
                     DevicesScreen(bleManager, preferencesRepository,
                         onInspectSecurity = { navController.navigate(Screen.Hub.route) })
                 }
-                composable(Screen.Hub.route) { LabHubScreen() }
+                composable(Screen.Hub.route) { LabHubScreen(session) }
             }
         }
     }

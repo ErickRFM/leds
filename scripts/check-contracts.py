@@ -52,4 +52,23 @@ assert 'pins_.acquire(pin, kManual, PinFunction::DigitalOutput)' in lab, "Pin ow
 assert 'digitalWrite(pin, LOW)' in lab, "Safe GPIO reset missing"
 assert 'intervalMs < 100' in runtime and 'cycles > 20' in runtime, "Runtime limits missing"
 assert 'http://192.168.4.1' in android_lab, "Android must target local SoftAP"
+# V8 regression: BLE callbacks must not write PWM or stop scripts on callback
+# thread. Only the bounded inbox is consumed by the firmware loop.
+callback = firmware.split("class CommandCallbacks", 1)[1].split("void renderEffect", 1)[0]
+assert "bleInbox.push(command.c_str())" in callback, "BLE must enqueue for the main loop"
+assert "applyRgbCommand(command)" not in callback, "BLE callback must not apply RGB"
+assert "stopScriptOnManualBle()" not in callback, "BLE callback must not abort scripts"
+assert "portENTER_CRITICAL(&bleInboxMux)" in firmware, "BLE inbox needs task synchronization"
+assert "processBleCommands();" in firmware, "Main loop must drain BLE inbox"
+
+manual_http = lab.split('server_.on("/v2/led/command"', 1)[1].split("server_.onNotFound", 1)[0]
+assert 'parseRgbCommand(cmd.c_str(), parsed)' in manual_http, "Wi-Fi must validate RGB syntax"
+assert manual_http.index("parseRgbCommand(cmd.c_str(), parsed)") < manual_http.index("script_.stop()"), (
+    "Malformed Wi-Fi commands must not interrupt a script"
+)
+assert "if (parsed.action != esp32core::RgbAction::Get)" in manual_http, (
+    "GET must never cancel the active script"
+)
+print("PASS: V8 loop-owned BLE RGB and validation-before-script-interruption")
+
 print("PASS: RGB V1 compatibility, core leases, local SoftAP endpoint and lab limits.")

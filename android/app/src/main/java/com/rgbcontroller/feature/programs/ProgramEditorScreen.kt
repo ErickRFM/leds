@@ -22,6 +22,7 @@ import com.rgbcontroller.core.programs.EditorReplacementPolicy
 import com.rgbcontroller.core.programs.ProgramLanguage
 import com.rgbcontroller.core.programs.ProgramSourcePolicy
 import com.rgbcontroller.core.wifi.LocalLabClient
+import com.rgbcontroller.core.wifi.CompiLabSession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -39,7 +40,7 @@ private data class PendingEditorReplacement(
 )
 
 @Composable
-fun ProgramEditorScreen() {
+fun ProgramEditorScreen(labSession: CompiLabSession) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val debug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
@@ -49,7 +50,7 @@ fun ProgramEditorScreen() {
     var fileName by rememberSaveable { mutableStateOf("Sin archivo") }
     var selected by rememberSaveable { mutableStateOf(ProgramLanguage.LAB_SCRIPT.name) }
     var notice by rememberSaveable { mutableStateOf("Selecciona un archivo o pega tus instrucciones.") }
-    var controlKey by remember { mutableStateOf("") } // RAM only. Never persisted or exported.
+    val controlKey = labSession.key // Volatile, shared with LED and Hardware Lab.
     var experimentBusy by remember { mutableStateOf(false) }
     var laboratoryMode by rememberSaveable { mutableStateOf("GPIO") }
     val language = ProgramLanguage.valueOf(selected)
@@ -262,10 +263,12 @@ fun ProgramEditorScreen() {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 OutlinedButton(onClick = {
-                    source = "GPIO 19 HIGH\nWAIT 500\nGPIO 19 LOW\nWAIT 500\nSTOP"
-                    fileName = "Ejemplo GPIO19"
-                    selected = ProgramLanguage.LAB_SCRIPT.name
-                    notice = "Ejemplo preparado. Usa una salida GPIO aprobada y verifica el cableado."
+                    requestReplacement(PendingEditorReplacement(
+                        "GPIO 19 HIGH\nWAIT 500\nGPIO 19 LOW\nWAIT 500\nSTOP",
+                        "Ejemplo GPIO19",
+                        ProgramLanguage.LAB_SCRIPT,
+                        "Ejemplo preparado. Usa una salida GPIO aprobada y verifica el cableado."
+                    ))
                 }) { Text("Cargar ejemplo GPIO") }
                 if (language == ProgramLanguage.LAB_SCRIPT) {
                     Text(
@@ -279,7 +282,7 @@ fun ProgramEditorScreen() {
                     )
                     OutlinedTextField(
                         value = controlKey,
-                        onValueChange = { if (it.length <= 16) controlKey = it },
+                        onValueChange = { labSession.updateKey(it) },
                         label = { Text("Clave de control del ESP32 (16 caracteres)") },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
@@ -302,7 +305,7 @@ fun ProgramEditorScreen() {
                                 if (plan != null) scope.launch {
                                     experimentBusy = true
                                     try {
-                                        labClient.sequence(controlKey, plan.pin, plan.sequence)
+                                        labSession.serialized { labClient.sequence(controlKey, plan.pin, plan.sequence) }
                                         notice = "ESP32 aceptó el inicio de la secuencia en GPIO " + plan.pin +
                                             ". Confirmación lógica; revisa el circuito físico."
                                     } catch (cancelled: CancellationException) {
@@ -321,7 +324,7 @@ fun ProgramEditorScreen() {
                                 scope.launch {
                                     experimentBusy = true
                                     try {
-                                        labClient.stopExperiment(controlKey)
+                                        labSession.serialized { labClient.stopExperiment(controlKey) }
                                         notice = "El ESP32 confirmó la orden de detener el experimento."
                                     } catch (cancelled: CancellationException) {
                                         throw cancelled
@@ -370,16 +373,19 @@ fun ProgramEditorScreen() {
                         "Máximo 512 bytes, 32 pasos y 20 segundos. Requiere firmware V4 con /v2/script/run.",
                         style = MaterialTheme.typography.bodySmall)
                     OutlinedButton(onClick = {
-                        source = "RGB 255 0 0\\nWAIT 500\\nRGB 0 0 255\\nWAIT 500\\nOFF\\nSTOP".replace("\\n", "\n")
-                        fileName = "Ejemplo RGB V4"
-                        notice = "Ejemplo RGB cargado. Comprueba la conexión SoftAP."
+                        requestReplacement(PendingEditorReplacement(
+                            "RGB 255 0 0\\nWAIT 500\\nRGB 0 0 255\\nWAIT 500\\nOFF\\nSTOP".replace("\\n", "\n"),
+                            "Ejemplo RGB V4",
+                            ProgramLanguage.LAB_SCRIPT,
+                            "Ejemplo RGB preparado. Comprueba la conexión SoftAP."
+                        ))
                     }) { Text("Cargar ejemplo RGB") }
                     Text(rgbCheck.message, style = MaterialTheme.typography.bodySmall,
                         color = if (rgbCheck.accepted) MaterialTheme.colorScheme.onSurfaceVariant
                             else MaterialTheme.colorScheme.error)
                     OutlinedTextField(
                         value = controlKey,
-                        onValueChange = { if (it.length <= 16) controlKey = it },
+                        onValueChange = { labSession.updateKey(it) },
                         label = { Text("Clave de control del ESP32 (16 caracteres)") },
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth(), singleLine = true,
@@ -397,7 +403,7 @@ fun ProgramEditorScreen() {
                                 scope.launch {
                                     experimentBusy = true
                                     try {
-                                        labClient.runRgbScript(controlKey, source)
+                                        labSession.serialized { labClient.runRgbScript(controlKey, source) }
                                         notice = "ESP32 aceptó el script RGB. Consulta estado y verifica LED físico."
                                     } catch (cancelled: CancellationException) { throw cancelled
                                     } catch (error: Exception) {
@@ -412,7 +418,7 @@ fun ProgramEditorScreen() {
                                 scope.launch {
                                     experimentBusy = true
                                     try {
-                                        labClient.stopRgbScript(controlKey)
+                                        labSession.serialized { labClient.stopRgbScript(controlKey) }
                                         notice = "Detención confirmada; el último color se conserva."
                                     } catch (cancelled: CancellationException) { throw cancelled
                                     } catch (error: Exception) {
@@ -428,7 +434,7 @@ fun ProgramEditorScreen() {
                             scope.launch {
                                 experimentBusy = true
                                 try {
-                                    val state = labClient.rgbScriptStatus(controlKey)
+                                    val state = labSession.serialized { labClient.rgbScriptStatus(controlKey) }
                                     notice = if (state.optBoolean("active")) {
                                         "RGB ejecutando paso ${state.optInt("step") + 1} de ${state.optInt("total")}."
                                     } else "RGB sin script en ejecución."

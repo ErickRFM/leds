@@ -9,6 +9,7 @@
 #include "PinManager.h"
 #include "ExperimentRuntime.h"
 #include "RgbScriptRuntime.h"
+#include "RgbCommandCodec.h"
 #include "CompiCapabilities.h"
 
 namespace esp32core {
@@ -313,9 +314,16 @@ class LocalWifiControl final {
       if (cmd.isEmpty() || cmd.length() > 48) {
         jsonError(400, "invalid_rgb_command"); return;
       }
-      script_.stop(); // Manual Wi-Fi RGB commands take priority.
-      if (!rgbCommand_(cmd)) {
+      esp32core::RgbCommand parsed{};
+      if (!esp32core::parseRgbCommand(cmd.c_str(), parsed)) {
         jsonError(400, "invalid_rgb_command"); return;
+      }
+      // Invalid commands, including malformed FX/SET, must not cancel scripts.
+      if (parsed.action != esp32core::RgbAction::Get) {
+        script_.stop(); // A VALID manual RGB operation takes priority.
+      }
+      if (!rgbCommand_(cmd)) {
+        jsonError(409, "rgb_command_not_applied"); return;
       }
       server_.send(200, "application/json", "{\"status\":\"APPLIED\"}");
     });

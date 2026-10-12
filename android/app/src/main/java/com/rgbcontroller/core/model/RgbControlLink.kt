@@ -9,5 +9,6 @@ data class RgbControlLink(
     val transport: String,
     val ready: Boolean,
     val state: RgbDeviceState?,
-    val sendCommand: (String) -> Unit
+    val sendCommand: (String) -> Unit,
+    val stateRevision: Long = 0L
 )

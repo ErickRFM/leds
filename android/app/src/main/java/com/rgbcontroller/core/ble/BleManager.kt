@@ -61,14 +61,20 @@ class BleManager(private val context: Context) {
 
     private val _rgbState = MutableStateFlow<RgbDeviceState?>(null)
     val rgbState: StateFlow<RgbDeviceState?> = _rgbState.asStateFlow()
+    private val _stateRevision = MutableStateFlow(0L)
+    val stateRevision: StateFlow<Long> = _stateRevision.asStateFlow()
     private val _publicDeviceId = MutableStateFlow<String?>(null)
     val publicDeviceId: StateFlow<String?> = _publicDeviceId.asStateFlow()
+    private val _connectedAddress = MutableStateFlow<String?>(null)
+    /** Published only after notifications, initial state and identity handshake succeeded. */
+    val connectedAddress: StateFlow<String?> = _connectedAddress.asStateFlow()
 
     private var gatt: BluetoothGatt? = null
     private var commandCharacteristic: BluetoothGattCharacteristic? = null
     private var stateCharacteristic: BluetoothGattCharacteristic? = null
     private var publicIdCharacteristic: BluetoothGattCharacteristic? = null
     private var scanning = false
+    private var mtuReady = false
     private val pending = ArrayDeque<String>()
     private var writeInFlight = false
     private val writeTimeout = Runnable {
@@ -109,6 +115,7 @@ class BleManager(private val context: Context) {
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
+            if (!scanning) return
             val device = result.device
             if (_discoveredDevices.value.none { it.address == device.address }) {
                 _discoveredDevices.value = _discoveredDevices.value + device
@@ -116,6 +123,7 @@ class BleManager(private val context: Context) {
         }
 
         override fun onScanFailed(errorCode: Int) {
+            if (!scanning) return
             scanning = false
             handler.removeCallbacks(scanTimeout)
             _connectionState.value = BleConnectionState.Error("Error de escaneo: $errorCode")
@@ -136,6 +144,16 @@ class BleManager(private val context: Context) {
             _connectionState.value = BleConnectionState.Error("Escáner BLE no disponible")
             return
         }
+        // Do not tear down a useful connection when permissions/radio are absent.
+        // A valid explicit search supersedes any pending automatic reconnection.
+        handler.removeCallbacks(reconnect)
+        handler.removeCallbacks(connectionTimeout)
+        manualDisconnect = true
+        retries = 0
+        activeDevice = null
+        closeConnection()
+        _rgbState.value = null
+        _connectionState.value = BleConnectionState.Disconnected
         try {
             _discoveredDevices.value = emptyList()
             _connectionState.value = BleConnectionState.Scanning
@@ -218,8 +236,10 @@ class BleManager(private val context: Context) {
             if (status == BluetoothGatt.GATT_SUCCESS && newState == BluetoothProfile.STATE_CONNECTED) {
                 _connectionState.value = BleConnectionState.Discovering
                 // STATE notifications exceed the default 20-byte ATT payload; negotiate MTU first.
-                if (!remote.requestMtu(128) && !remote.discoverServices()) {
-                    lostLink("No se pudieron descubrir servicios")
+                // Never fall through to service discovery with the default 23-byte MTU:
+                // STATE notifications may exceed 20 bytes.
+                if (!remote.requestMtu(128)) {
+                    lostLink("No se pudo iniciar la negociación MTU BLE")
                 }
             } else {
                 lostLink("ESP32 desconectado (GATT $status)")
@@ -232,15 +252,18 @@ class BleManager(private val context: Context) {
             // will be unreliable; surface a recoverable error rather than show stale RGB.
             if (status != BluetoothGatt.GATT_SUCCESS || mtu < 64) {
                 lostLink("No se pudo negociar MTU BLE suficiente (64 bytes)")
-            } else if (!remote.discoverServices()) {
-                lostLink("No se pudieron descubrir servicios")
+            } else {
+                mtuReady = true
+                if (!remote.discoverServices()) {
+                    lostLink("No se pudieron descubrir servicios")
+                }
             }
         }
 
         override fun onServicesDiscovered(remote: BluetoothGatt, status: Int) {
             if (remote !== gatt) return
-            if (status != BluetoothGatt.GATT_SUCCESS) {
-                lostLink("Error de descubrimiento GATT: $status")
+            if (!mtuReady || status != BluetoothGatt.GATT_SUCCESS) {
+                lostLink("Servicios GATT inválidos o MTU sin negociar: $status")
                 return
             }
             val service = remote.getService(SERVICE_UUID)
@@ -343,6 +366,7 @@ class BleManager(private val context: Context) {
     private fun finishInitialRead() {
         handler.removeCallbacks(connectionTimeout)
         retries = 0
+        _connectedAddress.value = activeDevice?.address
         _connectionState.value = BleConnectionState.Ready
         drainQueue()
     }
@@ -356,6 +380,7 @@ class BleManager(private val context: Context) {
         }
         _deviceState.value = frame
         _rgbState.value = parsed
+        _stateRevision.value += 1
         val identity = publicIdCharacteristic
         val remote = gatt
         if (identity != null && remote != null) {
@@ -369,7 +394,10 @@ class BleManager(private val context: Context) {
     private fun acceptState(bytes: ByteArray?) {
         val text = bytes?.toString(Charsets.UTF_8) ?: return
         _deviceState.value = text
-        RgbDeviceState.parse(text)?.let { _rgbState.value = it }
+        RgbDeviceState.parse(text)?.let {
+            _rgbState.value = it
+            _stateRevision.value += 1
+        }
     }
 
     fun writeCommand(text: String) {
@@ -438,6 +466,8 @@ class BleManager(private val context: Context) {
 
     private fun closeConnection() {
         handler.removeCallbacks(writeTimeout)
+        mtuReady = false
+        _connectedAddress.value = null
         synchronized(pending) {
             pending.clear()
             writeInFlight = false
