@@ -263,10 +263,12 @@ fun ProgramEditorScreen(labSession: CompiLabSession) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 OutlinedButton(onClick = {
-                    source = "GPIO 19 HIGH\nWAIT 500\nGPIO 19 LOW\nWAIT 500\nSTOP"
-                    fileName = "Ejemplo GPIO19"
-                    selected = ProgramLanguage.LAB_SCRIPT.name
-                    notice = "Ejemplo preparado. Usa una salida GPIO aprobada y verifica el cableado."
+                    requestReplacement(PendingEditorReplacement(
+                        "GPIO 19 HIGH\nWAIT 500\nGPIO 19 LOW\nWAIT 500\nSTOP",
+                        "Ejemplo GPIO19",
+                        ProgramLanguage.LAB_SCRIPT,
+                        "Ejemplo preparado. Usa una salida GPIO aprobada y verifica el cableado."
+                    ))
                 }) { Text("Cargar ejemplo GPIO") }
                 if (language == ProgramLanguage.LAB_SCRIPT) {
                     Text(
@@ -371,9 +373,12 @@ fun ProgramEditorScreen(labSession: CompiLabSession) {
                         "Máximo 512 bytes, 32 pasos y 20 segundos. Requiere firmware V4 con /v2/script/run.",
                         style = MaterialTheme.typography.bodySmall)
                     OutlinedButton(onClick = {
-                        source = "RGB 255 0 0\\nWAIT 500\\nRGB 0 0 255\\nWAIT 500\\nOFF\\nSTOP".replace("\\n", "\n")
-                        fileName = "Ejemplo RGB V4"
-                        notice = "Ejemplo RGB cargado. Comprueba la conexión SoftAP."
+                        requestReplacement(PendingEditorReplacement(
+                            "RGB 255 0 0\\nWAIT 500\\nRGB 0 0 255\\nWAIT 500\\nOFF\\nSTOP".replace("\\n", "\n"),
+                            "Ejemplo RGB V4",
+                            ProgramLanguage.LAB_SCRIPT,
+                            "Ejemplo RGB preparado. Comprueba la conexión SoftAP."
+                        ))
                     }) { Text("Cargar ejemplo RGB") }
                     Text(rgbCheck.message, style = MaterialTheme.typography.bodySmall,
                         color = if (rgbCheck.accepted) MaterialTheme.colorScheme.onSurfaceVariant
