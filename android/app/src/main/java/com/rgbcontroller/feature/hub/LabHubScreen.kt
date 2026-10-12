@@ -169,7 +169,7 @@ fun LabHubScreen(labSession: CompiLabSession) {
                 }) { Text("Abrir ajustes Wi-Fi") }
                 Text("SoftAP · 192.168.4.1", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(10.dp))
-                OutlinedTextField(value = secret, onValueChange = { labSession.setKey(it) },
+                OutlinedTextField(value = secret, onValueChange = { labSession.updateKey(it) },
                     label = { Text("Clave de control del dispositivo") },
                     singleLine = true, visualTransformation = PasswordVisualTransformation(),
                     enabled = debug, modifier = Modifier.fillMaxWidth())
