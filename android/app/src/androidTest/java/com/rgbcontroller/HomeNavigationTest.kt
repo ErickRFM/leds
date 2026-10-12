@@ -107,7 +107,7 @@ class HomeNavigationTest {
         composeRule.onNodeWithTag("nav_led").performClick()
         composeRule.onNodeWithText("LED RGB").assertExists()
         composeRule.onNodeWithTag("nav_code").performClick()
-        composeRule.onNodeWithText("Programas").assertExists()
+        composeRule.onNodeWithText("Compi Studio").assertExists()
         composeRule.onNodeWithTag("nav_hub").performClick()
         composeRule.onNodeWithText("Hardware Lab").assertExists()
         composeRule.onNodeWithTag("nav_settings").performClick()
