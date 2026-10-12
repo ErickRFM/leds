@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontFamily
 import com.rgbcontroller.core.programs.LabGpioScriptCompiler
 import com.rgbcontroller.core.programs.LabRgbScriptPolicy
 import com.rgbcontroller.core.programs.EditorReplacementPolicy
@@ -277,7 +278,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
             modifier = Modifier.fillMaxWidth().testTag("studio_source"),
             minLines = 9,
             maxLines = 16,
-            textStyle = MaterialTheme.typography.bodyMedium
+            textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace)
         )
 
         Text("${inspection.byteCount} / ${ProgramSourcePolicy.MAX_BYTES} bytes · " +
@@ -286,21 +287,24 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
             color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { notice = ProgramSourcePolicy.inspect(source).explanation }) {
-                Text("Revisar texto")
-            }
+            Button(
+                modifier = Modifier.weight(1f),
+                onClick = { notice = ProgramSourcePolicy.inspect(source).explanation }
+            ) { Text("Validar") }
             OutlinedButton(
+                modifier = Modifier.weight(1f),
                 enabled = inspection.acceptedForEditing,
                 onClick = { exporter.launch(if (language == ProgramLanguage.ARDUINO_CPP) "programa.ino" else "programa.txt") }
             ) { Text("Exportar") }
-            OutlinedButton(
-                enabled = inspection.acceptedForEditing,
-                onClick = {
-                    clipboard.setText(androidx.compose.ui.text.AnnotatedString(source))
-                    notice = "Código copiado al portapapeles."
-                }
-            ) { Text("Copiar") }
         }
+        OutlinedButton(
+            modifier = Modifier.fillMaxWidth(),
+            enabled = inspection.acceptedForEditing,
+            onClick = {
+                clipboard.setText(androidx.compose.ui.text.AnnotatedString(source))
+                notice = "Código copiado al portapapeles."
+            }
+        ) { Text("Copiar código") }
         CompiInlineMessage(notice, isError = notice.startsWith("Error", ignoreCase = true) ||
             notice.startsWith("No se pudo", ignoreCase = true) ||
             notice.startsWith("Máximo", ignoreCase = true))
