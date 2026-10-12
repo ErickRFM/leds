@@ -285,6 +285,14 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
     ) {
         Text("Programas", style = MaterialTheme.typography.headlineMedium)
         CompiInlineMessage(draftStatus, isError = draftRecoveryError)
+        val operation = labSession.operationStatus
+        if (operation.name.isNotBlank()) {
+            CompiInlineMessage(
+                "${operation.name}: ${operation.phase.name.lowercase()}" +
+                    (if (operation.details.isBlank()) "" else " · ${operation.details}"),
+                isError = operation.phase == com.rgbcontroller.core.wifi.LabOperationPhase.FAILED
+            )
+        }
         Text("Importa un TXT/INO, pega código o escribe un programa. El núcleo RGB y la conexión no se modifican.",
             color = MaterialTheme.colorScheme.onSurfaceVariant)
 
@@ -464,7 +472,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                                 if (plan != null) scope.launch {
                                     experimentBusy = true
                                     try {
-                                        labSession.serialized { labClient.sequence(controlKey, plan.pin, plan.sequence) }
+                                        labSession.userOperation("Secuencia GPIO") { labClient.sequence(controlKey, plan.pin, plan.sequence) }
                                         notice = "ESP32 aceptó el inicio de la secuencia en GPIO " + plan.pin +
                                             ". Confirmación lógica; revisa el circuito físico."
                                     } catch (cancelled: CancellationException) {
@@ -483,7 +491,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                                 scope.launch {
                                     experimentBusy = true
                                     try {
-                                        labSession.serialized { labClient.stopExperiment(controlKey) }
+                                        labSession.userOperation("Detener GPIO") { labClient.stopExperiment(controlKey) }
                                         notice = "El ESP32 confirmó la orden de detener el experimento."
                                     } catch (cancelled: CancellationException) {
                                         throw cancelled
@@ -566,7 +574,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                                 scope.launch {
                                     experimentBusy = true
                                     try {
-                                        labSession.serialized { labClient.runRgbScript(controlKey, source) }
+                                        labSession.userOperation("Script RGB") { labClient.runRgbScript(controlKey, source) }
                                         notice = "ESP32 aceptó el script RGB. Consulta estado y verifica LED físico."
                                     } catch (cancelled: CancellationException) { throw cancelled
                                     } catch (error: Exception) {
@@ -581,7 +589,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                                 scope.launch {
                                     experimentBusy = true
                                     try {
-                                        labSession.serialized { labClient.stopRgbScript(controlKey) }
+                                        labSession.userOperation("Detener RGB") { labClient.stopRgbScript(controlKey) }
                                         notice = "Detención confirmada; el último color se conserva."
                                     } catch (cancelled: CancellationException) { throw cancelled
                                     } catch (error: Exception) {
@@ -614,7 +622,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                             scope.launch {
                                 experimentBusy = true
                                 try {
-                                    val state = labSession.serialized { labClient.rgbScriptStatus(controlKey) }
+                                    val state = labSession.userOperation("Consultar script RGB") { labClient.rgbScriptStatus(controlKey) }
                                     notice = if (state.optBoolean("active")) {
                                         "RGB ejecutando paso ${state.optInt("step") + 1} de ${state.optInt("total")}."
                                     } else "RGB sin script en ejecución."
