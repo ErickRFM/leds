@@ -14,13 +14,14 @@ object DeviceCapabilityPolicy {
     fun check(
         operation: CompiOperation, channel: CompiChannel,
         connected: Boolean, debugBuild: Boolean = true,
-        gpioTelemetryAvailable: Boolean = false
+        gpioTelemetryAvailable: Boolean = false,
+        automationAvailable: Boolean = false
     ): OperationPermission {
         if (!connected) return OperationPermission(false, "Conecta el ESP32 antes de realizar esta operación.")
         if (operation == CompiOperation.FIRMWARE_UPDATE) return OperationPermission(
             false, "Firmware OTA bloqueado: requiere imagen firmada, rollback y recuperación física.")
-        if (operation == CompiOperation.AUTOMATION) return OperationPermission(
-            false, "Automatizaciones aún no integradas y verificadas en el firmware de main.")
+        if (operation == CompiOperation.AUTOMATION && !automationAvailable) return OperationPermission(
+            false, "El firmware no confirmó soporte de automatización acotada.")
         return when (channel) {
             CompiChannel.BLE_V1 -> {
                 val rgb = operation in setOf(
