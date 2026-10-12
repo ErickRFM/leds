@@ -71,4 +71,18 @@ assert "if (parsed.action != esp32core::RgbAction::Get)" in manual_http, (
 )
 print("PASS: V8 loop-owned BLE RGB and validation-before-script-interruption")
 
+# V9: a live GPIO panel must read actual firmware leases, never guess them
+# from the Android board pin reference. This endpoint stays behind SoftAP auth.
+gpio_endpoint = lab.split('server_.on("/v2/gpio/status"', 1)[1].split('server_.on("/v2/gpio/write"', 1)[0]
+assert "if (!authorized()) return;" in gpio_endpoint
+assert 'pins_.lease(pin)' in gpio_endpoint
+assert 'manualLevels_[pin]' in gpio_endpoint
+assert '"gpio.manual"' in lab and 'pin_reserved' in lab
+assert 'server_.client().localIP() != WiFi.softAPIP()' in lab
+studio = (root / "android/app/src/main/java/com/rgbcontroller/feature/programs/ProgramEditorScreen.kt").read_text(encoding="utf-8")
+assert 'gpioDraft by rememberSaveable' in studio and 'rgbDraft by rememberSaveable' in studio
+assert 'chooseEngine("GPIO")' in studio and 'chooseEngine("RGB")' in studio
+client = android_lab
+assert '"/v2/gpio/status"' in client
+print("PASS V9: runtime GPIO ownership is authenticated; Studio engines keep separate drafts")
 print("PASS: RGB V1 compatibility, core leases, local SoftAP endpoint and lab limits.")
