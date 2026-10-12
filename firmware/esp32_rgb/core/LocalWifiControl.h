@@ -27,9 +27,10 @@ class LocalWifiControl final {
   using RgbCommand = bool (*)(const String&);
   using DeviceId = String (*)();
 
-  LocalWifiControl(PinManager& pins, RgbState state, RgbCommand command,
-                   DeviceId deviceId)
-      : pins_(pins), rgbState_(state), rgbCommand_(command), deviceId_(deviceId) {}
+  LocalWifiControl(PinManager& pins, RgbState state, RgbCommand manualCommand,
+                   RgbCommand runtimeCommand, DeviceId deviceId)
+      : pins_(pins), rgbState_(state), rgbCommand_(manualCommand),
+        rgbRuntime_(runtimeCommand), deviceId_(deviceId) {}
 
   void begin() {
     prefs_.begin("rgb-lab-v2", false);
@@ -128,7 +129,7 @@ class LocalWifiControl final {
       if (!authorized()) return;
       const esp_partition_t* current = esp_ota_get_running_partition();
       const esp_partition_t* next = esp_ota_get_next_update_partition(nullptr);
-      String body = "{\"firmwareVersion\":\"1.2.0-lab\",";
+      String body = "{\"firmwareVersion\":\"1.3.0-lab\",";
       body += "\"activePartition\":\"";
       body += current ? escape(String(current->label)) : "unknown";
       body += "\",\"activeSize\":";
@@ -421,14 +422,20 @@ class LocalWifiControl final {
       const auto action = automation_.tick(nowMs);
       if (action != RgbAutomationClock::Result::None) {
         const char* command = action == RgbAutomationClock::Result::TurnOn ? "ON" : "OFF";
-        if (!rgbCommand_(String(command))) {
+        // Count every logical interval, including those skipped while a
+        // network request blocked the main loop. A delayed tick never extends
+        // the configured automation beyond its time budget.
+        const uint32_t consumed = automation_.advancedIntervals();
+        if (consumed >= automationEdges_) {
           automation_.stop();
           automationEdges_ = 0;
-        } else if (automationEdges_ > 0) {
-          if (--automationEdges_ == 0) {
-            automation_.stop();
-            rgbCommand_(String("OFF")); // Finish with a safe dark LED state.
-          }
+          rgbRuntime_(String("OFF")); // Safe dark LED even on a very late tick.
+        } else if (!rgbRuntime_(String(command))) {
+          automation_.stop();
+          automationEdges_ = 0;
+          rgbRuntime_(String("OFF"));
+        } else {
+          automationEdges_ -= static_cast<uint8_t>(consumed);
         }
       }
     }
@@ -450,7 +457,7 @@ class LocalWifiControl final {
   static constexpr const char* kRead = "gpio.read";
   static bool sendScriptRgb(const char* command, void* context) {
     auto* self = static_cast<LocalWifiControl*>(context);
-    return self != nullptr && self->rgbCommand_(String(command));
+    return self != nullptr && self->rgbRuntime_(String(command));
   }
 
   static constexpr bool manualOutputAllowed(int pin) {
@@ -459,6 +466,7 @@ class LocalWifiControl final {
   PinManager& pins_;
   RgbState rgbState_;
   RgbCommand rgbCommand_;
+  RgbCommand rgbRuntime_;
   RgbScriptRuntime script_;
   RgbAutomationClock automation_;
   uint8_t automationEdges_ = 0;
