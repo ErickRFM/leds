@@ -33,6 +33,8 @@ import com.rgbcontroller.core.ui.SectionHeader
 import com.rgbcontroller.core.ui.CompiInlineMessage
 import com.rgbcontroller.core.wifi.LocalLabClient
 import com.rgbcontroller.core.wifi.CompiLabSession
+import com.rgbcontroller.core.ble.BleManager
+import com.rgbcontroller.core.ble.BleConnectionState
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CancellationException
@@ -49,7 +51,7 @@ private enum class LabSection(val title: String) {
 }
 
 @Composable
-fun LabHubScreen(labSession: CompiLabSession) {
+fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
     val context = LocalContext.current
     val debug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     val client = remember(context) { LocalLabClient(context.applicationContext) }
@@ -57,6 +59,8 @@ fun LabHubScreen(labSession: CompiLabSession) {
     val savedProjects by preferences.experimentProjects.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     val secret = labSession.key // Shared volatile session; never saved or exported.
+    val blePins = bleManager?.gpioPins?.collectAsState()?.value
+    val bleConnection = bleManager?.connectionState?.collectAsState()?.value
     var status by remember { mutableStateOf<JSONObject?>(null) }
     var firmware by remember { mutableStateOf<JSONObject?>(null) }
     var diagnostics by remember { mutableStateOf<JSONObject?>(null) }
@@ -387,6 +391,22 @@ fun LabHubScreen(labSession: CompiLabSession) {
         }
         Spacer(Modifier.height(12.dp))
         Text("Ocupación REAL de GPIO", style = MaterialTheme.typography.titleMedium)
+        if (bleConnection == BleConnectionState.Ready) {
+            Text("Bluetooth · telemetría de solo lectura", style = MaterialTheme.typography.titleSmall)
+            if (blePins == null) {
+                CompiInlineMessage("Sin inventario BLE disponible. Necesita firmware Compi V9 " +
+                    "para la característica opcional; el control RGB BLE sigue funcionando.")
+            } else {
+                blePins.forEach { pin ->
+                    Text("GPIO ${pin.number} · ${pin.description}",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                Text("No autoriza cambiar GPIO por BLE; solo reporta reservas del firmware.",
+                    style = MaterialTheme.typography.bodySmall)
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+        Text("Wi-Fi · lectura detallada de 14 pines", style = MaterialTheme.typography.titleSmall)
         Text("Leído del firmware por Wi-Fi de laboratorio cada 3 s. " +
             "No demuestra cableado ni mide voltaje.",
             style = MaterialTheme.typography.bodySmall)
