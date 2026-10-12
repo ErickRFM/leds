@@ -11,8 +11,8 @@ android {
         applicationId = "com.rgbcontroller"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.2.0-lab"
+        versionCode = 4
+        versionName = "1.3.0-lab"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
