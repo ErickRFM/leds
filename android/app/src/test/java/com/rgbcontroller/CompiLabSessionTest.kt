@@ -67,6 +67,29 @@ class CompiLabSessionTest {
         assertEquals(0, active)
     }
 
+    @Test fun userOperationShowsRealProgressAndFailure() = runBlocking {
+        val session = CompiLabSession()
+        assertEquals(com.rgbcontroller.core.wifi.LabOperationPhase.IDLE, session.operationStatus.phase)
+        val applied = session.userOperation("GPIO19") {
+            assertEquals(com.rgbcontroller.core.wifi.LabOperationPhase.RUNNING,
+                session.operationStatus.phase)
+            42
+        }
+        assertEquals(42, applied)
+        assertEquals(com.rgbcontroller.core.wifi.LabOperationPhase.CONFIRMED,
+            session.operationStatus.phase)
+        try {
+            session.userOperation("No conecta") {
+                error("ESP32 no disponible")
+            }
+            fail("Expected simulated error")
+        } catch (_: IllegalStateException) {
+            assertEquals(com.rgbcontroller.core.wifi.LabOperationPhase.FAILED,
+                session.operationStatus.phase)
+            assertTrue(session.operationStatus.details.contains("ESP32"))
+        }
+    }
+
     @Test fun cancelledOrFailedRequestNeverClaimsReady() {
         val session = CompiLabSession()
         session.selectTransport(LabTransport.WIFI_LAB)
