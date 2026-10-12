@@ -147,17 +147,6 @@ fun MainAppNavHost(
                             }
                         }
                     )
-                } else {
-                    TopAppBar(
-                        title = { Text("") },
-                        actions = {
-                            IconButton(
-                                modifier = Modifier.testTag("nav_settings"),
-                                onClick = { navController.navigate(Screen.Settings.route) }
-                            ) { Icon(Icons.Default.Settings, contentDescription = "Ajustes") }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
-                    )
                 }
             },
             bottomBar = {
@@ -190,7 +179,8 @@ fun MainAppNavHost(
                         onLed = { navController.navigateTopLevel(Screen.Led) },
                         onCode = { navController.navigateTopLevel(Screen.Code) },
                         onDevices = { navController.navigate(Screen.Devices.route) },
-                        onHardware = { navController.navigateTopLevel(Screen.Hub) }
+                        onHardware = { navController.navigateTopLevel(Screen.Hub) },
+                        onSettings = { navController.navigate(Screen.Settings.route) }
                     )
                 }
                 // Retain a migration route for back stacks saved by Compi V8.
