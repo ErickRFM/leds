@@ -44,6 +44,9 @@ uint32_t physicalProvisionHoldStarted = 0;
 uint32_t effectStarted = 0;
 esp32core::RgbSettingsStore rgbStorage;
 bool rgbDirty = false;
+// Only explicit manual RGB choices become persistent. Temporary scripts and
+// automation transitions must never overwrite the user's restored preference.
+esp32core::RgbSaved rgbPendingPersist{};
 bool rgbPersistenceAttempted = false;
 // Legacy BLE stack invokes onWrite on a different task. Never mutate the
 // RGB engine/LED state in that callback; the Arduino loop owns all commands.
@@ -59,10 +62,7 @@ void persistRgbIfDue(uint32_t now) {
       static_cast<uint32_t>(now - rgbLastPersistAttemptMs) < 5000) return;
   rgbPersistenceAttempted = true;
   rgbLastPersistAttemptMs = now;
-  const esp32core::RgbSaved saved{
-      rgb.r, rgb.g, rgb.b, rgb.brightness, rgb.power ? uint8_t{1} : uint8_t{0},
-      static_cast<uint8_t>(rgb.mode), rgb.speed};
-  if (rgbStorage.save(saved)) {
+  if (rgbStorage.save(rgbPendingPersist)) {
     rgbDirty = false;
     rgbPersistenceAttempted = false;
   } else {
@@ -131,17 +131,14 @@ class ServerCallbacks : public BLEServerCallbacks {
   }
 };
 
-// One RGB command implementation shared by the legacy BLE service and
-// the new AP-only laboratory transport. Invalid input never changes PWM.
-bool applyRgbCommand(const String& cmd) {
+// One RGB command implementation shared by BLE, SoftAP and bounded runtimes.
+// Only explicit/manual operations persist a copy of the chosen configuration.
+// The loop is the sole RGB state owner; callbacks enqueue instead of mutating.
+bool applyRgbCommandInternal(const String& cmd, bool persistManualChoice) {
   String line = cmd;
   line.trim();
-  esp32core::RgbCommand command;
+  esp32core::RgbCommand command{};
   if (!esp32core::parseRgbCommand(line.c_str(), command)) return false;
-  if (command.action != esp32core::RgbAction::Get) {
-    rgbDirty = true;
-    rgbLastChangedMs = millis();
-  }
   switch (command.action) {
     case esp32core::RgbAction::Get:
       publishState();
@@ -149,18 +146,15 @@ bool applyRgbCommand(const String& cmd) {
     case esp32core::RgbAction::Off:
       rgb.power = false;
       renderStatic();
-      publishState();
-      return true;
+      break;
     case esp32core::RgbAction::On:
       rgb.power = true;
       if (rgb.mode == Mode::NONE) renderStatic();
-      publishState();
-      return true;
+      break;
     case esp32core::RgbAction::StopEffect:
       rgb.mode = Mode::NONE;
       renderStatic();
-      publishState();
-      return true;
+      break;
     case esp32core::RgbAction::Set:
       rgb.r = command.red;
       rgb.g = command.green;
@@ -169,8 +163,7 @@ bool applyRgbCommand(const String& cmd) {
       rgb.mode = Mode::NONE;
       rgb.power = true;
       renderStatic();
-      publishState();
-      return true;
+      break;
     case esp32core::RgbAction::StartEffect:
       switch (command.effect) {
         case esp32core::RgbEffect::Rainbow: rgb.mode = Mode::RAINBOW; break;
@@ -180,10 +173,29 @@ bool applyRgbCommand(const String& cmd) {
       rgb.speed = command.speed;
       rgb.power = true;
       effectStarted = millis();
-      publishState();
-      return true;
+      break;
+    default:
+      return false;
   }
-  return false;
+  if (persistManualChoice) {
+    rgbPendingPersist = {
+      rgb.r, rgb.g, rgb.b, rgb.brightness,
+      rgb.power ? uint8_t{1} : uint8_t{0},
+      static_cast<uint8_t>(rgb.mode), rgb.speed
+    };
+    rgbDirty = true;
+    rgbLastChangedMs = millis();
+  }
+  publishState();
+  return true;
+}
+
+bool applyRgbCommand(const String& cmd) {
+  return applyRgbCommandInternal(cmd, true);
+}
+
+bool applyRgbRuntimeCommand(const String& cmd) {
+  return applyRgbCommandInternal(cmd, false);
 }
 
 void stopScriptOnManualBle();
@@ -245,7 +257,7 @@ esp32core::LedRgbModule rgbModule(
     renderStatic, renderEffect,
     []() { return rgb.mode != Mode::NONE; });
 esp32core::LocalWifiControl wifiLab(pinManager, stateString, applyRgbCommand,
-    []() { return deviceIdentity.value(); });
+    applyRgbRuntimeCommand, []() { return deviceIdentity.value(); });
 
 
 void stopScriptOnManualBle() { wifiLab.stopScriptFromBle(); }
