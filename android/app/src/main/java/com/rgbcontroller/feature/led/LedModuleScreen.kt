@@ -55,7 +55,7 @@ fun LedModuleScreen(
         if (labSession.transport == LabTransport.WIFI_LAB && labSession.wifiReady) {
             val (epoch, key) = labSession.beginVerification()
             try {
-                val response = wifiClient.status(key)
+                val response = labSession.serialized { wifiClient.status(key) }
                 val parsed = RgbDeviceState.parse(response.optString("rgb"))
                     ?: error("Estado RGB no reconocido.")
                 labSession.verified(epoch, key, parsed)
@@ -89,8 +89,10 @@ fun LedModuleScreen(
                         }
                     }
                 }
-                wifiClient.rgb(key, command)
-                val response = wifiClient.status(key)
+                val response = labSession.serialized {
+                    wifiClient.rgb(key, command)
+                    wifiClient.status(key)
+                }
                 val parsed = RgbDeviceState.parse(response.optString("rgb"))
                     ?: error("Respuesta RGB inválida; vuelve a conectar.")
                 if (command.startsWith("SET,")) {
@@ -217,7 +219,7 @@ fun LedModuleScreen(
                                     wifiBusy = true
                                     scope.launch {
                                         try {
-                                            val response = wifiClient.status(key)
+                                            val response = labSession.serialized { wifiClient.status(key) }
                                             val fresh = RgbDeviceState.parse(response.optString("rgb"))
                                                 ?: error("Estado RGB no reconocido.")
                                             labSession.verified(attempt, key, fresh)
