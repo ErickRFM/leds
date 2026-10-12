@@ -12,7 +12,7 @@ protocol = (root / "docs/PROTOCOLO_BLE.md").read_text(encoding="utf-8")
 uuid_pattern = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 uuids = set(re.findall(uuid_pattern, firmware.lower()))
 uuids.discard("00002902-0000-1000-8000-00805f9b34fb")
-assert len(uuids) == 4, f"Expected RGB V1 plus read-only public ID UUID; got {uuids}"
+assert len(uuids) == 5, f"Expected RGB V1 plus optional public ID and BLE GPIO-read UUIDs; got {uuids}"
 assert uuids <= set(re.findall(uuid_pattern, android.lower())), "UUID mismatch with Android"
 assert uuids <= set(re.findall(uuid_pattern, protocol.lower())), "UUID mismatch with protocol docs"
 
@@ -27,6 +27,11 @@ assert '"FX," + name + "," + speed' in android_rgb_contract, "Shared effect seri
 codec = (root / "firmware/esp32_rgb/core/RgbCommandCodec.h").read_text(encoding="utf-8")
 assert "FX,STOP" in effects and "FX,STOP" in codec
 assert "esp32core::parseRgbCommand" in firmware, "Firmware must route RGB through shared codec"
+ble_gpio_block = firmware.split('gpioStatusCharacteristic = service->createCharacteristic(', 1)[1].split('service->start();', 1)[0]
+assert "GPIO_STATUS_UUID, BLECharacteristic::PROPERTY_READ" in ble_gpio_block
+assert "PROPERTY_WRITE" not in ble_gpio_block, "GPIO BLE telemetry MUST stay read-only"
+assert '"4b9d0005-7a5e-4d4c-ae88-c8c70d3ab211"' in android, "Optional GPIO BLE UUID mismatch"
+assert "gpioReadInFlight" in android and "gpioPollingDisabled" in android, "GATT read must not collide with RGB writes"
 assert "requestMtu(128)" in android and "BLEDevice::setMTU(128)" in firmware, "MTU negotiation missing"
 assert "completeInitialRead" in android and "connectionTimeout" in android, "BLE readiness checks missing"
 assert "PROPERTY_READ" in firmware and "PROPERTY_NOTIFY" in firmware
@@ -71,4 +76,18 @@ assert "if (parsed.action != esp32core::RgbAction::Get)" in manual_http, (
 )
 print("PASS: V8 loop-owned BLE RGB and validation-before-script-interruption")
 
+# V9: a live GPIO panel must read actual firmware leases, never guess them
+# from the Android board pin reference. This endpoint stays behind SoftAP auth.
+gpio_endpoint = lab.split('server_.on("/v2/gpio/status"', 1)[1].split('server_.on("/v2/gpio/write"', 1)[0]
+assert "if (!authorized()) return;" in gpio_endpoint
+assert 'pins_.lease(pin)' in gpio_endpoint
+assert 'manualLevels_[pin]' in gpio_endpoint
+assert '"gpio.manual"' in lab and 'pin_reserved' in lab
+assert 'server_.client().localIP() != WiFi.softAPIP()' in lab
+studio = (root / "android/app/src/main/java/com/rgbcontroller/feature/programs/ProgramEditorScreen.kt").read_text(encoding="utf-8")
+assert 'gpioDraft by rememberSaveable' in studio and 'rgbDraft by rememberSaveable' in studio
+assert 'chooseEngine("GPIO")' in studio and 'chooseEngine("RGB")' in studio
+client = android_lab
+assert '"/v2/gpio/status"' in client
+print("PASS V9: runtime GPIO ownership is authenticated; Studio engines keep separate drafts")
 print("PASS: RGB V1 compatibility, core leases, local SoftAP endpoint and lab limits.")

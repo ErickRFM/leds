@@ -7,6 +7,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Only the newest version of a PR branch needs an expensive Android/ESP32 build.
+# Different branches and main retain their independent CI records.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -53,6 +59,10 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/rgb_command_inbox_test.cpp -o /tmp/rgb_command_inbox_test
           /tmp/rgb_command_inbox_test
+      - name: Bounded BLE GPIO read-only telemetry host tests
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/gpio_telemetry_codec_test.cpp -o /tmp/gpio_telemetry_codec_test
+          /tmp/gpio_telemetry_codec_test
 
       - name: Read-only diagnostics security contract
         run: python3 scripts/check-diagnostics-contract.py

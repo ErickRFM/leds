@@ -8,6 +8,7 @@ Nombre anunciado: `RGB-ESP32` (ESP32 clásico con Bluetooth LE).
 | Comando | `4b9d0002-7a5e-4d4c-ae88-c8c70d3ab211` | WRITE with response |
 | Estado | `4b9d0003-7a5e-4d4c-ae88-c8c70d3ab211` | READ + NOTIFY, CCCD 0x2902 |
 | Identidad pública V4 (opcional) | `4b9d0004-7a5e-4d4c-ae88-c8c70d3ab211` | READ únicamente; 16 caracteres ASCII hexadecimales, NO es secreto |
+| GPIO V9 (opcional) | `4b9d0005-7a5e-4d4c-ae88-c8c70d3ab211` | READ únicamente. Mapa de reservas en firmware: no escribe ni autoriza GPIO |
 
 Todos los comandos se escriben como texto ASCII/UTF-8, sin nueva línea, hasta 48 bytes.
 
@@ -35,3 +36,9 @@ Android habilita notificaciones mediante CCCD y espera confirmación; después l
 Firmware **experimental**: no incluye emparejamiento seguro ni autorización BLE. Cualquier cliente BLE cercano que conozca el UUID podría enviar comandos. Antes de distribución fuera de laboratorio, implementar bonding/enrolamiento de dispositivo y autorización de escrituras; no asumir que la cercanía protege el dispositivo.
 
 El ESP32 ejecuta efectos autónomamente, aunque Android salga de primer plano. No hay nube ni servidor HTTP.
+
+## Estado GPIO BLE V9 (informativo y opcional)
+
+`PINS,18:F,19:H,21:F,22:F,23:F,25:R,26:R,27:R` en texto ASCII de menos de 96 bytes. Ocho pines con orden fijo; estados: F=libre en firmware, H/L=salida manual HIGH/LOW, E=experimento, R=RGB reservado, X=otro módulo. El firmware calcula el valor en su loop, evitando leer PinManager desde tareas BLE; Android solo realiza una lectura a la vez y da prioridad a escrituras RGB. No hay credenciales ni identificadores privados.
+
+Un estado **libre** no comprueba que el pin esté correctamente cableado. Sin característica V9, el RGB BLE anterior debe seguir funcionando. **Quedan expresamente prohibidas** escrituras GATT GPIO/ADC/Wi-Fi/OTA por BLE V1 no autenticado; exigir enrolamiento criptográfico de propietario, revocación y anti-replay antes de agregar control privilegiado.

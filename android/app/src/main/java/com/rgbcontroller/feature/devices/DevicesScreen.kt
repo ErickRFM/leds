@@ -55,7 +55,15 @@ fun DevicesScreen(
 
     Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 20.dp)) {
         SectionHeader("Mis dispositivos", "Conecta y controla tu iluminación RGB")
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(12.dp))
+        if (busy || searching) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            Text(
+                if (searching) "Buscando ESP32 cercanos…" else "Negociando Bluetooth y leyendo el estado…",
+                style = MaterialTheme.typography.labelSmall
+            )
+            Spacer(Modifier.height(8.dp))
+        }
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
             Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -95,8 +103,10 @@ fun DevicesScreen(
             Column(Modifier.padding(14.dp)) {
                 Text("Conexión de laboratorio (BLE V1)",
                     style = MaterialTheme.typography.titleSmall)
-                Text("Estar conectado NO significa ser propietario del ESP32. " +
-                    "La vinculación segura V4 todavía está pendiente.",
+                Text("Bluetooth BLE V1 permite el control RGB y sus efectos. " +
+                    "GPIO, sensores, Wi-Fi y scripts requieren el canal local protegido " +
+                    "hasta que exista autorización BLE de propietario. " +
+                    "Estar conectado NO demuestra propiedad.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton(onClick = onInspectSecurity) {

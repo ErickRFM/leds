@@ -81,7 +81,7 @@ object LabGpioScriptCompiler {
                     if (pendingLevel != null) fail("Falta WAIT antes de STOP.")
                     stopped = true
                 }
-                "RGB" -> fail("RGB en scripts aún no está disponible; usa el módulo LED.")
+                "RGB" -> fail("Estás en el motor GPIO. Cambia a Código → Motor LED RGB para ejecutar este script.")
                 else -> fail("Instrucción no compatible: $command.")
             }
         }

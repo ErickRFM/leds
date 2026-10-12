@@ -4,6 +4,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.assertTextContains
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.rgbcontroller.core.ble.BleManager
@@ -65,7 +67,6 @@ class HomeNavigationTest {
 
     @Test
     fun hardwareSectionsAreReachableWithoutADevice() {
-        composeRule.onNodeWithTag("open_center").performClick()
         composeRule.onNodeWithTag("open_hardware").performClick()
         composeRule.onNodeWithText("Hardware Lab").assertExists()
 
@@ -86,13 +87,33 @@ class HomeNavigationTest {
     }
 
     @Test
+    fun studioKeepsIndependentGpioAndRgbDrafts() {
+        composeRule.onNodeWithTag("open_code").performClick()
+        composeRule.onNodeWithTag("studio_source").performTextInput("GPIO 19 HIGH\\nWAIT 500\\nSTOP".replace("\\n", "\n"))
+        composeRule.onNodeWithTag("studio_engine_rgb").performClick()
+        composeRule.onNodeWithTag("studio_source").performTextInput("RGB 255 0 0")
+        composeRule.onNodeWithTag("studio_engine_gpio").performClick()
+        composeRule.onNodeWithTag("studio_source").assertTextContains("GPIO 19 HIGH", substring = true)
+        composeRule.onNodeWithTag("studio_engine_rgb").performClick()
+        composeRule.onNodeWithTag("studio_source").assertTextContains("RGB 255 0 0", substring = true)
+        composeRule.onNodeWithTag("nav_home").performClick()
+        composeRule.onNodeWithText("Compi").assertExists()
+        composeRule.onNodeWithTag("open_code").performClick()
+        composeRule.onNodeWithTag("studio_source").assertTextContains("RGB 255 0 0", substring = true)
+    }
+
+    @Test
     fun homeReturnsFromOtherPrimaryModules() {
         composeRule.onNodeWithTag("open_code").performClick()
         composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
 
-        composeRule.onNodeWithTag("open_center").performClick()
-        composeRule.onNodeWithTag("nav_home").performClick()
+        composeRule.onNodeWithTag("open_devices").performClick()
+        composeRule.onNodeWithTag("nav_back").performClick()
+        composeRule.onNodeWithText("Compi").assertExists()
+
+        composeRule.onNodeWithTag("open_hardware").performClick()
+        composeRule.onNodeWithTag("nav_back").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
     }
 }

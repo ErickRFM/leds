@@ -13,7 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ColorLens
-import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Settings
@@ -38,7 +38,6 @@ import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.ui.RgbTheme
 import com.rgbcontroller.feature.programs.ProgramEditorScreen
 import com.rgbcontroller.feature.devices.DevicesScreen
-import com.rgbcontroller.feature.home.CenterLandingScreen
 import com.rgbcontroller.feature.home.DashboardScreen
 import com.rgbcontroller.feature.hub.LabHubScreen
 import com.rgbcontroller.feature.led.LedModuleScreen
@@ -74,7 +73,6 @@ private sealed class Screen(
     data object Home : Screen("home", "Inicio", Icons.Default.Home)
     data object Led : Screen("led", "LED", Icons.Default.ColorLens)
     data object Code : Screen("code", "Código", Icons.Default.Code)
-    data object Center : Screen("center", "Centro", Icons.Default.Dashboard)
     data object Settings : Screen("settings", "Ajustes", Icons.Default.Settings)
     data object Devices : Screen("devices", "Equipos", Icons.Default.Bluetooth)
     data object Hub : Screen("hub", "Laboratorio", Icons.Default.Memory)
@@ -90,7 +88,7 @@ private fun NavHostController.navigateTopLevel(screen: Screen) {
     if (screen == Screen.Home) {
         // Pop the actual root rather than navigating to another Home instance with
         // restoreState=true, which can revive the screen the user just left.
-        if (!popBackStack(Screen.Home.route, inclusive = false)) {
+        if (!popBackStack(Screen.Home.route, inclusive = false, saveState = true)) {
             navigate(Screen.Home.route) {
                 popUpTo(graph.findStartDestination().id) { inclusive = true }
                 launchSingleTop = true
@@ -105,6 +103,7 @@ private fun NavHostController.navigateTopLevel(screen: Screen) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainAppNavHost(
     bleManager: BleManager,
@@ -120,12 +119,37 @@ fun MainAppNavHost(
     }
     RgbTheme(theme) {
         val navController = rememberNavController()
-        val items = listOf(Screen.Home, Screen.Led, Screen.Code, Screen.Center, Screen.Settings)
+        val items = listOf(Screen.Home, Screen.Led, Screen.Code, Screen.Settings)
+        val entry by navController.currentBackStackEntryAsState()
+        val route = entry?.destination?.route
+        val nested = route == Screen.Devices.route || route == Screen.Hub.route
         Scaffold(
+            topBar = {
+                if (nested) {
+                    TopAppBar(
+                        title = { Text(if (route == Screen.Devices.route) "Dispositivos" else "Laboratorio") },
+                        navigationIcon = {
+                            IconButton(
+                                modifier = Modifier.testTag("nav_back"),
+                                onClick = {
+                                    if (!navController.popBackStack()) {
+                                        navController.navigateTopLevel(Screen.Home)
+                                    }
+                                }
+                            ) {
+                                Icon(Icons.Default.ArrowBack, contentDescription = "Regresar")
+                            }
+                        },
+                        actions = {
+                            TextButton(onClick = { navController.navigateTopLevel(Screen.Home) }) {
+                                Text("Inicio")
+                            }
+                        }
+                    )
+                }
+            },
             bottomBar = {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
-                    val entry by navController.currentBackStackEntryAsState()
-                    val route = entry?.destination?.route
                     items.forEach { screen ->
                         NavigationBarItem(
                             modifier = Modifier.testTag("nav_${screen.route}"),
@@ -136,7 +160,7 @@ fun MainAppNavHost(
                                 indicatorColor = MaterialTheme.colorScheme.primaryContainer
                             ),
                             selected = route == screen.route ||
-                                (screen == Screen.Center && route in setOf(Screen.Devices.route, Screen.Hub.route)),
+                                (screen == Screen.Home && nested),
                             onClick = { navController.navigateTopLevel(screen) }
                         )
                     }
@@ -153,21 +177,20 @@ fun MainAppNavHost(
                         bleManager = bleManager,
                         onLed = { navController.navigateTopLevel(Screen.Led) },
                         onCode = { navController.navigateTopLevel(Screen.Code) },
-                        onCenter = { navController.navigateTopLevel(Screen.Center) }
+                        onDevices = { navController.navigate(Screen.Devices.route) },
+                        onHardware = { navController.navigate(Screen.Hub.route) }
                     )
+                }
+                // Retain a migration route for back stacks saved by Compi V8.
+                // The redundant Centro TAB is gone; legacy state returns to Home.
+                composable("center") {
+                    LaunchedEffect(Unit) { navController.navigateTopLevel(Screen.Home) }
                 }
                 composable(Screen.Led.route) {
                     LedModuleScreen(bleManager, preferencesRepository, session,
                         onOpenDevices = { navController.navigate(Screen.Devices.route) })
                 }
-                composable(Screen.Code.route) { ProgramEditorScreen(session) }
-                composable(Screen.Center.route) {
-                    CenterLandingScreen(
-                        onDevices = { navController.navigate(Screen.Devices.route) },
-                        onLab = { navController.navigate(Screen.Hub.route) },
-                        onCode = { navController.navigateTopLevel(Screen.Code) }
-                    )
-                }
+                composable(Screen.Code.route) { ProgramEditorScreen(session, bleManager) }
                 composable(Screen.Settings.route) {
                     SettingsScreen(bleManager, preferencesRepository,
                         onOpenHub = { navController.navigate(Screen.Hub.route) },
@@ -177,7 +200,7 @@ fun MainAppNavHost(
                     DevicesScreen(bleManager, preferencesRepository,
                         onInspectSecurity = { navController.navigate(Screen.Hub.route) })
                 }
-                composable(Screen.Hub.route) { LabHubScreen(session) }
+                composable(Screen.Hub.route) { LabHubScreen(session, bleManager) }
             }
         }
     }

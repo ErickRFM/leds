@@ -38,6 +38,8 @@ class LocalLabClient(private val context: Context) {
         require(validSsid(ssid) && validPassword(password))
         return request("POST", "/v2/wifi/connect", key, mapOf("ssid" to ssid, "password" to password))
     }
+    /** Actual ownership snapshot from ESP32; a pin being FREE does not prove wiring. */
+    suspend fun gpioStatus(key: String): JSONObject = request("GET", "/v2/gpio/status", key)
     suspend fun writePin(key: String, pin: Int, value: Boolean): JSONObject {
         require(allowedOutput(pin) && pin !in setOf(25,26,27)) // RGB is reserved.
         return request("POST", "/v2/gpio/write", key,

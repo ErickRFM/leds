@@ -33,6 +33,8 @@ import com.rgbcontroller.core.ui.SectionHeader
 import com.rgbcontroller.core.ui.CompiInlineMessage
 import com.rgbcontroller.core.wifi.LocalLabClient
 import com.rgbcontroller.core.wifi.CompiLabSession
+import com.rgbcontroller.core.ble.BleManager
+import com.rgbcontroller.core.ble.BleConnectionState
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CancellationException
@@ -49,7 +51,7 @@ private enum class LabSection(val title: String) {
 }
 
 @Composable
-fun LabHubScreen(labSession: CompiLabSession) {
+fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
     val context = LocalContext.current
     val debug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     val client = remember(context) { LocalLabClient(context.applicationContext) }
@@ -57,6 +59,8 @@ fun LabHubScreen(labSession: CompiLabSession) {
     val savedProjects by preferences.experimentProjects.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     val secret = labSession.key // Shared volatile session; never saved or exported.
+    val blePins = bleManager?.gpioPins?.collectAsState()?.value
+    val bleConnection = bleManager?.connectionState?.collectAsState()?.value
     var status by remember { mutableStateOf<JSONObject?>(null) }
     var firmware by remember { mutableStateOf<JSONObject?>(null) }
     var diagnostics by remember { mutableStateOf<JSONObject?>(null) }
@@ -68,6 +72,10 @@ fun LabHubScreen(labSession: CompiLabSession) {
     var message by remember { mutableStateOf("Conéctate a ESP32-Control-Lab para comenzar.") }
     var busy by remember { mutableStateOf(false) }
     var selectedPin by remember { mutableIntStateOf(18) }
+    var gpioSnapshot by remember { mutableStateOf<JSONObject?>(null) }
+    var gpioPolling by remember { mutableStateOf(false) }
+    var gpioError by remember { mutableStateOf<String?>(null) }
+    var showPinReference by rememberSaveable { mutableStateOf(false) }
     var adcValue by remember { mutableStateOf<Int?>(null) }
     var adcHistory by remember { mutableStateOf(emptyList<AdcSample>()) }
     var samplingAdc by remember { mutableStateOf(false) }
@@ -107,6 +115,34 @@ fun LabHubScreen(labSession: CompiLabSession) {
             message = error.message ?: "Muestreo ADC1 interrumpido."
         } finally {
             samplingAdc = false
+        }
+    }
+
+    // Firmware truth, never a simulated GPIO board map. Cancel polling when leaving the
+    // GPIO section or when the control key changes; clear stale data on network errors.
+    LaunchedEffect(section, secret) {
+        gpioSnapshot = null
+        gpioError = null
+        if (section != LabSection.GPIO || !debug || !LocalLabClient.validKey(secret)) return@LaunchedEffect
+        while (true) {
+            gpioPolling = true
+            try {
+                val response = labSession.serialized { client.gpioStatus(secret) }
+                if (response.optInt("version") != 1 ||
+                    response.optString("source") != "firmware-runtime") {
+                    error("El firmware no admite telemetría GPIO en vivo. Actualiza Compi V9.")
+                }
+                gpioSnapshot = response
+                gpioError = null
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                gpioSnapshot = null
+                gpioError = error.message ?: "No se pudo consultar GPIO reales."
+            } finally {
+                gpioPolling = false
+            }
+            delay(3000)
         }
     }
 
@@ -353,19 +389,80 @@ fun LabHubScreen(labSession: CompiLabSession) {
                 }
             }
         }
-        Text("Mapa de pines · ESP32 clásico verificado", style = MaterialTheme.typography.titleSmall)
-        Text("Inventario informativo; no demuestra cableado físico ni reserva en vivo.",
-            style = MaterialTheme.typography.bodySmall)
-        Esp32BoardPinout.pins.forEach { pin ->
-            val label = when (pin.kind) {
-                PinKind.LAB_OUTPUT -> "Lab"
-                PinKind.RGB_RESERVED -> "RGB reservado"
-                PinKind.ADC1_INPUT -> "ADC1"
-                PinKind.SYSTEM_RESERVED -> "Protegido"
+        Spacer(Modifier.height(12.dp))
+        Text("Ocupación REAL de GPIO", style = MaterialTheme.typography.titleMedium)
+        if (bleConnection == BleConnectionState.Ready) {
+            Text("Bluetooth · telemetría de solo lectura", style = MaterialTheme.typography.titleSmall)
+            if (blePins == null) {
+                CompiInlineMessage("Sin inventario BLE disponible. Necesita firmware Compi V9 " +
+                    "para la característica opcional; el control RGB BLE sigue funcionando.")
+            } else {
+                blePins.forEach { pin ->
+                    Text("GPIO ${pin.number} · ${pin.description}",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                Text("No autoriza cambiar GPIO por BLE; solo reporta reservas del firmware.",
+                    style = MaterialTheme.typography.bodySmall)
             }
-            Text("GPIO " + pin.number + " · " + label + " · " + pin.note,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+        }
+        Text("Wi-Fi · lectura detallada de 14 pines", style = MaterialTheme.typography.titleSmall)
+        Text("Leído del firmware por Wi-Fi de laboratorio cada 3 s. " +
+            "No demuestra cableado ni mide voltaje.",
+            style = MaterialTheme.typography.bodySmall)
+        if (gpioPolling) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        gpioError?.let { CompiInlineMessage(it, isError = true) }
+        gpioSnapshot?.optJSONArray("pins")?.let { pins ->
+            val occupied = (0 until pins.length()).mapNotNull { pins.optJSONObject(it) }
+                .filter { it.optString("owner") != "FREE" }
+            Text("Pines ocupados ahora: ${occupied.size}", style = MaterialTheme.typography.labelLarge)
+            for (i in 0 until pins.length()) {
+                val data = pins.optJSONObject(i) ?: continue
+                val owner = data.optString("owner")
+                val label = when (owner) {
+                    "RGB" -> "Reservado por LED RGB"
+                    "MANUAL" -> "Salida manual"
+                    "EXPERIMENT" -> "En experimento"
+                    "READ" -> "Lectura temporal"
+                    "FREE" -> "Libre en firmware"
+                    else -> "Reservado por otro módulo"
+                }
+                val manualLevel = if (owner == "MANUAL" && !data.isNull("level"))
+                    if (data.optInt("level") == 1) " · HIGH" else " · LOW" else ""
+                Text(
+                    "GPIO ${data.optInt("pin")} · $label" +
+                        (if (owner == "FREE") "" else " · ${data.optString("mode")}") +
+                        manualLevel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (owner == "FREE") MaterialTheme.colorScheme.onSurfaceVariant
+                        else MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+        if (gpioSnapshot == null && gpioError == null) {
+            CompiInlineMessage("Conecta el móvil a ESP32-Control-Lab e introduce la clave " +
+                "en Conexión para obtener los GPIO que el ESP32 ocupa realmente.")
+        }
+        TextButton(onClick = { showPinReference = !showPinReference }) {
+            Text(if (showPinReference) "Ocultar mapa informativo" else "Ver mapa estático de pines")
+        }
+        if (showPinReference) {
+            Text("Inventario estático: no demuestra el estado real.", style = MaterialTheme.typography.bodySmall)
+            Esp32BoardPinout.pins.forEach { pin ->
+                val label = when (pin.kind) {
+                    PinKind.LAB_OUTPUT -> "Lab"
+                    PinKind.RGB_RESERVED -> "RGB reservado"
+                    PinKind.ADC1_INPUT -> "ADC1"
+                    PinKind.SYSTEM_RESERVED -> "Protegido"
+                }
+                Text("GPIO ${pin.number} · $label · ${pin.note}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        if (busy) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            Text("Enviando operación GPIO al ESP32…", style = MaterialTheme.typography.labelSmall)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(enabled = debug && !busy && LocalLabClient.validKey(secret),

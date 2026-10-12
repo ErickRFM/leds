@@ -24,6 +24,8 @@ import android.os.ParcelUuid
 import androidx.core.content.ContextCompat
 import com.rgbcontroller.core.model.RgbDeviceState
 import com.rgbcontroller.core.model.RgbDeviceCommand
+import com.rgbcontroller.core.model.BleGpioPin
+import com.rgbcontroller.core.model.BleGpioSnapshot
 import com.rgbcontroller.core.model.DeviceIdCodec
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,6 +44,7 @@ class BleManager(private val context: Context) {
         val COMMAND_CHAR_UUID: UUID = UUID.fromString("4b9d0002-7a5e-4d4c-ae88-c8c70d3ab211")
         val STATE_CHAR_UUID: UUID = UUID.fromString("4b9d0003-7a5e-4d4c-ae88-c8c70d3ab211")
         val PUBLIC_ID_CHAR_UUID: UUID = UUID.fromString("4b9d0004-7a5e-4d4c-ae88-c8c70d3ab211")
+        val GPIO_STATUS_CHAR_UUID: UUID = UUID.fromString("4b9d0005-7a5e-4d4c-ae88-c8c70d3ab211")
         private val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
         const val WRITE_TIMEOUT_MS = 5000L
     }
@@ -68,11 +71,45 @@ class BleManager(private val context: Context) {
     private val _connectedAddress = MutableStateFlow<String?>(null)
     /** Published only after notifications, initial state and identity handshake succeeded. */
     val connectedAddress: StateFlow<String?> = _connectedAddress.asStateFlow()
+    private val _gpioPins = MutableStateFlow<List<BleGpioPin>?>(null)
+    /** Optional firmware lease snapshot, read-only, and never a GPIO permission. */
+    val gpioPins: StateFlow<List<BleGpioPin>?> = _gpioPins.asStateFlow()
 
     private var gatt: BluetoothGatt? = null
     private var commandCharacteristic: BluetoothGattCharacteristic? = null
     private var stateCharacteristic: BluetoothGattCharacteristic? = null
     private var publicIdCharacteristic: BluetoothGattCharacteristic? = null
+    private var gpioStatusCharacteristic: BluetoothGattCharacteristic? = null
+    private var gpioReadInFlight = false
+    private var gpioPollingDisabled = false
+    private val gpioReadTimeout = Runnable {
+        // Telemetry is optional. A stalled read never falsely reports GPIO as live.
+        _gpioPins.value = null
+        gpioReadInFlight = false
+        gpioPollingDisabled = true
+        drainQueue()
+    }
+    private val gpioPoll = object : Runnable {
+        override fun run() {
+            if (_connectionState.value != BleConnectionState.Ready) return
+            val remote = gatt
+            val characteristic = gpioStatusCharacteristic
+            if (!gpioPollingDisabled && remote != null && characteristic != null &&
+                !gpioReadInFlight && !writeInFlight &&
+                synchronized(pending) { pending.isEmpty() }) {
+                gpioReadInFlight = true
+                val started = try { remote.readCharacteristic(characteristic) }
+                    catch (_: SecurityException) { false }
+                    catch (_: IllegalStateException) { false }
+                if (started) handler.postDelayed(gpioReadTimeout, 4500)
+                else {
+                    gpioReadInFlight = false
+                    gpioPollingDisabled = true
+                }
+            }
+            handler.postDelayed(this, 3000)
+        }
+    }
     private var scanning = false
     private var mtuReady = false
     private val pending = ArrayDeque<String>()
@@ -278,6 +315,7 @@ class BleManager(private val context: Context) {
             commandCharacteristic = command
             stateCharacteristic = state
             publicIdCharacteristic = service?.getCharacteristic(PUBLIC_ID_CHAR_UUID)
+            gpioStatusCharacteristic = service?.getCharacteristic(GPIO_STATUS_CHAR_UUID)
             val started = if (Build.VERSION.SDK_INT >= 33) {
                 remote.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) ==
                     BluetoothStatusCodes.SUCCESS
@@ -353,6 +391,17 @@ class BleManager(private val context: Context) {
                     completeInitialRead(bytes)
                 }
             }
+            GPIO_STATUS_CHAR_UUID -> {
+                handler.post {
+                    handler.removeCallbacks(gpioReadTimeout)
+                    gpioReadInFlight = false
+                    _gpioPins.value = if (status == BluetoothGatt.GATT_SUCCESS) {
+                        BleGpioSnapshot.parse(bytes?.toString(Charsets.UTF_8).orEmpty())
+                    } else null
+                    if (_gpioPins.value == null) gpioPollingDisabled = true
+                    drainQueue()
+                }
+            }
             PUBLIC_ID_CHAR_UUID -> {
                 // Optional identity read: incompatible old firmware still controls RGB.
                 _publicDeviceId.value = if (status == BluetoothGatt.GATT_SUCCESS) {
@@ -368,6 +417,8 @@ class BleManager(private val context: Context) {
         retries = 0
         _connectedAddress.value = activeDevice?.address
         _connectionState.value = BleConnectionState.Ready
+        handler.removeCallbacks(gpioPoll)
+        handler.postDelayed(gpioPoll, 600)
         drainQueue()
     }
 
@@ -414,7 +465,7 @@ class BleManager(private val context: Context) {
 
     private fun drainQueue() {
         synchronized(pending) {
-            if (writeInFlight || pending.isEmpty() ||
+            if (writeInFlight || gpioReadInFlight || pending.isEmpty() ||
                 _connectionState.value != BleConnectionState.Ready) return
             val remote = gatt ?: return
             val characteristic = commandCharacteristic ?: return
@@ -466,6 +517,11 @@ class BleManager(private val context: Context) {
 
     private fun closeConnection() {
         handler.removeCallbacks(writeTimeout)
+        handler.removeCallbacks(gpioPoll)
+        handler.removeCallbacks(gpioReadTimeout)
+        gpioReadInFlight = false
+        gpioPollingDisabled = false
+        _gpioPins.value = null
         mtuReady = false
         _connectedAddress.value = null
         synchronized(pending) {
@@ -474,6 +530,7 @@ class BleManager(private val context: Context) {
             commandCharacteristic = null
             stateCharacteristic = null
             publicIdCharacteristic = null
+            gpioStatusCharacteristic = null
             _publicDeviceId.value = null
         }
         val old = gatt

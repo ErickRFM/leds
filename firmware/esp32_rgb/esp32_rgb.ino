@@ -25,6 +25,7 @@ constexpr char SERVICE_UUID[] = "4b9d0001-7a5e-4d4c-ae88-c8c70d3ab211";
 constexpr char WRITE_UUID[] = "4b9d0002-7a5e-4d4c-ae88-c8c70d3ab211";
 constexpr char STATE_UUID[] = "4b9d0003-7a5e-4d4c-ae88-c8c70d3ab211";
 constexpr char PUBLIC_ID_UUID[] = "4b9d0004-7a5e-4d4c-ae88-c8c70d3ab211";
+constexpr char GPIO_STATUS_UUID[] = "4b9d0005-7a5e-4d4c-ae88-c8c70d3ab211";
 
 enum class Mode : uint8_t { NONE, RAINBOW, BREATHE, FADE };
 struct RgbState {
@@ -35,6 +36,8 @@ struct RgbState {
 };
 RgbState rgb;
 BLECharacteristic* stateCharacteristic = nullptr;
+BLECharacteristic* gpioStatusCharacteristic = nullptr;
+uint32_t lastGpioBleUpdateMs = 0;
 volatile bool connected = false;
 bool connectedPreviously = false;
 uint32_t physicalProvisionHoldStarted = 0;
@@ -325,6 +328,10 @@ void setup() {
   BLECharacteristic* publicId = service->createCharacteristic(
       PUBLIC_ID_UUID, BLECharacteristic::PROPERTY_READ);
   publicId->setValue(deviceIdentity.value().c_str());
+  // Optional read-only GPIO occupancy frame. No BLE GPIO writes, script
+  // execution, credentials or Wi-Fi provisioning are exposed.
+  gpioStatusCharacteristic = service->createCharacteristic(
+      GPIO_STATUS_UUID, BLECharacteristic::PROPERTY_READ);
   service->start();
 
   BLEAdvertising* advertising = BLEDevice::getAdvertising();
@@ -333,6 +340,10 @@ void setup() {
   BLEDevice::startAdvertising();
   Serial.println("RGB-ESP32 ready (laboratory; BLE not authenticated)");
   wifiLab.begin();
+  char gpioFrame[96] = {};
+  if (wifiLab.writeBlePinSnapshot(gpioFrame) && gpioStatusCharacteristic) {
+    gpioStatusCharacteristic->setValue(gpioFrame);
+  }
 }
 
 void loop() {
@@ -363,6 +374,15 @@ void loop() {
   processBleCommands();
   moduleRegistry.tickAll(millis());
   wifiLab.tick(millis());
+  const uint32_t telemetryNow = millis();
+  if (gpioStatusCharacteristic &&
+      static_cast<uint32_t>(telemetryNow - lastGpioBleUpdateMs) >= 2000U) {
+    char gpioFrame[96] = {};
+    if (wifiLab.writeBlePinSnapshot(gpioFrame)) {
+      gpioStatusCharacteristic->setValue(gpioFrame);
+    }
+    lastGpioBleUpdateMs = telemetryNow;
+  }
   persistRgbIfDue(millis());
   delay(5);
 }
