@@ -29,7 +29,8 @@ fun DashboardScreen(
     bleManager: BleManager,
     onLed: () -> Unit,
     onCode: () -> Unit,
-    onCenter: () -> Unit
+    onDevices: () -> Unit,
+    onHardware: () -> Unit
 ) {
     val bleConnection by bleManager.connectionState.collectAsState()
     val status = when (val state = bleConnection) {
@@ -76,8 +77,12 @@ fun DashboardScreen(
             Icons.Default.ColorLens, onClick = onLed, modifier = Modifier.testTag("open_led"))
         CompiModuleCard("Compi Studio", "Editar código, proyectos y scripts",
             Icons.Default.Code, onClick = onCode, modifier = Modifier.testTag("open_code"))
-        CompiModuleCard("Centro ESP32", "Equipos, Wi-Fi, GPIO, sensores y pruebas",
-            Icons.Default.DeveloperBoard, onClick = onCenter, modifier = Modifier.testTag("open_center"))
+        Text("Dispositivo y laboratorio", style = MaterialTheme.typography.titleMedium)
+        CompiModuleCard("Mis dispositivos", "Conectar, desconectar e identificar por Bluetooth",
+            Icons.Default.Bluetooth, onClick = onDevices, modifier = Modifier.testTag("open_devices"))
+        CompiModuleCard("Hardware Lab", "Wi-Fi local, GPIO, pines activos, sensores y diagnóstico",
+            Icons.Default.SettingsInputComponent, onClick = onHardware,
+            modifier = Modifier.testTag("open_hardware"))
         CompiInlineMessage(
             "La conexión Wi-Fi está disponible solo para pruebas en APK debug. " +
                 "La edición de código no flashea automáticamente la placa."
@@ -86,20 +91,3 @@ fun DashboardScreen(
     }
 }
 
-@Composable
-fun CenterLandingScreen(onDevices: () -> Unit, onLab: () -> Unit, onCode: () -> Unit) {
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = 18.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        SectionHeader("Centro ESP32", "Hardware y herramientas de diagnóstico")
-        CompiModuleCard("Dispositivos", "Buscar y conectar controladores Bluetooth",
-            Icons.Default.Bluetooth, onClick = onDevices)
-        CompiModuleCard("Hardware Lab", "Wi-Fi, GPIO, sensores, recursos y diagnóstico",
-            Icons.Default.SettingsInputComponent, onClick = onLab,
-            modifier = Modifier.testTag("open_hardware"))
-        CompiModuleCard("Compi Studio", "Volver al editor y a tus proyectos",
-            Icons.Default.Code, onClick = onCode)
-    }
-}
