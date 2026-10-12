@@ -32,6 +32,8 @@ class CompiLabSession {
         private set
     var rgbState by mutableStateOf<RgbDeviceState?>(null)
         private set
+    var stateRevision by mutableStateOf(0L)
+        private set
     var message by mutableStateOf("Conecta a ESP32-Control-Lab para usar Wi-Fi.")
         private set
     var revision by mutableIntStateOf(0)
@@ -69,6 +71,7 @@ class CompiLabSession {
         if (epoch != revision || verifiedKey != key || transport != LabTransport.WIFI_LAB) return false
         wifiReady = true
         rgbState = state
+        stateRevision += 1
         message = "Estado RGB leído del ESP32; conexión de laboratorio confirmada."
         return true
     }
@@ -77,6 +80,7 @@ class CompiLabSession {
         if (epoch != revision || verifiedKey != key || transport != LabTransport.WIFI_LAB ||
             !wifiReady) return false
         rgbState = state
+        stateRevision += 1
         message = "Comando aplicado y estado leído del ESP32."
         return true
     }
