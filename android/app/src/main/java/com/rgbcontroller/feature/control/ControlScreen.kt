@@ -20,6 +20,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
 import com.rgbcontroller.core.ble.BleManager
@@ -105,7 +107,8 @@ fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null) {
     val r = red.toInt().coerceIn(0, 255)
     val g = green.toInt().coerceIn(0, 255)
     val b = blue.toInt().coerceIn(0, 255)
-    val light = if (actual?.power == true || dirty) brightness / 255f else 0f
+    // The swatch represents the selected color, never an unverified physical LED state.
+    val light = brightness / 255f
     val targetPreview = Color((r / 255f) * light, (g / 255f) * light, (b / 255f) * light)
     val preview by animateColorAsState(targetPreview, label = "RGB preview")
 
@@ -113,14 +116,19 @@ fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        SectionHeader("Control RGB", "Selecciona un color y ajústalo a tu gusto")
-        Spacer(Modifier.height(10.dp))
+        Text("Color y brillo", style = MaterialTheme.typography.titleMedium)
         Text(
-            if (ready) "●  ESP32 conectado" else "○  Conecta el ESP32 con el canal seleccionado",
-            style = MaterialTheme.typography.labelLarge,
-            color = if (ready) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            when {
+                !ready -> "Conecta el ESP32 para habilitar la rueda y los deslizadores."
+                awaitingState != null -> "Aplicando ajustes, esperando confirmación del ESP32…"
+                dirty -> "Preparando nuevo color…"
+                actual?.power == false -> "LED apagado · muestra del color seleccionado"
+                else -> "Ajustes sincronizados con el ESP32"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.height(22.dp))
+        Spacer(Modifier.height(12.dp))
 
         var diameter by remember { mutableFloatStateOf(1f) }
         fun selectWheel(point: Offset) {
@@ -138,6 +146,10 @@ fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null) {
         Canvas(
             modifier = Modifier
                 .size(210.dp)
+                .semantics {
+                    contentDescription = "Selector circular de color. " +
+                        "Para un ajuste accesible usa los deslizadores Rojo, Verde y Azul."
+                }
                 .onSizeChanged { diameter = it.width.toFloat() }
                 .pointerInput(ready) {
                     if (ready) detectTapGestures(onTap = { selectWheel(it) })
@@ -169,10 +181,10 @@ fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null) {
             drawCircle(color = Color.White, radius = 10.dp.toPx(), center = marker,
                 style = Stroke(width = 3.dp.toPx()))
         }
-        Spacer(Modifier.height(14.dp))
-        Box(modifier = Modifier.size(82.dp).background(preview, CircleShape))
+        Spacer(Modifier.height(12.dp))
+        Box(modifier = Modifier.size(64.dp).background(preview, CircleShape))
         Spacer(Modifier.height(8.dp))
-        Text(ColorUtils.rgbToHex(r, g, b), style = MaterialTheme.typography.titleLarge,
+        Text(ColorUtils.rgbToHex(r, g, b), style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold)
         Text(
             "R: $r   G: $g   B: $b",
@@ -219,6 +231,7 @@ private fun ColorSlider(
             color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     Slider(
+        modifier = Modifier.semantics { contentDescription = "Ajustar $label" },
         value = value,
         onValueChange = onChange,
         valueRange = 0f..255f,
