@@ -206,7 +206,7 @@ fun LedModuleScreen(
                             OutlinedTextField(
                                 value = wifiSecret,
                                 onValueChange = {
-                                    labSession.setKey(it)
+                                    labSession.updateKey(it)
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 label = { Text("Clave local (monitor serie USB)") },
