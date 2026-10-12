@@ -39,7 +39,7 @@ class CompiLabSession {
     var revision by mutableIntStateOf(0)
         private set
 
-    fun setKey(value: String) {
+    fun updateKey(value: String) {
         val sanitized = value.trim().take(16)
         if (sanitized != key) {
             key = sanitized
