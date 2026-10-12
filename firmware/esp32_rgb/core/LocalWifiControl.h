@@ -167,6 +167,42 @@ class LocalWifiControl final {
       WiFi.begin(ssid.c_str(), password.c_str());
       server_.send(202, "application/json", "{\"status\":\"connecting\"}");
     });
+    // Live firmware resource ownership; this does NOT validate physical wiring.
+    // Authenticated laboratory SoftAP only. Do not expose unsafe BLE GPIO writes.
+    server_.on("/v2/gpio/status", HTTP_GET, [this]() {
+      if (!authorized()) return;
+      static constexpr uint8_t reported[] = {18,19,21,22,23,25,26,27,32,33,34,35,36,39};
+      String body = "{\"version\":1,\"source\":\"firmware-runtime\",\"uptimeMs\":" +
+                    String(millis()) + ",\"pins\":[";
+      for (size_t i = 0; i < sizeof(reported); ++i) {
+        const uint8_t pin = reported[i];
+        const PinLease* lease = pins_.lease(pin);
+        const char* owner = "FREE";
+        const char* mode = "NONE";
+        if (lease) {
+          if (std::strcmp(lease->owner, "led.rgb") == 0) owner = "RGB";
+          else if (std::strcmp(lease->owner, kManual) == 0) owner = "MANUAL";
+          else if (std::strcmp(lease->owner, "lab.experiment") == 0) owner = "EXPERIMENT";
+          else if (std::strcmp(lease->owner, kRead) == 0) owner = "READ";
+          else owner = "OTHER";
+          switch (lease->function) {
+            case PinFunction::DigitalInput: mode = "INPUT"; break;
+            case PinFunction::DigitalOutput: mode = "OUTPUT"; break;
+            case PinFunction::PwmOutput: mode = "PWM"; break;
+            case PinFunction::AnalogInput: mode = "ADC"; break;
+          }
+        }
+        if (i) body += ",";
+        body += "{\"pin\":" + String(pin) + ",\"owner\":\"" + owner +
+                "\",\"mode\":\"" + mode + "\",\"level\":";
+        if (lease && std::strcmp(lease->owner, kManual) == 0) {
+          body += String(manualLevels_[pin] ? 1 : 0);
+        } else body += "null";
+        body += "}";
+      }
+      body += "]}";
+      server_.send(200, "application/json", body);
+    });
     server_.on("/v2/gpio/write", HTTP_POST, [this]() {
       if (!authorized()) return;
       int pin = -1, value = -1;
@@ -188,6 +224,7 @@ class LocalWifiControl final {
       digitalWrite(pin, value ? HIGH : LOW);
       manualTouched_ = millis();
       manualPins_[pin] = true;
+      manualLevels_[pin] = value != 0;
       server_.send(200, "application/json", "{\"status\":\"APPLIED\"}");
     });
     server_.on("/v2/gpio/read", HTTP_GET, [this]() {
@@ -371,6 +408,7 @@ class LocalWifiControl final {
   ExperimentRuntime experiment_;
   String accessKey_;
   bool manualPins_[PinManager::kPinCount] = {};
+  bool manualLevels_[PinManager::kPinCount] = {};
   uint32_t manualTouched_ = 0;
   bool active_ = false;
 
@@ -437,6 +475,7 @@ class LocalWifiControl final {
         pinMode(pin, INPUT);
         pins_.release(pin, kManual);
         manualPins_[pin] = false;
+        manualLevels_[pin] = false;
       }
     }
   }
