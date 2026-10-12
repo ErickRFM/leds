@@ -14,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -74,6 +75,12 @@ fun LabHubScreen() {
     var nextDuration by remember { mutableStateOf("500") }
     var projectName by remember { mutableStateOf("") }
     var section by rememberSaveable { mutableStateOf(LabSection.CONNECTION) }
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(message) {
+        if (message != "Conéctate a ESP32-Control-Lab para comenzar.") {
+            snackbar.showSnackbar(message, duration = SnackbarDuration.Short)
+        }
+    }
 
     // Sampling belongs to this Composable lifecycle; navigation away cancels the job.
     // No GPS, no background process, no unbounded retention and no device secrets in CSV.
@@ -109,7 +116,8 @@ fun LabHubScreen() {
         }
     }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+    Box(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding()
         .padding(horizontal = 18.dp, vertical = 20.dp)) {
         SectionHeader("Hardware Lab", "Herramientas locales del ESP32")
         Spacer(Modifier.height(12.dp))
@@ -131,6 +139,13 @@ fun LabHubScreen() {
             message.startsWith("Error", ignoreCase = true) ||
             message.startsWith("No hay", ignoreCase = true) ||
             message.contains("rechazó", ignoreCase = true))
+        if (section != LabSection.CONNECTION && !LocalLabClient.validKey(secret)) {
+            CompiInlineMessage("Configura primero la clave local del ESP32 en Conexión. " +
+                "Puedes explorar estas herramientas sin conectarte.")
+            TextButton(onClick = { section = LabSection.CONNECTION }) {
+                Text("Configurar conexión")
+            }
+        }
         Spacer(Modifier.height(12.dp))
         if (section == LabSection.CONNECTION) {
         Card(Modifier.fillMaxWidth(), colors =
@@ -539,5 +554,7 @@ fun LabHubScreen() {
         }
         // RGB Wi-Fi controls live in the LED module. Laboratory stays focused on GPIO, network and sensors.
         Spacer(Modifier.height(30.dp))
+    }
+    SnackbarHost(hostState = snackbar, modifier = Modifier.align(Alignment.BottomCenter))
     }
 }
