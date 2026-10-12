@@ -27,7 +27,8 @@ private data class NamedColor(
 )
 
 @Composable
-fun PresetsScreen(bleManager: BleManager, preferencesRepository: PreferencesRepository, link: RgbControlLink? = null) {
+@OptIn(ExperimentalLayoutApi::class)
+fun PresetsScreen(bleManager: BleManager, preferencesRepository: PreferencesRepository, link: RgbControlLink? = null, embedded: Boolean = false) {
     val connected by bleManager.connectionState.collectAsState()
     val bleCurrent by bleManager.rgbState.collectAsState()
     val current = if (link != null) link.state else bleCurrent
@@ -58,7 +59,7 @@ fun PresetsScreen(bleManager: BleManager, preferencesRepository: PreferencesRepo
         )
     }
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 20.dp)) {
+    Column((if (embedded) Modifier.fillMaxWidth() else Modifier.fillMaxSize()).padding(horizontal = 18.dp, vertical = 20.dp)) {
         SectionHeader("Colores", if (ready) "Tu paleta personal"
             else "Conecta el ESP32 para aplicar colores")
         Spacer(Modifier.height(20.dp))
@@ -74,18 +75,17 @@ fun PresetsScreen(bleManager: BleManager, preferencesRepository: PreferencesRepo
             }
         ) { Text("Guardar color actual en favoritos") }
         Spacer(Modifier.height(14.dp))
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 144.dp),
-            modifier = Modifier.weight(1f),
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(bottom = 16.dp)
+            maxItemsInEachRow = 2
         ) {
-            items(cards) { preset ->
-                val rgb = ColorUtils.hexToRgb(preset.hex) ?: return@items
+            cards.forEach { preset ->
+                val rgb = ColorUtils.hexToRgb(preset.hex) ?: return@forEach
                 val uiColor = Color(rgb.r, rgb.g, rgb.b)
                 Card(
-                    Modifier.fillMaxWidth().clickable(enabled = ready) { apply(preset.hex) }
+                    Modifier.width(144.dp).clickable(enabled = ready) { apply(preset.hex) }
                 ) {
                     Column(Modifier.fillMaxWidth().padding(14.dp)) {
                         Box(
