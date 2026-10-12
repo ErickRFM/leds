@@ -18,6 +18,17 @@ class DeviceCapabilityPolicyTest {
             assertFalse(DeviceCapabilityPolicy.check(feature, CompiChannel.BLE_V1, true).allowed)
         }
     }
+    @Test fun automationIsOnlyAllowedOnVerifiedDebugSoftAp() {
+        assertFalse(DeviceCapabilityPolicy.check(CompiOperation.AUTOMATION,
+            CompiChannel.BLE_V1, true, automationAvailable = true).allowed)
+        assertFalse(DeviceCapabilityPolicy.check(CompiOperation.AUTOMATION,
+            CompiChannel.WIFI_LAB, true).allowed)
+        assertTrue(DeviceCapabilityPolicy.check(CompiOperation.AUTOMATION,
+            CompiChannel.WIFI_LAB, true, debugBuild = true, automationAvailable = true).allowed)
+        assertFalse(DeviceCapabilityPolicy.check(CompiOperation.AUTOMATION,
+            CompiChannel.WIFI_LAB, true, debugBuild = false, automationAvailable = true).allowed)
+    }
+
     @Test fun wifiLabRequiresDebugAndNoFirmwareFlash() {
         assertTrue(DeviceCapabilityPolicy.check(CompiOperation.WRITE_GPIO, CompiChannel.WIFI_LAB, true, true).allowed)
         assertFalse(DeviceCapabilityPolicy.check(CompiOperation.WRITE_GPIO, CompiChannel.WIFI_LAB, true, false).allowed)
