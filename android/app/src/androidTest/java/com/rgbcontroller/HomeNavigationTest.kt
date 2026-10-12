@@ -57,7 +57,7 @@ class HomeNavigationTest {
     @Test
     fun homeReturnsFromNestedBluetoothDevices() {
         composeRule.onNodeWithTag("open_led").performClick()
-        composeRule.onNodeWithText("Buscar dispositivo Bluetooth").performClick()
+        composeRule.onNodeWithText("Buscar ESP32").performClick()
         composeRule.onNodeWithText("Mis dispositivos").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
