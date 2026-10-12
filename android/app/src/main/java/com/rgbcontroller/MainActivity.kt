@@ -127,7 +127,7 @@ fun MainAppNavHost(
             topBar = {
                 if (nested) {
                     TopAppBar(
-                        title = { Text(if (route == Screen.Devices.route) "Dispositivos" else "Hardware Lab") },
+                        title = { Text(if (route == Screen.Devices.route) "Dispositivos" else "Laboratorio") },
                         navigationIcon = {
                             IconButton(
                                 modifier = Modifier.testTag("nav_back"),
