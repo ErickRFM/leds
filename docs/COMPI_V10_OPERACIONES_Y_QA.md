@@ -24,7 +24,7 @@
 
 **CompiDeviceController (objetivo V11):** sesión de dispositivo con ID público no privilegiado, capacidades de firmware verificadas, transportes independientes, ejecución compartida, timeouts y readback causal.
 
-**DeviceCapabilityPolicy (V10):** `READ_RGB`, `SET_RGB`, `EFFECT_RGB` admitidos con conexión BLE V1; `READ_GPIO` BLE solo si existe característica GATT V9. `WRITE_GPIO`, ADC, scripts y configuración de Wi-Fi requieren SoftAP debug con clave local; no se conceden al BLE V1. OTA y automatizaciones sin validar denegadas. Un futuro BLE autorizado requiere **ambas** condiciones `secureBleAvailable` y `authorizedOwner`; el firmware debe confirmar realmente ambos estados, no solo UI.
+**DeviceCapabilityPolicy (V10):** `READ_RGB`, `SET_RGB`, `EFFECT_RGB` admitidos con conexión BLE V1; `READ_GPIO` BLE solo si existe característica GATT V9. `WRITE_GPIO`, ADC, scripts y configuración de Wi-Fi requieren SoftAP debug con clave local; no se conceden al BLE V1. OTA y automatizaciones sin validar denegadas. El canal `AUTHENTICATED_BLE` futuro queda **denegado por completo en V10**; no puede autorizarse con booleanos de interfaz ni con la MAC o el ID público. Habrá que incorporar un verificador criptográfico real en el firmware y pruebas de dispositivo antes de cambiar esta política.
 
 **CompiLabSession:** credenciales solo en RAM; el `Mutex` arbitra las peticiones HTTP; `userOperation` publica QUEUED/RUNNING/CONFIRMED/FAILED/CANCELLED. La confirmación significa que HTTP respondió, nunca que el LED físico encendió. Cancela solicitudes si abandona pantalla y no interpreta resultado tardío como nueva sesión.
 
