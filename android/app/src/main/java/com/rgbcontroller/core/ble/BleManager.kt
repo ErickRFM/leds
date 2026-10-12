@@ -132,16 +132,6 @@ class BleManager(private val context: Context) {
 
     fun startScan() {
         if (scanning) return
-        // Explicit discovery supersedes a pending automatic reconnect. Do not let
-        // a delayed retry hijack a scan or revive a previously selected device.
-        handler.removeCallbacks(reconnect)
-        handler.removeCallbacks(connectionTimeout)
-        manualDisconnect = true
-        retries = 0
-        activeDevice = null
-        closeConnection()
-        _rgbState.value = null
-        _connectionState.value = BleConnectionState.Disconnected
         if (!hasPermissions()) {
             _connectionState.value = BleConnectionState.Error("Concede permisos Bluetooth/ubicación en Ajustes")
             return
@@ -154,6 +144,16 @@ class BleManager(private val context: Context) {
             _connectionState.value = BleConnectionState.Error("Escáner BLE no disponible")
             return
         }
+        // Do not tear down a useful connection when permissions/radio are absent.
+        // A valid explicit search supersedes any pending automatic reconnection.
+        handler.removeCallbacks(reconnect)
+        handler.removeCallbacks(connectionTimeout)
+        manualDisconnect = true
+        retries = 0
+        activeDevice = null
+        closeConnection()
+        _rgbState.value = null
+        _connectionState.value = BleConnectionState.Disconnected
         try {
             _discoveredDevices.value = emptyList()
             _connectionState.value = BleConnectionState.Scanning
