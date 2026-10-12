@@ -90,4 +90,19 @@ assert 'chooseEngine("GPIO")' in studio and 'chooseEngine("RGB")' in studio
 client = android_lab
 assert '"/v2/gpio/status"' in client
 print("PASS V9: runtime GPIO ownership is authenticated; Studio engines keep separate drafts")
+# Bounded automation must remain AP-authenticated and never be enabled over
+# unauthenticated GATT. Parser validation precedes script/automation cancellation.
+automation_start = lab.split('server_.on("/v2/automation/start"', 1)[1].split('server_.on("/v2/automation/stop"', 1)[0]
+assert 'if (!authorized()) return;' in automation_start
+assert 'parseInt("intervalSeconds", 1, 60, seconds)' in automation_start
+assert 'parseInt("cycles", 1, 10, cycles)' in automation_start
+assert 'script_.active()' in automation_start and 'experiment_.active()' in automation_start
+assert 'automation_.configure' in automation_start
+assert 'automationEdges_ = static_cast<uint8_t>(cycles * 2)' in automation_start
+assert 'automation_.stop()' in manual_http
+assert manual_http.index('parseRgbCommand(cmd.c_str(), parsed)') < manual_http.index('automation_.stop()')
+assert 'void stopScriptFromBle() { script_.stop(); automation_.stop();' in lab
+assert 'if (--automationEdges_ == 0)' in lab and 'rgbCommand_(String("OFF"))' in lab
+print("PASS V12: automation bounded, authenticated and cancelled only by valid manual RGB commands")
+
 print("PASS: RGB V1 compatibility, core leases, local SoftAP endpoint and lab limits.")
