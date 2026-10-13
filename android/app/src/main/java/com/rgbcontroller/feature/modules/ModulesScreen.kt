@@ -1,7 +1,6 @@
 package com.rgbcontroller.feature.modules
 
 import android.os.SystemClock
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -12,11 +11,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
 import com.rgbcontroller.core.ble.BleManager
@@ -28,6 +24,8 @@ import com.rgbcontroller.core.sensors.AdcTelemetry
 import com.rgbcontroller.core.sensors.SoilCalibration
 import com.rgbcontroller.core.ui.CompiInlineMessage
 import com.rgbcontroller.core.ui.CompiModuleCard
+import com.rgbcontroller.core.ui.modules.CompiMetricValue
+import com.rgbcontroller.core.ui.modules.CompiAdcTrend
 import com.rgbcontroller.core.wifi.CompiLabSession
 import com.rgbcontroller.core.wifi.LocalLabClient
 import kotlinx.coroutines.CancellationException
@@ -173,34 +171,20 @@ private fun SoilAdcPanel(
         runCatching { SoilCalibration(dryRaw!!, wetRaw!!) }.getOrNull() else null
     val percentage = if (raw != null && calibration != null)
         calibration.percentage(raw!!) else null
-    val lineColor = MaterialTheme.colorScheme.primary
 
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Entrada ADC1 · GPIO34", style = MaterialTheme.typography.titleLarge)
             Text("Fuente: firmware /v2/modules/telemetry · sensor físico no verificado",
                 style = MaterialTheme.typography.bodySmall)
-            Text(raw?.let { "ADC bruto: $it / 4095" } ?: "Sin lectura en vivo",
-                style = MaterialTheme.typography.titleMedium, modifier = Modifier.testTag("adc_raw"))
-            Text(percentage?.let { "Humedad calibrada (temporal): $it %" }
-                ?: "Humedad: sin calibración válida", style = MaterialTheme.typography.bodyLarge)
+            Box(Modifier.testTag("adc_raw")) {
+                CompiMetricValue("ADC bruto", raw?.toString(), "/ 4095", "GPIO34 · firmware")
+            }
+            CompiMetricValue("Humedad calibrada (temporal)",
+                percentage?.toString(), "%", "Solo tras dos referencias reales")
             error?.let { CompiInlineMessage(it, isError = true) }
             Text("Historial ADC (hasta 120 muestras)", style = MaterialTheme.typography.labelLarge)
-            Canvas(Modifier.fillMaxWidth().height(90.dp).semantics {
-                contentDescription = "Historial de " + history.size + " lecturas ADC"
-            }) {
-                val samples = history
-                if (samples.size >= 2) {
-                    for (i in 1 until samples.size) {
-                        val x0 = (i - 1).toFloat() / (samples.size - 1) * size.width
-                        val x1 = i.toFloat() / (samples.size - 1) * size.width
-                        drawLine(lineColor,
-                            Offset(x0, size.height * (1f - samples[i - 1].raw / 4095f)),
-                            Offset(x1, size.height * (1f - samples[i].raw / 4095f)),
-                            strokeWidth = 3.dp.toPx())
-                    }
-                }
-            }
+            CompiAdcTrend(history)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { dryRaw = raw }, enabled = raw != null,
                     modifier = Modifier.weight(1f)) { Text("Guardar seco") }
