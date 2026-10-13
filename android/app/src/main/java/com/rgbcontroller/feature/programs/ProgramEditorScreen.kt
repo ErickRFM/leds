@@ -28,6 +28,7 @@ import com.rgbcontroller.core.programs.EditorReplacementPolicy
 import com.rgbcontroller.core.programs.EditorDraftSnapshot
 import com.rgbcontroller.core.data.EditorDraftStore
 import com.rgbcontroller.core.programs.ProgramLanguage
+import com.rgbcontroller.core.modules.ProjectModuleHints
 import com.rgbcontroller.core.programs.ProgramSourcePolicy
 import com.rgbcontroller.core.wifi.LocalLabClient
 import com.rgbcontroller.core.wifi.CompiLabSession
@@ -51,7 +52,11 @@ private data class PendingEditorReplacement(
 )
 
 @Composable
-fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
+fun ProgramEditorScreen(
+    labSession: CompiLabSession,
+    bleManager: BleManager? = null,
+    onOpenModules: () -> Unit = {}
+) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val debug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
@@ -198,6 +203,9 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
     val gpioPlan = compiled?.getOrNull()
     val inspection = remember(source) { ProgramSourcePolicy.inspect(source) }
     val rgbCheck = remember(source) { LabRgbScriptPolicy.validate(source) }
+    val moduleHints = remember(source, language, laboratoryMode) {
+        ProjectModuleHints.suggestions(source, language, laboratoryMode)
+    }
     var pendingReplacement by remember { mutableStateOf<PendingEditorReplacement?>(null) }
 
     fun applyReplacement(item: PendingEditorReplacement) {
@@ -298,6 +306,12 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
     ) {
         Text("Compi Studio", style = MaterialTheme.typography.headlineLarge, color = CompiV9.title)
         CompiInlineMessage(draftStatus, isError = draftRecoveryError)
+        if (moduleHints.isNotEmpty()) {
+            CompiInlineMessage("UI sugerida (sin verificar firmware): " + moduleHints.joinToString(" · "))
+            OutlinedButton(onClick = onOpenModules, modifier = Modifier.testTag("studio_modules")) {
+                Text("Abrir biblioteca de módulos")
+            }
+        }
         val operation = labSession.operationStatus
         if (operation.name.isNotBlank()) {
             CompiInlineMessage(
