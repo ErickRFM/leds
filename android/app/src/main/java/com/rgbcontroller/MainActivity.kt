@@ -41,6 +41,7 @@ import com.rgbcontroller.feature.devices.DevicesScreen
 import com.rgbcontroller.feature.home.DashboardScreen
 import com.rgbcontroller.feature.hub.LabHubScreen
 import com.rgbcontroller.feature.led.LedModuleScreen
+import com.rgbcontroller.feature.modules.ModulesScreen
 import com.rgbcontroller.feature.settings.SettingsScreen
 import androidx.compose.ui.unit.dp
 
@@ -72,6 +73,7 @@ private sealed class Screen(
 ) {
     data object Home : Screen("home", "Inicio", Icons.Default.Home)
     data object Led : Screen("led", "LED", Icons.Default.ColorLens)
+    data object Modules : Screen("modules", "Módulos", Icons.Default.Memory)
     data object Code : Screen("code", "Studio", Icons.Default.Code)
     data object Settings : Screen("settings", "Ajustes", Icons.Default.Settings)
     data object Devices : Screen("devices", "Equipos", Icons.Default.Bluetooth)
@@ -122,13 +124,18 @@ fun MainAppNavHost(
         val items = listOf(Screen.Home, Screen.Led, Screen.Code, Screen.Hub)
         val entry by navController.currentBackStackEntryAsState()
         val route = entry?.destination?.route
-        val nested = route == Screen.Devices.route || route == Screen.Settings.route
+        val nested = route == Screen.Devices.route || route == Screen.Settings.route ||
+            route == Screen.Modules.route
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 if (nested) {
                     TopAppBar(
-                        title = { Text(if (route == Screen.Devices.route) "Dispositivos" else "Ajustes") },
+                        title = { Text(when (route) {
+                            Screen.Devices.route -> "Dispositivos"
+                            Screen.Modules.route -> "Biblioteca de módulos"
+                            else -> "Ajustes"
+                        }) },
                         navigationIcon = {
                             IconButton(
                                 modifier = Modifier.testTag("nav_back"),
@@ -177,6 +184,7 @@ fun MainAppNavHost(
                     DashboardScreen(
                         bleManager = bleManager,
                         onLed = { navController.navigateTopLevel(Screen.Led) },
+                        onModules = { navController.navigate(Screen.Modules.route) },
                         onCode = { navController.navigateTopLevel(Screen.Code) },
                         onDevices = { navController.navigate(Screen.Devices.route) },
                         onHardware = { navController.navigateTopLevel(Screen.Hub) },
@@ -187,6 +195,11 @@ fun MainAppNavHost(
                 // The redundant Centro TAB is gone; legacy state returns to Home.
                 composable("center") {
                     LaunchedEffect(Unit) { navController.navigateTopLevel(Screen.Home) }
+                }
+                composable(Screen.Modules.route) {
+                    ModulesScreen(session, bleManager,
+                        onOpenLed = { navController.navigateTopLevel(Screen.Led) },
+                        onOpenHardware = { navController.navigateTopLevel(Screen.Hub) })
                 }
                 composable(Screen.Led.route) {
                     LedModuleScreen(bleManager, preferencesRepository, session,
