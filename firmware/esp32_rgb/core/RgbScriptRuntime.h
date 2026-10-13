@@ -47,7 +47,8 @@ class RgbScriptRuntime final {
   /** Never blocks: at most 32 instantaneous commands per tick. */
   bool tick(uint32_t nowMs, RgbCommand send, void* context) {
     if (!active_) return true;
-    if (!send || static_cast<uint32_t>(nowMs - startedMs_) >= kMaxDurationMs) {
+    // Allow scripts up to kMaxDurationMs to complete their final action without premature cutoff.
+    if (!send || static_cast<uint32_t>(nowMs - startedMs_) > kMaxDurationMs) {
       stop();
       return false;
     }
@@ -197,7 +198,7 @@ class RgbScriptRuntime final {
     return hasAction && count != 0;
   }
 
-  static size_t boundedLength(const char* p) {
+  size_t boundedLength(const char* p) {
     size_t n = 0;
     while (n <= kMaxSourceBytes && p[n] != '\0') ++n;
     return n;

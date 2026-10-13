@@ -36,8 +36,20 @@ int main() {
 
   assert(runner.start("ON\nWAIT 1000\nOFF", 0));
   assert(runner.tick(0, record, &received));
-  assert(!runner.tick(20000, record, &received));  // safety expiry
+  assert(!runner.tick(20001, record, &received));  // safety expiry past 20000ms
   assert(!runner.active());
+
+  // Regression test for 20-second max duration script completing with OFF at exactly 20000ms
+  std::string maxScript = "RGB 255 0 0\n";
+  for (int i = 0; i < 10; ++i) maxScript += "WAIT 2000\n";
+  maxScript += "OFF";
+  assert(RgbScriptRuntime::validate(maxScript.c_str()));
+  assert(runner.start(maxScript.c_str(), 0));
+  received.clear();
+  assert(runner.tick(0, record, &received)); // RGB
+  assert(runner.tick(20000, record, &received)); // finishes final WAIT 2000 and executes OFF
+  assert(!runner.active());
+  assert(received.back() == "OFF");
 
   assert(runner.start("ON", 10));
   assert(!runner.tick(10, reject, nullptr));
