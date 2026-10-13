@@ -149,7 +149,7 @@ private fun SoilAdcPanel(
                     result.optString("quality") == "RAW_UNCALIBRATED") {
                     "Telemetría de módulo incompatible"
                 }
-                val readings = result.optJSONObject("readings") ?: error("Sin lecturas ADC")
+                val readings = result.optJSONObject("readings") ?: kotlin.error("Sin lecturas ADC")
                 val next = readings.optInt("adc_raw", -1)
                 require(next in 0..4095) { "ADC fuera de rango" }
                 val now = SystemClock.elapsedRealtime()
