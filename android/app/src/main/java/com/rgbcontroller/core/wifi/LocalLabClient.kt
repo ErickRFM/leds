@@ -41,6 +41,13 @@ class LocalLabClient(private val context: Context) {
     }
     /** Actual ownership snapshot from ESP32; a pin being FREE does not prove wiring. */
     suspend fun gpioStatus(key: String): JSONObject = request("GET", "/v2/gpio/status", key)
+    /** V15 discovery & raw telemetry: read-only over existing authenticated lab SoftAP. */
+    suspend fun modules(key: String): JSONObject = request("GET", "/v2/modules", key)
+    suspend fun moduleTelemetry(key: String, moduleId: String): JSONObject {
+        require(moduleId == "input.adc1.34") { "Módulo no admitido" }
+        return request("GET", "/v2/modules/telemetry?moduleId=input.adc1.34", key)
+    }
+
     /** Bounded automation only, requires authenticated local SoftAP. Never persistent/OTA. */
     suspend fun automationStatus(key: String): JSONObject =
         request("GET", "/v2/automation/status", key)
