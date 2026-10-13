@@ -38,6 +38,7 @@ import com.rgbcontroller.core.ui.CompiInlineMessage
 fun DashboardScreen(
     bleManager: BleManager,
     onLed: () -> Unit,
+    onModules: () -> Unit,
     onCode: () -> Unit,
     onDevices: () -> Unit,
     onHardware: () -> Unit,
@@ -108,7 +109,7 @@ fun DashboardScreen(
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            QuickAction("LED RGB", Icons.Default.ColorLens, onLed, Modifier.weight(1f))
+            QuickAction("Módulos", Icons.Default.Memory, onModules, Modifier.weight(1f))
             QuickAction("Studio", Icons.Default.Code, onCode, Modifier.weight(1f))
             QuickAction("Hardware", Icons.Default.Memory, onHardware, Modifier.weight(1f))
             QuickAction("Equipos", Icons.Default.Devices, onDevices, Modifier.weight(1f))
@@ -116,6 +117,8 @@ fun DashboardScreen(
 
         Text("Herramientas principales", style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold)
+        CompiModuleCard("Biblioteca de módulos", "Intercambia LED, sensores y mediciones",
+            Icons.Default.Memory, onClick = onModules, modifier = Modifier.testTag("open_modules"))
         CompiModuleCard("LED RGB", "Color, brillo, favoritos y efectos",
             Icons.Default.ColorLens, onClick = onLed, modifier = Modifier.testTag("open_led"))
         CompiModuleCard("Compi Studio", "Editar código, importar y ejecutar scripts compatibles",
