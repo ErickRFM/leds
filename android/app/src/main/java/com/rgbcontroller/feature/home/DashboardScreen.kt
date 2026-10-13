@@ -112,7 +112,8 @@ fun DashboardScreen(
             QuickAction("Módulos", Icons.Default.Memory, onModules, Modifier.weight(1f))
             QuickAction("Studio", Icons.Default.Code, onCode, Modifier.weight(1f))
             QuickAction("Hardware", Icons.Default.Memory, onHardware, Modifier.weight(1f))
-            QuickAction("Equipos", Icons.Default.Devices, onDevices, Modifier.weight(1f))
+            QuickAction("Equipos", Icons.Default.Devices, onDevices,
+                Modifier.weight(1f).testTag("open_devices"))
         }
 
         Text("Herramientas principales", style = MaterialTheme.typography.titleLarge,
