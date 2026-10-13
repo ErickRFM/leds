@@ -110,10 +110,20 @@ class HomeNavigationTest {
         composeRule.onNodeWithText("Compi Studio").assertExists()
         composeRule.onNodeWithTag("nav_hub").performClick()
         composeRule.onNodeWithText("Hardware Lab").assertExists()
-        composeRule.onNodeWithTag("nav_settings").performClick()
+        composeRule.onNodeWithTag("nav_home").performClick()
+        composeRule.onNodeWithTag("home_settings").performClick()
         composeRule.onNodeWithText("Ajustes").assertExists()
         composeRule.onNodeWithTag("nav_back").performClick()
-        composeRule.onNodeWithText("Hardware Lab").assertExists()
+        composeRule.onNodeWithText("Compi").assertExists()
+        composeRule.onNodeWithTag("nav_home").performClick()
+        composeRule.onNodeWithText("Compi").assertExists()
+    }
+
+    @Test
+    fun modulesCanBeOpenedWithoutClaimingAConnectedSensor() {
+        composeRule.onNodeWithTag("open_modules").performClick()
+        composeRule.onNodeWithText("El ESP32 anuncia capacidades", substring = true).assertExists()
+        composeRule.onNodeWithText("Sin módulos verificados", substring = true).assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
     }
