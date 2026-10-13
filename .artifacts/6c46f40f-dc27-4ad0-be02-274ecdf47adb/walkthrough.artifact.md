@@ -1,33 +1,32 @@
-# Walkthrough - Compi V9 Reference UI & V12/V13 Integration (Definitive)
+# Walkthrough - Compi V14 Real Stability & Connectivity
 
-This walkthrough summarizes the definitive execution, unifications, local testing, and push to `origin/main` for the **Compi V9 Reference UI** and **V12/V13 Automations**.
+This walkthrough summarizes the implementation of robust Wi-Fi SoftAP connection states and authorization policies for **Compi V14**, complete with successful local builds, passing unit tests, and merge into `main`.
 
 ## Changes Made
 
-### 1. Unified Compi V9 Reference UI & V12/V13 Integration
-- **LED RGB Module (`LedModuleScreen.kt`):** Refactored to eliminate tab separation (`LedPage.entries`), presenting Control (Wheel + Sliders), Power switch, Favorites, and Effects together in a single scrollable vertical view matching Reference Image 2.
-- **Dashboard / Inicio (`DashboardScreen.kt`):** Implemented Compi header with settings icon, ESP32 status card with illustration, connection status, Bluetooth/Wi-Fi indicators, quick access buttons, main tool cards, and recent activity feed.
-- **Compi Studio (`ProgramEditorScreen.kt`):** Local editor card with toolbar (Import, Paste, Export, Copy), project type selector (Laboratorio vs Arduino C++), code editor with line numbers and syntax highlighting, size/line counters, Run RGB / Stop controls, and "Mis proyectos" list.
-- **Hardware Lab (`LabHubScreen.kt`):** Top tab selector (Conexión, GPIO, Sensores, Diagnóstico), Laboratory Wi-Fi connection card with secure key, device state card (Chip, Flash, RAM, RSSI), GPIO control card, ADC1 sensors real-time waveform chart, and autodiagnostics.
-- **Navigation (`MainActivity.kt`):** Unified bottom navigation bar to display exactly 4 tabs: Inicio, LED, Studio, Hardware.
+### 1. Robust Wi-Fi SoftAP Connection State Machine (`CompiLabSession.kt`, `LabAuthPolicy.kt`)
+- Introduced explicit connection states: `DISCONNECTED`, `SOFTAP_DETECTED`, `LOCAL_ROUTE_AVAILABLE`, `CONTROL_KEY_REQUIRED`, `VERIFYING`, `AUTHORIZED`, `AUTH_FAILED`, `NETWORK_ERROR`, `SESSION_EXPIRED`.
+- Separated physical network presence from cryptographic/local control key authorization.
+- Added pure Kotlin `LabAuthPolicy` to avoid Android Context dependency issues in JVM unit tests.
+- Updated unit tests in `CompiLabSessionTest.kt` to thoroughly verify state transitions.
 
 ### 2. Local Android Verification & APK Generation
-- **Unit Tests & Lint:** All unit tests (`testDebugUnitTest`) and lint checks (`lintDebug`) passed successfully.
+- **Unit Tests & Lint:** All unit tests (`testDebugUnitTest`) and lint checks (`lintDebug`) passed successfully (71 tests passed).
 - **Generated APK Path:**
   `android/app/build/outputs/apk/debug/app-debug.apk`
 - **APK SHA-256 Hash:**
-  `2FA8BE989880467570A52EE87A77C2265AD5B60E88B751096228E544B21F7816`
+  `2CA0CF6430953B79A07BE7CA89ED15A9C65D6F9A6FF3D620A8C84587D6211777`
 
 ### 3. Git & Integration
-- Successfully merged and pushed definitive Compi V9 reference UI screens and V12/V13 automations to `origin/main` (Commit SHA: `bafb692`).
+- Committed and pushed changes to `origin/fix/compi-v14-real-stability`, merged into `main`, and pushed to `origin/main` (Commit SHA: `6c90388`).
 
 ## Verification Results
 
 ### Automated Tests & Local Build
-- **Unit Tests:** PASSED
+- **Unit Tests:** PASSED (71 tests)
 - **Lint Check:** PASSED
 - **APK Compilation & Hashing:** PASSED (`app-debug.apk` compiled and hashed successfully)
 
-### Physical BLE Hardware Testing Status
+### Physical BLE/Wi-Fi Hardware Testing Status
 > [!NOTE]
-> Physical BLE and Wi-Fi validation (`READY_FOR_PHYSICAL_TEST`) with an actual ESP32 and Android device is documented as pending local bench deployment due to the headless test environment.
+> Physical SoftAP and BLE verification (`READY_FOR_PHYSICAL_TEST`) with an actual ESP32 and Android device is documented as pending local bench deployment due to the headless test environment.
