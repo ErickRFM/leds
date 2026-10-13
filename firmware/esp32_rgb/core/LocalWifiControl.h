@@ -125,6 +125,34 @@ class LocalWifiControl final {
       body += ",\"runtime\":\"lab\"}";
       server_.send(200, "application/json", body);
     });
+    // V15 read-only module discovery. Advertises *capabilities*, never
+    // a verified sensor connection, calibration or a privileged BLE operation.
+    server_.on("/v2/modules", HTTP_GET, [this]() {
+      if (!authorized()) return;
+      static const char body[] = R"compi({"schemaVersion":1,"modules":[{"id":"led.rgb.main","kind":"actuator.rgb","uiKind":"rgb-control","title":"LED RGB","pins":[27,25,26],"transports":["BLE_V1","WIFI_LAB"]},{"id":"input.adc1.34","kind":"sensor.adc_raw","uiKind":"adc-gauge","title":"Entrada ADC1 GPIO34","pins":[34],"transports":["WIFI_LAB"],"sampleIntervalMs":2000,"physicalSensorVerified":false}]})compi";
+      server_.send(200, "application/json", body);
+    });
+    // No percentages: an analog input does not identify or calibrate a probe.
+    // A sensor must be physically wired and calibrated on the Android side.
+    server_.on("/v2/modules/telemetry", HTTP_GET, [this]() {
+      if (!authorized()) return;
+      if (server_.arg("moduleId") != "input.adc1.34") {
+        jsonError(404, "unknown_module"); return;
+      }
+      if (!pins_.acquire(34, kRead, PinFunction::AnalogInput)) {
+        jsonError(409, "pin_reserved"); return;
+      }
+      int raw = analogRead(34);
+      pins_.release(34, kRead);
+      if (raw < 0 || raw > 4095) {
+        jsonError(503, "adc_out_of_range"); return;
+      }
+      String body = "{\"moduleId\":\"input.adc1.34\",\"sampleSeq\":" +
+          String(++adcSampleSeq_) + ",\"sampleUptimeMs\":" + String(millis()) +
+          ",\"readings\":{\"adc_raw\":" + String(raw) +
+          ",\"moisture_percent\":null},\"quality\":\"RAW_UNCALIBRATED\"}";
+      server_.send(200, "application/json", body);
+    });
     server_.on("/v2/firmware", HTTP_GET, [this]() {
       if (!authorized()) return;
       const esp_partition_t* current = esp_ota_get_running_partition();
@@ -478,6 +506,7 @@ class LocalWifiControl final {
   bool manualPins_[PinManager::kPinCount] = {};
   bool manualLevels_[PinManager::kPinCount] = {};
   uint32_t manualTouched_ = 0;
+  uint32_t adcSampleSeq_ = 0;
   bool active_ = false;
 
   static String randomKey() {
