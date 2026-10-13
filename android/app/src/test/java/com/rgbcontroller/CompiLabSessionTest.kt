@@ -3,6 +3,7 @@ package com.rgbcontroller
 import com.rgbcontroller.core.model.RgbDeviceState
 import com.rgbcontroller.core.wifi.CompiLabSession
 import com.rgbcontroller.core.wifi.LabTransport
+import com.rgbcontroller.core.wifi.LabConnectionState
 import org.junit.Assert.*
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -16,9 +17,13 @@ class CompiLabSessionTest {
     @Test fun keysStayInMemoryAndInvalidateReadiness() {
         val session = CompiLabSession()
         session.selectTransport(LabTransport.WIFI_LAB)
+        assertEquals(LabConnectionState.CONTROL_KEY_REQUIRED, session.connectionState)
         session.updateKey("1234567890abcdef")
+        assertEquals(LabConnectionState.LOCAL_ROUTE_AVAILABLE, session.connectionState)
         val (epoch, key) = session.beginVerification()
+        assertEquals(LabConnectionState.VERIFYING, session.connectionState)
         assertTrue(session.verified(epoch, key, red))
+        assertEquals(LabConnectionState.AUTHORIZED, session.connectionState)
         assertTrue(session.wifiReady)
         session.updateKey("abcdef1234567890")
         assertFalse(session.wifiReady)
@@ -28,6 +33,7 @@ class CompiLabSessionTest {
         session.clear()
         assertEquals("", session.key)
         assertEquals(LabTransport.BLUETOOTH, session.transport)
+        assertEquals(LabConnectionState.DISCONNECTED, session.connectionState)
     }
 
     @Test fun lateTransportResponsesCannotReconnectWifi() {
@@ -97,5 +103,14 @@ class CompiLabSessionTest {
         session.failed(epoch, "connection failed")
         assertFalse(session.wifiReady)
         assertFalse(session.verified(epoch, key, red))
+        assertEquals(LabConnectionState.NETWORK_ERROR, session.connectionState)
+    }
+
+    @Test fun authFailureSetsCorrectConnectionState() {
+        val session = CompiLabSession()
+        session.selectTransport(LabTransport.WIFI_LAB)
+        val (epoch, _) = session.beginVerification()
+        session.failed(epoch, "ESP32 rechazó la operación: unauthorized")
+        assertEquals(LabConnectionState.AUTH_FAILED, session.connectionState)
     }
 }

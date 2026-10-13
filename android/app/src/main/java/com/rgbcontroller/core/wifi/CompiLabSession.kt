@@ -18,11 +18,26 @@ enum class LabTransport { BLUETOOTH, WIFI_LAB }
 enum class LabOperationPhase { IDLE, QUEUED, RUNNING, CONFIRMED, FAILED, CANCELLED }
 data class LabOperationStatus(val name: String, val phase: LabOperationPhase, val details: String = "")
 
+enum class LabConnectionState {
+    DISCONNECTED,
+    SOFTAP_DETECTED,
+    LOCAL_ROUTE_AVAILABLE,
+    CONTROL_KEY_REQUIRED,
+    VERIFYING,
+    AUTHORIZED,
+    AUTH_FAILED,
+    NETWORK_ERROR,
+    SESSION_EXPIRED
+}
+
 class CompiLabSession {
     private val networkMutex = Mutex()
     var operationStatus by mutableStateOf(LabOperationStatus("", LabOperationPhase.IDLE))
         private set
     private var latestOperationId = 0L
+
+    var connectionState by mutableStateOf(LabConnectionState.DISCONNECTED)
+        private set
 
     /**
      * User initiated commands are queued with the same mutex as background
@@ -84,6 +99,13 @@ class CompiLabSession {
         val sanitized = value.trim().take(16)
         if (sanitized != key) {
             key = sanitized
+            if (sanitized.length == 16 && LabAuthPolicy.validKey(sanitized)) {
+                connectionState = LabConnectionState.LOCAL_ROUTE_AVAILABLE
+                message = "Clave lista; presiona Conectar Wi-Fi."
+            } else {
+                connectionState = LabConnectionState.CONTROL_KEY_REQUIRED
+                message = "Introduce la clave local de 16 caracteres hexadecimales."
+            }
             invalidate("La clave cambió; vuelve a sincronizar el ESP32.")
         }
     }
@@ -91,20 +113,31 @@ class CompiLabSession {
     fun selectTransport(next: LabTransport) {
         if (transport != next) {
             transport = next
+            if (next == LabTransport.WIFI_LAB) {
+                connectionState = if (LabAuthPolicy.validKey(key)) LabConnectionState.LOCAL_ROUTE_AVAILABLE
+                else LabConnectionState.CONTROL_KEY_REQUIRED
+            } else {
+                connectionState = LabConnectionState.DISCONNECTED
+            }
             invalidate("Transporte cambiado; el último estado Wi-Fi requiere sincronización.")
         }
     }
 
     /** Increments revision so delayed responses cannot revive an invalid session. */
-    fun invalidate(reason: String = "Sesión Wi-Fi sin confirmar.") {
+    fun invalidate(reason: String = "Sesión Wi-Fi sin confirmar.", preserveErrorState: Boolean = false) {
         revision += 1
         wifiReady = false
         rgbState = null
         message = reason
+        if (transport == LabTransport.WIFI_LAB && !preserveErrorState) {
+            connectionState = if (LabAuthPolicy.validKey(key)) LabConnectionState.LOCAL_ROUTE_AVAILABLE
+            else LabConnectionState.CONTROL_KEY_REQUIRED
+        }
     }
 
     fun beginVerification(): Pair<Int, String> {
-        invalidate("Verificando la conexión con ESP32-Control-Lab…")
+        connectionState = LabConnectionState.VERIFYING
+        invalidate("Verificando la conexión con ESP32-Control-Lab…", preserveErrorState = true)
         return revision to key
     }
 
@@ -113,7 +146,8 @@ class CompiLabSession {
         wifiReady = true
         rgbState = state
         stateRevision += 1
-        message = "Estado RGB leído del ESP32; conexión de laboratorio confirmada."
+        connectionState = LabConnectionState.AUTHORIZED
+        message = "ESP32 autorizado · Estado RGB sincronizado."
         return true
     }
 
@@ -122,13 +156,20 @@ class CompiLabSession {
             !wifiReady) return false
         rgbState = state
         stateRevision += 1
+        connectionState = LabConnectionState.AUTHORIZED
         message = "Comando aplicado y estado leído del ESP32."
         return true
     }
 
     fun failed(epoch: Int, details: String) {
         if (epoch == revision && transport == LabTransport.WIFI_LAB) {
-            invalidate(details)
+            val targetState = if (details.contains("rechazó", ignoreCase = true) || details.contains("clave", ignoreCase = true)) {
+                LabConnectionState.AUTH_FAILED
+            } else {
+                LabConnectionState.NETWORK_ERROR
+            }
+            invalidate(details, preserveErrorState = true)
+            connectionState = targetState
         }
     }
 
@@ -137,6 +178,7 @@ class CompiLabSession {
         operationStatus = LabOperationStatus("", LabOperationPhase.IDLE)
         key = ""
         transport = LabTransport.BLUETOOTH
+        connectionState = LabConnectionState.DISCONNECTED
         invalidate("Sesión de laboratorio cerrada.")
     }
 }
