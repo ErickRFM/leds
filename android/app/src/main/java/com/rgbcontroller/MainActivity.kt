@@ -205,7 +205,8 @@ fun MainAppNavHost(
                     LedModuleScreen(bleManager, preferencesRepository, session,
                         onOpenDevices = { navController.navigate(Screen.Devices.route) })
                 }
-                composable(Screen.Code.route) { ProgramEditorScreen(session, bleManager) }
+                composable(Screen.Code.route) { ProgramEditorScreen(session, bleManager,
+                    onOpenModules = { navController.navigate(Screen.Modules.route) }) }
                 composable(Screen.Settings.route) {
                     SettingsScreen(bleManager, preferencesRepository,
                         onOpenHub = { navController.navigate(Screen.Hub.route) },
