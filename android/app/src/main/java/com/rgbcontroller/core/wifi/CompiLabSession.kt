@@ -39,6 +39,37 @@ class CompiLabSession {
     var connectionState by mutableStateOf(LabConnectionState.DISCONNECTED)
         private set
 
+    var isNetworkRouteAvailable by mutableStateOf(false)
+        private set
+
+    fun updateNetworkRouteAvailable(available: Boolean) {
+        if (isNetworkRouteAvailable != available) {
+            isNetworkRouteAvailable = available
+            reevaluateConnectionState()
+        }
+    }
+
+    private fun reevaluateConnectionState() {
+        if (transport != LabTransport.WIFI_LAB) {
+            connectionState = LabConnectionState.DISCONNECTED
+            return
+        }
+        if (!isNetworkRouteAvailable) {
+            connectionState = LabConnectionState.SOFTAP_DETECTED
+            message = "Red ESP32 no detectada o sin ruta 192.168.4.1."
+            return
+        }
+        if (!LabAuthPolicy.validKey(key)) {
+            connectionState = LabConnectionState.CONTROL_KEY_REQUIRED
+            message = "Red ESP32 detectada · Falta autorizar el control."
+            return
+        }
+        if (!wifiReady) {
+            connectionState = LabConnectionState.LOCAL_ROUTE_AVAILABLE
+            message = "Clave lista; presiona Conectar Wi-Fi."
+        }
+    }
+
     /**
      * User initiated commands are queued with the same mutex as background
      * readbacks, so a write and its confirmation cannot overlap a second HTTP
@@ -99,13 +130,7 @@ class CompiLabSession {
         val sanitized = value.trim().take(16)
         if (sanitized != key) {
             key = sanitized
-            if (sanitized.length == 16 && LabAuthPolicy.validKey(sanitized)) {
-                connectionState = LabConnectionState.LOCAL_ROUTE_AVAILABLE
-                message = "Clave lista; presiona Conectar Wi-Fi."
-            } else {
-                connectionState = LabConnectionState.CONTROL_KEY_REQUIRED
-                message = "Introduce la clave local de 16 caracteres hexadecimales."
-            }
+            reevaluateConnectionState()
             invalidate("La clave cambió; vuelve a sincronizar el ESP32.")
         }
     }
@@ -113,12 +138,7 @@ class CompiLabSession {
     fun selectTransport(next: LabTransport) {
         if (transport != next) {
             transport = next
-            if (next == LabTransport.WIFI_LAB) {
-                connectionState = if (LabAuthPolicy.validKey(key)) LabConnectionState.LOCAL_ROUTE_AVAILABLE
-                else LabConnectionState.CONTROL_KEY_REQUIRED
-            } else {
-                connectionState = LabConnectionState.DISCONNECTED
-            }
+            reevaluateConnectionState()
             invalidate("Transporte cambiado; el último estado Wi-Fi requiere sincronización.")
         }
     }
@@ -130,8 +150,7 @@ class CompiLabSession {
         rgbState = null
         message = reason
         if (transport == LabTransport.WIFI_LAB && !preserveErrorState) {
-            connectionState = if (LabAuthPolicy.validKey(key)) LabConnectionState.LOCAL_ROUTE_AVAILABLE
-            else LabConnectionState.CONTROL_KEY_REQUIRED
+            reevaluateConnectionState()
         }
     }
 
@@ -178,6 +197,7 @@ class CompiLabSession {
         operationStatus = LabOperationStatus("", LabOperationPhase.IDLE)
         key = ""
         transport = LabTransport.BLUETOOTH
+        isNetworkRouteAvailable = false
         connectionState = LabConnectionState.DISCONNECTED
         invalidate("Sesión de laboratorio cerrada.")
     }

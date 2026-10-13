@@ -14,9 +14,25 @@ import org.junit.Test
 class CompiLabSessionTest {
     private val red = RgbDeviceState(255, 0, 0, 255, true)
 
+    @Test fun validKeyWithoutNetworkRouteDoesNotProduceLocalRouteAvailable() {
+        val session = CompiLabSession()
+        session.selectTransport(LabTransport.WIFI_LAB)
+        assertFalse(session.isNetworkRouteAvailable)
+
+        // Valid 16-char hex key supplied without network route
+        session.updateKey("1234567890abcdef")
+        assertNotEquals(LabConnectionState.LOCAL_ROUTE_AVAILABLE, session.connectionState)
+        assertEquals(LabConnectionState.SOFTAP_DETECTED, session.connectionState)
+
+        // Establish network route
+        session.updateNetworkRouteAvailable(true)
+        assertEquals(LabConnectionState.LOCAL_ROUTE_AVAILABLE, session.connectionState)
+    }
+
     @Test fun keysStayInMemoryAndInvalidateReadiness() {
         val session = CompiLabSession()
         session.selectTransport(LabTransport.WIFI_LAB)
+        session.updateNetworkRouteAvailable(true)
         assertEquals(LabConnectionState.CONTROL_KEY_REQUIRED, session.connectionState)
         session.updateKey("1234567890abcdef")
         assertEquals(LabConnectionState.LOCAL_ROUTE_AVAILABLE, session.connectionState)
@@ -39,12 +55,14 @@ class CompiLabSessionTest {
     @Test fun lateTransportResponsesCannotReconnectWifi() {
         val session = CompiLabSession()
         session.selectTransport(LabTransport.WIFI_LAB)
+        session.updateNetworkRouteAvailable(true)
         session.updateKey("1234567890abcdef")
         val (epoch, key) = session.beginVerification()
         session.selectTransport(LabTransport.BLUETOOTH)
         assertFalse(session.verified(epoch, key, red))
         assertFalse(session.wifiReady)
         session.selectTransport(LabTransport.WIFI_LAB)
+        session.updateNetworkRouteAvailable(true)
         val (next, newKey) = session.beginVerification()
         assertTrue(session.verified(next, newKey, red))
         assertFalse(session.commandReadback(epoch, key, red))
@@ -99,6 +117,7 @@ class CompiLabSessionTest {
     @Test fun cancelledOrFailedRequestNeverClaimsReady() {
         val session = CompiLabSession()
         session.selectTransport(LabTransport.WIFI_LAB)
+        session.updateNetworkRouteAvailable(true)
         val (epoch, key) = session.beginVerification()
         session.failed(epoch, "connection failed")
         assertFalse(session.wifiReady)
@@ -109,6 +128,7 @@ class CompiLabSessionTest {
     @Test fun authFailureSetsCorrectConnectionState() {
         val session = CompiLabSession()
         session.selectTransport(LabTransport.WIFI_LAB)
+        session.updateNetworkRouteAvailable(true)
         val (epoch, _) = session.beginVerification()
         session.failed(epoch, "ESP32 rechazó la operación: unauthorized")
         assertEquals(LabConnectionState.AUTH_FAILED, session.connectionState)
