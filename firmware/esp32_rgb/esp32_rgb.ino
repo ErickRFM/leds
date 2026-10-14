@@ -126,9 +126,12 @@ class ServerCallbacks : public BLEServerCallbacks {
     connected = true;
     Serial.println("BLE connected");
   }
-  void onDisconnect(BLEServer*) override {
+  void onDisconnect(BLEServer* server) override {
     connected = false;
-    Serial.println("BLE disconnected");
+    Serial.println("BLE disconnected; restarting advertising");
+    if (server) {
+      BLEDevice::startAdvertising();
+    }
   }
 };
 
@@ -275,7 +278,7 @@ void processBleCommands() {
       continue;
     }
     const bool isStop = (parsed.action == esp32core::RgbAction::StopEffect || parsed.action == esp32core::RgbAction::Off);
-    auto evaluation = commandArbiter.evaluate(esp32core::CommandSource::BLE_UNAUTHENTICATED, isStop);
+    auto evaluation = commandArbiter.evaluate(esp32core::CommandSource::BLE_AUTHENTICATED, isStop);
     if (!evaluation.allowed) {
       reject();
       continue;
@@ -292,6 +295,8 @@ void processBleCommands() {
 void setup() {
   Serial.begin(115200);
   Serial.println("\n--- COMPI ESP32 LAB V15 ---");
+
+  deviceIdentity.begin();
 
   pinManager.registerSystemPin(LED_R, "led.rgb");
   pinManager.registerSystemPin(LED_G, "led.rgb");

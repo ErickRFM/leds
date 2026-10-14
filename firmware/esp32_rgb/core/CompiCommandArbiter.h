@@ -7,7 +7,7 @@ namespace esp32core {
  * Thread-safe, deterministic command arbiter for the ESP32 laboratory.
  * Coordinates execution priority across BLE GATT, Wi-Fi SoftAP, active RGB scripts,
  * and background automations to ensure unauthenticated channels cannot disrupt
- * active protected operations.
+ * active protected operations or alter hardware without authorization.
  */
 enum class CommandSource : uint8_t {
   BLE_UNAUTHENTICATED = 0,
@@ -42,33 +42,26 @@ class CompiCommandArbiter final {
 
   /**
    * Evaluates whether an incoming command request from a specific source
-   * is allowed to execute given the current active mode.
+   * is allowed to execute given the current active mode and channel authorization.
    */
   ArbiterResult evaluate(CommandSource source, bool isEmergencyStop = false) const {
     if (isEmergencyStop) {
-      // Emergency stop from any local route or authenticated BLE is always allowed.
       if (source == CommandSource::WIFI_SOFTAP_LOCAL ||
           source == CommandSource::BLE_AUTHENTICATED) {
         return {true, "Emergency stop accepted"};
       }
     }
 
+    // Unauthenticated BLE writes cannot alter hardware, scripts or automations.
+    if (source == CommandSource::BLE_UNAUTHENTICATED) {
+      return {false, "Operation rejected: unauthenticated BLE channel"};
+    }
+
     if (currentMode_ == ActiveMode::SCRIPT_RUNNING || currentMode_ == ActiveMode::AUTOMATION_ACTIVE) {
-      // Unauthenticated BLE writes cannot interrupt or alter active scripts or automations.
-      if (source == CommandSource::BLE_UNAUTHENTICATED) {
-        return {false, "Operation rejected: active protected task running under Wi-Fi/Script authority"};
-      }
-      // Wi-Fi SoftAP local requests and authenticated BLE requests can override if explicitly authorized.
       if (source == CommandSource::WIFI_SOFTAP_LOCAL || source == CommandSource::BLE_AUTHENTICATED) {
         return {true, "Authorized override accepted"};
       }
       return {false, "Operation conflict with active background task"};
-    }
-
-    // When IDLE or in MANUAL_CONTROL, authenticated Wi-Fi and BLE operations are permitted.
-    if (source == CommandSource::BLE_UNAUTHENTICATED && currentMode_ == ActiveMode::MANUAL_CONTROL &&
-        currentOwner_ == CommandSource::WIFI_SOFTAP_LOCAL) {
-      return {false, "Operation rejected: manual control locked by active Wi-Fi session"};
     }
 
     return {true, "Command permitted"};

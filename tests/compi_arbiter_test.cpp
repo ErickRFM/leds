@@ -9,12 +9,19 @@ using esp32core::ActiveMode;
 int main() {
   CompiCommandArbiter arbiter;
 
-  // 1. Initially IDLE, any source can issue commands
+  // 1. Unauthenticated BLE is rejected by default
   assert(arbiter.currentMode() == ActiveMode::IDLE);
   auto res1 = arbiter.evaluate(CommandSource::BLE_UNAUTHENTICATED);
-  assert(res1.allowed);
+  assert(!res1.allowed);
 
-  // 2. Active script running under Wi-Fi SoftAP ownership
+  // 2. Authenticated Wi-Fi SoftAP and Authenticated BLE commands are permitted when IDLE
+  auto resWifi = arbiter.evaluate(CommandSource::WIFI_SOFTAP_LOCAL);
+  assert(resWifi.allowed);
+
+  auto resBleAuth = arbiter.evaluate(CommandSource::BLE_AUTHENTICATED);
+  assert(resBleAuth.allowed);
+
+  // 3. Active script running under Wi-Fi SoftAP ownership
   arbiter.setActiveMode(ActiveMode::SCRIPT_RUNNING, CommandSource::WIFI_SOFTAP_LOCAL);
   assert(arbiter.currentMode() == ActiveMode::SCRIPT_RUNNING);
 
@@ -30,7 +37,7 @@ int main() {
   auto res4 = arbiter.evaluate(CommandSource::WIFI_SOFTAP_LOCAL, true);
   assert(res4.allowed);
 
-  // 3. Reset arbiter
+  // 4. Reset arbiter
   arbiter.reset();
   assert(arbiter.currentMode() == ActiveMode::IDLE);
 
