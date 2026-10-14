@@ -491,8 +491,7 @@ void setup() {
   publicIdChar->setValue(publicId.c_str());
 
   gpioStatusCharacteristic = service->createCharacteristic(
-      GPIO_STATUS_UUID,
-      BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
+      GPIO_STATUS_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
   gpioStatusCharacteristic->addDescriptor(new BLE2902());
 
   service->start();
