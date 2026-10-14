@@ -73,6 +73,12 @@ class LocalLabClient(private val context: Context) {
         return request("GET", "/v2/adc/read?pin=" + pin, key)
     }
     suspend fun resetPins(key: String) = request("POST", "/v2/gpio/reset", key)
+    /** Declarative component catalog advertised by the firmware (metadata only). */
+    suspend fun componentCatalog(key: String): JSONObject =
+        request("GET", "/v2/components/catalog", key)
+    /** Freshest read-only telemetry from active components; never fabricated. */
+    suspend fun componentTelemetry(key: String): JSONObject =
+        request("GET", "/v2/components/telemetry", key)
     suspend fun blink(key: String, pin: Int, intervalMs: Int, cycles: Int): JSONObject {
         require(allowedOutput(pin) && pin !in setOf(25,26,27))
         require(intervalMs in 100..2000 && cycles in 1..20)

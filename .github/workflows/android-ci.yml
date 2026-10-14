@@ -67,6 +67,10 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/gpio_telemetry_codec_test.cpp -o /tmp/gpio_telemetry_codec_test
           /tmp/gpio_telemetry_codec_test
+      - name: Modular hardware component library host tests
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/component_modules_test.cpp -o /tmp/component_modules_test
+          /tmp/component_modules_test
 
       - name: Read-only diagnostics security contract
         run: python3 scripts/check-diagnostics-contract.py
