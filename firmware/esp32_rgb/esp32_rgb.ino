@@ -456,15 +456,15 @@ void setup() {
     rgb.r = 255; rgb.g = 255; rgb.b = 255; rgb.brightness = 255; rgb.power = true;
   }
 
-  moduleRegistry.registerModule(&rgbModule);
+  moduleRegistry.add(rgbModule);
 #if COMPI_ENABLE_DHT22
-  moduleRegistry.registerModule(&dht22Module);
+  moduleRegistry.add(dht22Module);
 #endif
 #if COMPI_ENABLE_SOIL
-  moduleRegistry.registerModule(&soilModule);
+  moduleRegistry.add(soilModule);
 #endif
 #if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
-  moduleRegistry.registerModule(&oledModule);
+  moduleRegistry.add(oledModule);
 #endif
   moduleRegistry.startAll(pinManager);
 
@@ -472,6 +472,9 @@ void setup() {
   wifiLab.begin();
 
   BLEDevice::init(DEVICE_NAME);
+  // STATE frames can be longer than the 20-byte default notification payload.
+  // Android requests 128 as well; peers must negotiate before subscribing.
+  BLEDevice::setMTU(128);
   BLEServer* server = BLEDevice::createServer();
   server->setCallbacks(new ServerCallbacks());
   BLEService* service = server->createService(SERVICE_UUID);
@@ -510,7 +513,7 @@ void loop() {
   uint32_t now = millis();
   processBleCommands();
   wifiLab.tick(now);
-  moduleRegistry.tickAll(now);
+  moduleRegistry.tickAll(millis());
   persistRgbIfDue(now);
 
   if (now - lastGpioBleUpdateMs >= 1000) {
