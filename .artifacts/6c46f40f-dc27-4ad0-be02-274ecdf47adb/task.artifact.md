@@ -1,7 +1,11 @@
-# Tasks - Compi V15 CI Recovery & Refactoring
+# Tasks - Compi V15 Master Integration (Phases 03–13)
 
-- [x] Fix `tests/rgb_script_runtime_test.cpp` to advance ticks sequentially across the 10 wait steps `[id: 1]`
-- [x] Remove all string-matching decisions (`contains("rechazó")`, `contains("clave")`) in `CompiLabSession.kt` in favor of explicit typed `LabHttpException` handling `[id: 2]`
-- [x] Run local Android build verification, unit tests, and assemble debug APK (`app-debug.apk`) `[id: 3]`
-- [x] Commit, push to `origin/main` (`42191c1`), and verify new HEAD SHA `[id: 4]`
-- [x] Provide technical walkthrough report `[id: 5]`
+- [/] Phase 03: Firmware Central Command Arbiter (`esp32_rgb.ino`, `CompiCommandArbiter.h`) `[id: 1]`
+- [ ] Phase 04: BLE Security & GATT Protection (`esp32_rgb.ino`, `BleManager.kt`) `[id: 2]`
+- [ ] Phase 05: Asynchronous Non-Blocking Wi-Fi Scan (`LocalWifiControl.h`) `[id: 3]`
+- [ ] Phase 06: Android BLE Concurrency & GATT Serializer Hardening (`BleManager.kt`) `[id: 4]`
+- [ ] Phase 07–09: HTTP Hardening, NVS Wear-Leveling, Shared Kotlin/C++ Test Vectors `[id: 5]`
+- [ ] Phase 10–12: Android Architecture Refactoring, CI Pipeline Expansion, UX/UI Status Sync `[id: 6]`
+- [ ] Phase 13: Local build verification, unit tests, debug APK generation with SHA-256 calculation `[id: 7]`
+- [ ] Git commit, push feature branch, PR merge into `main`, and verify origin `[id: 8]`
+- [ ] Final delivery report with commit SHA, CI status, and artifact details `[id: 9]`

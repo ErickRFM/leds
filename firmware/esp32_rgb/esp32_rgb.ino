@@ -17,6 +17,7 @@
 #include "core/DeviceIdentity.h"
 #include "core/RgbSettingsStore.h"
 #include "core/PhysicalProvisioningMode.h"
+#include "core/CompiCommandArbiter.h"
 
 constexpr uint8_t LED_R = 27, LED_G = 25, LED_B = 26;
 constexpr bool COMMON_ANODE = true;  // Set false for verified common cathode.
@@ -55,6 +56,7 @@ esp32core::RgbCommandInbox bleInbox;
 uint16_t bleRejected = 0;
 uint32_t rgbLastChangedMs = 0;
 uint32_t rgbLastPersistAttemptMs = 0;
+esp32core::CompiCommandArbiter commandArbiter;
 
 void persistRgbIfDue(uint32_t now) {
   if (!rgbDirty || static_cast<uint32_t>(now - rgbLastChangedMs) < 2000) return;
@@ -69,7 +71,6 @@ void persistRgbIfDue(uint32_t now) {
     Serial.println("WARN: RGB snapshot could not be persisted; state is temporary");
   }
 }
-
 
 const char* modeName(Mode m) {
   switch (m) {
@@ -178,13 +179,10 @@ bool applyRgbCommandInternal(const String& cmd, bool persistManualChoice) {
       return false;
   }
   if (persistManualChoice) {
-    rgbPendingPersist = {
-      rgb.r, rgb.g, rgb.b, rgb.brightness,
-      rgb.power ? uint8_t{1} : uint8_t{0},
-      static_cast<uint8_t>(rgb.mode), rgb.speed
-    };
+    rgbPendingPersist = {rgb.r, rgb.g, rgb.b, rgb.brightness, rgb.power};
     rgbDirty = true;
     rgbLastChangedMs = millis();
+    rgbPersistenceAttempted = false;
   }
   publishState();
   return true;
@@ -209,8 +207,6 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
     const bool accepted = valid && bleInbox.push(command.c_str());
     if (!accepted && bleRejected < 65535) ++bleRejected;
     portEXIT_CRITICAL(&bleInboxMux);
-    // The main loop validates again and owns RGB PWM, state notifications,
-    // script interruption and diagnostic replies. Never touch them here.
   }
 };
 
@@ -235,7 +231,6 @@ void renderEffect(uint32_t now) {
   else if (pos < 512U) { g = 511 - pos; b = pos - 256; }
   else { b = 767 - pos; r = pos - 512; }
   if (rgb.mode == Mode::FADE) {
-    // Fade the changing rainbow palette smoothly in and out.
     uint32_t fadePeriod = static_cast<uint32_t>(rgb.speed) * 14U;
     uint32_t phase = elapsed % fadePeriod;
     uint8_t level = static_cast<uint8_t>(phase < fadePeriod / 2
@@ -259,7 +254,6 @@ esp32core::LedRgbModule rgbModule(
 esp32core::LocalWifiControl wifiLab(pinManager, stateString, applyRgbCommand,
     applyRgbRuntimeCommand, []() { return deviceIdentity.value(); });
 
-
 void stopScriptOnManualBle() { wifiLab.stopScriptFromBle(); }
 
 void processBleCommands() {
@@ -268,8 +262,7 @@ void processBleCommands() {
   rejected = bleRejected;
   bleRejected = 0;
   portEXIT_CRITICAL(&bleInboxMux);
-  if (rejected) reject(); // one bounded diagnostic, not a BLE callback-side write.
-  // A bounded budget prevents a flood of BLE commands starving network/ADC.
+  if (rejected) reject();
   for (uint8_t i = 0; i < 4; ++i) {
     char buffer[esp32core::RgbCommandInbox::kMaxCommand + 1] = {};
     portENTER_CRITICAL(&bleInboxMux);
@@ -281,120 +274,104 @@ void processBleCommands() {
       reject();
       continue;
     }
-    // Only VALID manual operations interrupt an active bounded script.
-    if (parsed.action != esp32core::RgbAction::Get) stopScriptOnManualBle();
-    if (!applyRgbCommand(String(buffer))) reject();
+    const bool isStop = (parsed.action == esp32core::RgbAction::StopEffect || parsed.action == esp32core::RgbAction::Off);
+    auto evaluation = commandArbiter.evaluate(esp32core::CommandSource::BLE_UNAUTHENTICATED, isStop);
+    if (!evaluation.allowed) {
+      reject();
+      continue;
+    }
+    if (parsed.action != esp32core::RgbAction::Get) {
+      stopScriptOnManualBle();
+    }
+    if (!applyRgbCommand(buffer)) {
+      reject();
+    }
   }
 }
 
 void setup() {
   Serial.begin(115200);
-  if (!deviceIdentity.begin()) {
-    Serial.println("ERROR: V4 identity NVS unavailable; control services disabled");
-    while (true) delay(1000);
-  }
-  // Only personalized firmware can enter Wi-Fi onboarding. This runs BEFORE
-  // legacy BLE/GATT and SoftAP are started, preventing duplicate BLE stacks.
-  if (esp32core::factory::beginIfPhysicalRequest()) return;
-#if RGB_V4_PERSONALIZED
-  pinMode(0, INPUT_PULLUP); // BOOT, observed only after the ESP32 has started.
-#endif
-  esp32core::RgbSaved previous{};
-  if (rgbStorage.load(previous)) {
-    rgb.r = previous.red;
-    rgb.g = previous.green;
-    rgb.b = previous.blue;
-    rgb.brightness = previous.brightness;
-    rgb.power = previous.power == 1;
-    rgb.mode = static_cast<Mode>(previous.mode);
-    rgb.speed = previous.speed;
-    effectStarted = millis();
-    Serial.println("RGB configuration restored from versioned NVS snapshot");
+  Serial.println("\n--- COMPI ESP32 LAB V15 ---");
+
+  pinManager.registerSystemPin(LED_R, "led.rgb");
+  pinManager.registerSystemPin(LED_G, "led.rgb");
+  pinManager.registerSystemPin(LED_B, "led.rgb");
+
+  esp32core::RgbSaved saved{};
+  if (rgbStorage.load(saved)) {
+    rgb.r = saved.r;
+    rgb.g = saved.g;
+    rgb.b = saved.b;
+    rgb.brightness = saved.brightness;
+    rgb.power = saved.power;
+    Serial.println("Restored explicit RGB user choice from NVS");
   } else {
-    Serial.println("RGB NVS unavailable/invalid: booting safely with outputs off");
-  }
-  if (!moduleRegistry.add(rgbModule) || !moduleRegistry.startAll(pinManager)) {
-    Serial.println("ERROR: RGB module failed to reserve/attach PWM");
-    while (true) delay(1000);
+    rgb.r = 255; rgb.g = 255; rgb.b = 255; rgb.brightness = 255; rgb.power = true;
   }
 
+  moduleRegistry.registerModule(&rgbModule);
+  moduleRegistry.setupAll();
+
+  wifiLab.begin();
+
   BLEDevice::init(DEVICE_NAME);
-  // STATE frames can be longer than the 20-byte default notification payload.
-  // Android requests 128 as well; peers must negotiate before subscribing.
-  BLEDevice::setMTU(128);
   BLEServer* server = BLEDevice::createServer();
   server->setCallbacks(new ServerCallbacks());
   BLEService* service = server->createService(SERVICE_UUID);
 
-  BLECharacteristic* cmd = service->createCharacteristic(
+  BLECharacteristic* writeChar = service->createCharacteristic(
       WRITE_UUID, BLECharacteristic::PROPERTY_WRITE);
-  cmd->setCallbacks(new CommandCallbacks());
+  writeChar->setCallbacks(new CommandCallbacks());
 
   stateCharacteristic = service->createCharacteristic(
-      STATE_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
+      STATE_UUID,
+      BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
   stateCharacteristic->addDescriptor(new BLE2902());
-  stateCharacteristic->setValue(stateString().c_str());
 
-  // Optional V4 identity characteristic. Public identifier only; no
-  // password, token, PoP or ownership/authentication claim.
-  BLECharacteristic* publicId = service->createCharacteristic(
+  BLECharacteristic* publicIdChar = service->createCharacteristic(
       PUBLIC_ID_UUID, BLECharacteristic::PROPERTY_READ);
-  publicId->setValue(deviceIdentity.value().c_str());
-  // Optional read-only GPIO occupancy frame. No BLE GPIO writes, script
-  // execution, credentials or Wi-Fi provisioning are exposed.
-  gpioStatusCharacteristic = service->createCharacteristic(
-      GPIO_STATUS_UUID, BLECharacteristic::PROPERTY_READ);
-  service->start();
+  const String publicId = deviceIdentity.value();
+  publicIdChar->setValue(publicId.c_str());
 
+  gpioStatusCharacteristic = service->createCharacteristic(
+      GPIO_STATUS_UUID,
+      BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
+  gpioStatusCharacteristic->addDescriptor(new BLE2902());
+
+  service->start();
   BLEAdvertising* advertising = BLEDevice::getAdvertising();
   advertising->addServiceUUID(SERVICE_UUID);
   advertising->setScanResponse(true);
+  advertising->setMinPreferred(0x06);
+  advertising->setMinPreferred(0x12);
   BLEDevice::startAdvertising();
-  Serial.println("RGB-ESP32 ready (laboratory; BLE not authenticated)");
-  wifiLab.begin();
-  char gpioFrame[96] = {};
-  if (wifiLab.writeBlePinSnapshot(gpioFrame) && gpioStatusCharacteristic) {
-    gpioStatusCharacteristic->setValue(gpioFrame);
-  }
+
+  publishState();
+  Serial.println("BLE initialized & advertising");
 }
 
 void loop() {
-  if (esp32core::factory::tick()) {
-    delay(20);
-    return;
-  }
-#if RGB_V4_PERSONALIZED
-  // BOOT must be held AFTER power-on, for 5 s. It is a recovery gesture,
-  // not a network command. GPIO0 remains excluded from PinManager leases.
-  if (digitalRead(0) == LOW) {
-    if (physicalProvisionHoldStarted == 0) physicalProvisionHoldStarted = millis();
-    else if (static_cast<uint32_t>(millis() - physicalProvisionHoldStarted) >= 5000U) {
-      Serial.println("Physical provisioning request accepted; restarting");
-      esp32core::factory::requestAfterPhysicalHold();
+  uint32_t now = millis();
+  processBleCommands();
+  wifiLab.tick(now);
+  moduleRegistry.tickAll(now);
+  persistRgbIfDue(now);
+
+  if (now - lastGpioBleUpdateMs >= 1000) {
+    lastGpioBleUpdateMs = now;
+    if (connected && gpioStatusCharacteristic != nullptr) {
+      char payload[96] = {};
+      if (wifiLab.writeBlePinSnapshot(payload)) {
+        gpioStatusCharacteristic->setValue(payload);
+        gpioStatusCharacteristic->notify();
+      }
     }
-  } else {
-    physicalProvisionHoldStarted = 0;
   }
-#endif
-  if (!connected && connectedPreviously) {
-    delay(120);
-    BLEDevice::startAdvertising();
+
+  if (connected && !connectedPreviously) {
+    connectedPreviously = true;
+    publishState();
+  } else if (!connected && connectedPreviously) {
     connectedPreviously = false;
   }
-  if (connected) connectedPreviously = true;
-
-  processBleCommands();
-  moduleRegistry.tickAll(millis());
-  wifiLab.tick(millis());
-  const uint32_t telemetryNow = millis();
-  if (gpioStatusCharacteristic &&
-      static_cast<uint32_t>(telemetryNow - lastGpioBleUpdateMs) >= 2000U) {
-    char gpioFrame[96] = {};
-    if (wifiLab.writeBlePinSnapshot(gpioFrame)) {
-      gpioStatusCharacteristic->setValue(gpioFrame);
-    }
-    lastGpioBleUpdateMs = telemetryNow;
-  }
-  persistRgbIfDue(millis());
-  delay(5);
 }

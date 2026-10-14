@@ -60,9 +60,8 @@ class LocalWifiControl final {
     Serial.print("App pairing key (not Wi-Fi password): ");
     Serial.println(accessKey_);
     Serial.println("Use only for local bench testing; no TLS / no WAN.");
-    // Try any previously provisioned station credentials. This must not
-    // block the protected SoftAP or legacy BLE initialization.
     WiFi.begin();
+
     server_.on("/v2/status", HTTP_GET, [this]() {
       if (!authorized()) return;
       String json = "{\"version\":2,\"uptimeMs\":" + String(millis()) +
@@ -75,8 +74,7 @@ class LocalWifiControl final {
         ",\"experimentActive\":" + String(experiment_.active() ? "true":"false") + "}";
       server_.send(200, "application/json", json);
     });
-    // Read-only, authenticated and bound to the local lab SoftAP interface.
-    // No MAC, SSID, keys or credentials are included in this diagnostic payload.
+
     server_.on("/v2/diagnostics", HTTP_GET, [this]() {
       if (!authorized()) return;
       const int32_t signal = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
@@ -91,9 +89,7 @@ class LocalWifiControl final {
       body += ",\"leasedPins\":" + String(pins_.leasedCount()) + "}";
       server_.send(200, "application/json", body);
     });
-    // A non-secret NVS-stable identifier for compatibility/migration diagnostics.
-    // This endpoint is behind existing SoftAP-only lab authorization. It NEVER
-    // grants ownership or announces that BLE control is protected.
+
     server_.on("/v2/identity", HTTP_GET, [this]() {
       if (!authorized()) return;
       String body = "{\"schemaVersion\":4,\"deviceId\":\"" +
@@ -102,8 +98,7 @@ class LocalWifiControl final {
         "\"ownerBound\":false}";
       server_.send(200, "application/json", body);
     });
-    // Versioned, truthful feature negotiation. This is diagnostic metadata,
-    // NOT evidence of ownership or secure BLE authorization.
+
     server_.on("/v2/capabilities", HTTP_GET, [this]() {
       if (!authorized()) return;
       const uint32_t features =
@@ -113,8 +108,6 @@ class LocalWifiControl final {
           capabilityBit(Capability::Adc) |
           capabilityBit(Capability::Sequences) |
           capabilityBit(Capability::Diagnostics);
-      // In particular: do not advertise SecurePairing, FirmwareUpdate,
-      // Automation or SerialMonitor before the corresponding gates pass.
       const BoardProfile profile = {1, 1, ESP.getFlashChipSize(), features, 0};
       if (!validProfile(profile)) { jsonError(500, "invalid_capability_profile"); return; }
       String body = "{\"protocolMajor\":" + String(profile.protocolMajor);
@@ -125,6 +118,7 @@ class LocalWifiControl final {
       body += ",\"runtime\":\"lab\"}";
       server_.send(200, "application/json", body);
     });
+
     server_.on("/v2/firmware", HTTP_GET, [this]() {
       if (!authorized()) return;
       const esp_partition_t* current = esp_ota_get_running_partition();
@@ -143,21 +137,39 @@ class LocalWifiControl final {
       body += ",\"otaUploadEnabled\":false}";
       server_.send(200, "application/json", body);
     });
+
+    // Non-blocking asynchronous Wi-Fi scan state machine
     server_.on("/v2/wifi/scan", HTTP_GET, [this]() {
       if (!authorized()) return;
-      int count = WiFi.scanNetworks(false, true);
-      if (count < 0) { jsonError(503, "scan_failed"); return; }
-      String body = "{\"networks\":[";
-      for (int i = 0; i < count && i < 24; ++i) {
-        if (i) body += ",";
-        body += "{\"ssid\":\"" + escape(WiFi.SSID(i)) + "\",\"rssi\":" +
-          String(WiFi.RSSI(i)) + ",\"secure\":" +
-          String(WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "false" : "true") + "}";
+      int status = WiFi.scanComplete();
+      if (status == WIFI_SCAN_RUNNING) {
+        server_.send(202, "application/json", "{\"status\":\"SCANNING\"}");
+        return;
       }
-      body += "]}";
-      WiFi.scanDelete();
-      server_.send(200, "application/json", body);
+      if (status == WIFI_SCAN_FAILED) {
+        WiFi.scanDelete();
+        WiFi.scanNetworks(true, true); // Initiate new async scan
+        server_.send(202, "application/json", "{\"status\":\"SCANNING\"}");
+        return;
+      }
+      if (status >= 0) {
+        String body = "{\"status\":\"READY\",\"networks\":[";
+        for (int i = 0; i < status && i < 24; ++i) {
+          if (i) body += ",";
+          body += "{\"ssid\":\"" + escape(WiFi.SSID(i)) + "\",\"rssi\":" +
+            String(WiFi.RSSI(i)) + ",\"secure\":" +
+            String(WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "false" : "true") + "}";
+        }
+        body += "]}";
+        WiFi.scanDelete();
+        server_.send(200, "application/json", body);
+        return;
+      }
+      // Start new async scan if IDLE
+      WiFi.scanNetworks(true, true);
+      server_.send(202, "application/json", "{\"status\":\"SCANNING\"}");
     });
+
     server_.on("/v2/wifi/connect", HTTP_POST, [this]() {
       if (!authorized()) return;
       String ssid = server_.arg("ssid");
@@ -166,12 +178,10 @@ class LocalWifiControl final {
           (!password.isEmpty() && (password.length() < 8 || password.length() > 63))) {
         jsonError(400, "invalid_wifi_credentials"); return;
       }
-      // Never log or echo submitted router credentials.
       WiFi.begin(ssid.c_str(), password.c_str());
       server_.send(202, "application/json", "{\"status\":\"connecting\"}");
     });
-    // Live firmware resource ownership; this does NOT validate physical wiring.
-    // Authenticated laboratory SoftAP only. Do not expose unsafe BLE GPIO writes.
+
     server_.on("/v2/gpio/status", HTTP_GET, [this]() {
       if (!authorized()) return;
       static constexpr uint8_t reported[] = {18,19,21,22,23,25,26,27,32,33,34,35,36,39};
@@ -206,6 +216,7 @@ class LocalWifiControl final {
       body += "]}";
       server_.send(200, "application/json", body);
     });
+
     server_.on("/v2/gpio/write", HTTP_POST, [this]() {
       if (!authorized()) return;
       int pin = -1, value = -1;
@@ -213,8 +224,6 @@ class LocalWifiControl final {
           !PinManager::canUse(pin, PinFunction::DigitalOutput)) {
         jsonError(400, "invalid_gpio"); return;
       }
-      // Restrict experimental outputs further until the exact ESP32 module
-      // and PSRAM/peripheral pin assignments are confirmed on the bench.
       if (!manualOutputAllowed(pin)) {
         jsonError(403, "gpio_not_approved"); return;
       }
@@ -230,6 +239,7 @@ class LocalWifiControl final {
       manualLevels_[pin] = value != 0;
       server_.send(200, "application/json", "{\"status\":\"APPLIED\"}");
     });
+
     server_.on("/v2/gpio/read", HTTP_GET, [this]() {
       if (!authorized()) return;
       int pin = -1;
@@ -247,6 +257,7 @@ class LocalWifiControl final {
       server_.send(200, "application/json", "{\"pin\":" + String(pin) +
                    ",\"value\":" + String(value) + "}");
     });
+
     server_.on("/v2/adc/read", HTTP_GET, [this]() {
       if (!authorized()) return;
       int pin = -1;
@@ -262,11 +273,13 @@ class LocalWifiControl final {
       server_.send(200, "application/json", "{\"pin\":" + String(pin) +
                    ",\"raw\":" + String(raw) + "}");
     });
+
     server_.on("/v2/gpio/reset", HTTP_POST, [this]() {
       if (!authorized()) return;
       releaseManual();
       server_.send(200, "application/json", "{\"status\":\"RESET\"}");
     });
+
     server_.on("/v2/lab/blink", HTTP_POST, [this]() {
       if (!authorized()) return;
       int pin = -1, interval = -1, count = -1;
@@ -280,6 +293,7 @@ class LocalWifiControl final {
       }
       server_.send(202, "application/json", "{\"status\":\"RUNNING\"}");
     });
+
     server_.on("/v2/lab/sequence", HTTP_POST, [this]() {
       if (!authorized()) return;
       int pin = -1;
@@ -313,13 +327,13 @@ class LocalWifiControl final {
       }
       server_.send(202, "application/json", "{\"status\":\"RUNNING\"}");
     });
+
     server_.on("/v2/lab/stop", HTTP_POST, [this]() {
       if (!authorized()) return;
       experiment_.stop(pins_);
       server_.send(200, "application/json", "{\"status\":\"STOPPED\"}");
     });
-    // Bounded laboratory automation. No persistence, no native code, no public LAN.
-    // Up to 10 on/off cycles and at most 20 minutes. No endless GPIO activity.
+
     server_.on("/v2/automation/status", HTTP_GET, [this]() {
       if (!authorized()) return;
       String body = "{\"version\":1,\"active\":" +
@@ -328,6 +342,7 @@ class LocalWifiControl final {
         ",\"remainingTransitions\":" + String(automationEdges_) + "}";
       server_.send(200, "application/json", body);
     });
+
     server_.on("/v2/automation/start", HTTP_POST, [this]() {
       if (!authorized()) return;
       int seconds = 0, cycles = 0, startOn = 0;
@@ -346,14 +361,14 @@ class LocalWifiControl final {
       automationEdges_ = static_cast<uint8_t>(cycles * 2);
       server_.send(202, "application/json", "{\"status\":\"RUNNING\"}");
     });
+
     server_.on("/v2/automation/stop", HTTP_POST, [this]() {
       if (!authorized()) return;
       automation_.stop();
       automationEdges_ = 0;
       server_.send(200, "application/json", "{\"status\":\"STOPPED\"}");
     });
-    // V4 bounded RGB scripts: no native code, direct GPIO or firmware writes.
-    // Lab SoftAP only. A physical/manual RGB command interrupts the script.
+
     server_.on("/v2/script/status", HTTP_GET, [this]() {
       if (!authorized()) return;
       server_.send(200, "application/json",
@@ -361,6 +376,7 @@ class LocalWifiControl final {
         ",\"step\":" + String(script_.instructionIndex()) +
         ",\"total\":" + String(script_.instructionCount()) + "}");
     });
+
     server_.on("/v2/script/run", HTTP_POST, [this]() {
       if (!authorized()) return;
       if (script_.active() || experiment_.active() || automation_.active()) {
@@ -377,11 +393,13 @@ class LocalWifiControl final {
       }
       server_.send(202, "application/json", "{\"status\":\"ACCEPTED\"}");
     });
+
     server_.on("/v2/script/stop", HTTP_POST, [this]() {
       if (!authorized()) return;
-      script_.stop(); // Leave the last RGB state, never stop BLE or Wi-Fi.
+      script_.stop();
       server_.send(200, "application/json", "{\"status\":\"STOPPED\"}");
     });
+
     server_.on("/v2/led/command", HTTP_POST, [this]() {
       if (!authorized()) return;
       String cmd = server_.arg("command");
@@ -392,9 +410,8 @@ class LocalWifiControl final {
       if (!esp32core::parseRgbCommand(cmd.c_str(), parsed)) {
         jsonError(400, "invalid_rgb_command"); return;
       }
-      // Invalid commands, including malformed FX/SET, must not cancel scripts.
       if (parsed.action != esp32core::RgbAction::Get) {
-        script_.stop(); // A VALID manual RGB operation takes priority.
+        script_.stop();
         automation_.stop();
         automationEdges_ = 0;
       }
@@ -403,10 +420,12 @@ class LocalWifiControl final {
       }
       server_.send(200, "application/json", "{\"status\":\"APPLIED\"}");
     });
+
     server_.onNotFound([this]() {
       if (!authorized()) return;
       jsonError(404, "not_found");
     });
+
     const char* acceptedHeaders[] = {"X-Device-Key"};
     server_.collectHeaders(acceptedHeaders, 1);
     server_.begin();
@@ -422,14 +441,11 @@ class LocalWifiControl final {
       const auto action = automation_.tick(nowMs);
       if (action != RgbAutomationClock::Result::None) {
         const char* command = action == RgbAutomationClock::Result::TurnOn ? "ON" : "OFF";
-        // Count every logical interval, including those skipped while a
-        // network request blocked the main loop. A delayed tick never extends
-        // the configured automation beyond its time budget.
         const uint32_t consumed = automation_.advancedIntervals();
         if (consumed >= automationEdges_) {
           automation_.stop();
           automationEdges_ = 0;
-          rgbRuntime_(String("OFF")); // Safe dark LED even on a very late tick.
+          rgbRuntime_(String("OFF"));
         } else if (!rgbRuntime_(String(command))) {
           automation_.stop();
           automationEdges_ = 0;
@@ -441,13 +457,12 @@ class LocalWifiControl final {
     }
     experiment_.tick(pins_, nowMs);
     if (hasManual() && static_cast<uint32_t>(nowMs - manualTouched_) >= 30000U) {
-      releaseManual();  // Fail-safe bench timeout for manually controlled pins.
+      releaseManual();
     }
   }
 
   void stopScriptFromBle() { script_.stop(); automation_.stop(); automationEdges_ = 0; }
 
-  /** Compact read-only BLE GPIO snapshot, computed on Arduino loop only. */
   bool writeBlePinSnapshot(char (&output)[96]) const {
     return GpioTelemetryCodec::encode(pins_, manualLevels_, output, sizeof(output));
   }
@@ -498,7 +513,6 @@ class LocalWifiControl final {
     return out;
   }
   bool authorized() {
-    // Both remote subnet AND local interface must be AP, not station.
     if (server_.client().localIP() != WiFi.softAPIP() ||
         server_.header("X-Device-Key") != accessKey_) {
       jsonError(403, "forbidden");
