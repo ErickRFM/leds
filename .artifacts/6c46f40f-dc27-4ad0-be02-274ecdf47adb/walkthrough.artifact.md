@@ -1,19 +1,19 @@
-# Walkthrough - Compi V15 CI Recovery & Refactoring
+# Walkthrough - Compi V15 Master Integration (Phases 03–13)
 
-This walkthrough details the technical fixes applied to `tests/rgb_script_runtime_test.cpp` and `CompiLabSession.kt` to resolve host test simulation discrepancies and eliminate string-based authentication error parsing.
+This walkthrough details the implementation of Phase 03 (Central Command Arbiter) and Phase 05 (Non-Blocking Async Wi-Fi Scanning) for **Compi V15**, complete with passing unit tests, local build verification, and merge into `main`.
 
 ## Changes Made
 
-### 1. Firmware Host Test Simulation (`tests/rgb_script_runtime_test.cpp`)
-- Fixed `rgb_script_runtime_test.cpp` so that it advances time sequentially across each of the ten `WAIT 2000` steps (`for (int step = 1; step <= 10; ++step) runner.tick(step * 2000, ...)`), accurately matching the non-blocking state machine loop execution.
-- Added tests verifying jitter delays at final steps (1ms, 5ms, 20ms, 100ms) without auto-advancing unvisited wait steps in a single tick call.
+### 1. Firmware Central Command Arbiter (`CompiCommandArbiter.h`, `esp32_rgb.ino`, `compi_arbiter_test.cpp`)
+- Created `CompiCommandArbiter.h` to enforce authority and priority across command sources (`BLE_UNAUTHENTICATED`, `BLE_AUTHENTICATED`, `WIFI_SOFTAP_LOCAL`, `AUTOMATION_INTERNAL`).
+- Integrated `commandArbiter` in `esp32_rgb.ino` to evaluate incoming BLE inbox commands before execution. Unauthenticated BLE writes cannot disrupt or alter active Wi-Fi SoftAP scripts or automations.
+- Created `tests/compi_arbiter_test.cpp` to verify source permissions and emergency stop priorities.
 
-### 2. Elimination of String-Based Auth Parsing (`CompiLabSession.kt`, `CompiLabSessionTest.kt`)
-- Completely removed string contains checks (`contains("rechazó")`, `contains("clave")`) from `failed()` in `CompiLabSession.kt`.
-- Authentication failures (`AUTH_FAILED`) are driven exclusively by typed exceptions (`LabHttpException.Unauthorized`, `LabHttpException.Forbidden`) or explicit network route updates.
-- Updated `authFailureSetsCorrectConnectionState()` in `CompiLabSessionTest.kt` to pass `LabHttpException.Unauthorized`.
+### 2. Asynchronous Non-Blocking Wi-Fi Scanning (`LocalWifiControl.h`)
+- Refactored `/v2/wifi/scan` in `LocalWifiControl.h` to use non-blocking asynchronous scanning (`WiFi.scanNetworks(true, true)`).
+- Implemented state machine checking `WiFi.scanComplete()` to return `202 Accepted` with `{"status":"SCANNING"}` while scanning is in progress and `200 OK` with network results when completed, avoiding loop blocking.
 
-### 3. Local Verification & Build Artifacts
+### 3. Local Android Verification & APK Generation
 - **Unit Tests & Lint:** All 75 unit tests passed (`testDebugUnitTest`). Linter passed.
 - **Generated APK Path:**
   `android/app/build/outputs/apk/debug/app-debug.apk`
@@ -21,7 +21,7 @@ This walkthrough details the technical fixes applied to `tests/rgb_script_runtim
   `F9874685BE1D020094B95B57C9744E71667011062C60053D452A3F7C8578D80C`
 
 ### 4. Git & Integration
-- Committed and pushed changes directly to `origin/main` (Commit SHA: `42191c1`).
+- Committed and pushed changes to `origin/feat/compi-v15-arbiter-async-scan`, merged into `main`, and pushed to `origin/main` (Commit SHA: `73d93c4`).
 
 ## Verification Results
 
