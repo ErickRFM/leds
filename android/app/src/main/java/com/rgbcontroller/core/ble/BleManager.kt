@@ -75,6 +75,35 @@ class BleManager(private val context: Context) {
     /** Optional firmware lease snapshot, read-only, and never a GPIO permission. */
     val gpioPins: StateFlow<List<BleGpioPin>?> = _gpioPins.asStateFlow()
 
+    private val _securityState = MutableStateFlow(BleSecurityState.Disconnected)
+    /** Firmware-confirmed owner authorization; bonding alone is never Authorized. */
+    val securityState: StateFlow<BleSecurityState> = _securityState.asStateFlow()
+    private var ownerKey: String? = null
+    private var bondDeadlineMs = 0L
+    private val bondPoll = object : Runnable {
+        override fun run() {
+            val device = activeDevice
+            if (device == null || !hasPermissions()) return
+            when (_securityState.value) {
+                BleSecurityState.Authorized, BleSecurityState.AuthorizationFailed,
+                BleSecurityState.Disconnected -> return
+                else -> Unit
+            }
+            if (device.bondState == BluetoothDevice.BOND_BONDED) {
+                _securityState.value = BleSecurityState.Bonded
+                requestAuthorization()
+                return
+            }
+            if (System.currentTimeMillis() >= bondDeadlineMs) {
+                if (_securityState.value != BleSecurityState.Authorizing) {
+                    _securityState.value = BleSecurityState.Unauthorized
+                }
+                return
+            }
+            handler.postDelayed(this, 750)
+        }
+    }
+
     private var gatt: BluetoothGatt? = null
     private var commandCharacteristic: BluetoothGattCharacteristic? = null
     private var stateCharacteristic: BluetoothGattCharacteristic? = null
@@ -419,7 +448,58 @@ class BleManager(private val context: Context) {
         _connectionState.value = BleConnectionState.Ready
         handler.removeCallbacks(gpioPoll)
         handler.postDelayed(gpioPoll, 600)
+        startBondWatch()
         drainQueue()
+    }
+
+    /** Configure the provisioned owner key; null disables automatic authorization. */
+    fun setOwnerKey(key: String?) {
+        ownerKey = key?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * Begin pairing then prove ownership. Bonding/encryption only prepares an
+     * encrypted link; authorization is granted solely by the firmware reply.
+     */
+    private fun startBondWatch() {
+        val device = activeDevice ?: return
+        if (!hasPermissions()) {
+            _securityState.value = BleSecurityState.Unauthorized
+            return
+        }
+        if (device.bondState == BluetoothDevice.BOND_BONDED) {
+            _securityState.value = BleSecurityState.Bonded
+            requestAuthorization()
+            return
+        }
+        _securityState.value = BleSecurityState.Pairing
+        try {
+            if (!device.createBond()) {
+                _securityState.value = BleSecurityState.Unauthorized
+                return
+            }
+        } catch (_: SecurityException) {
+            _securityState.value = BleSecurityState.Unauthorized
+            return
+        }
+        bondDeadlineMs = System.currentTimeMillis() + 20_000
+        handler.removeCallbacks(bondPoll)
+        handler.postDelayed(bondPoll, 750)
+    }
+
+    private fun requestAuthorization() {
+        val key = ownerKey
+        if (key == null) {
+            _securityState.value = BleSecurityState.Unauthorized
+            return
+        }
+        val frame = RgbDeviceCommand.auth(key)
+        if (frame == null) {
+            _securityState.value = BleSecurityState.Unauthorized
+            return
+        }
+        _securityState.value = BleSecurityState.Authorizing
+        writeCommand(frame)
     }
 
     private fun completeInitialRead(bytes: ByteArray?) {
@@ -444,6 +524,17 @@ class BleManager(private val context: Context) {
 
     private fun acceptState(bytes: ByteArray?) {
         val text = bytes?.toString(Charsets.UTF_8) ?: return
+        when (text) {
+            // Firmware-confirmed owner authorization over the encrypted link.
+            "AUTH,OK" -> {
+                _securityState.value = BleSecurityState.Authorized
+                return
+            }
+            "AUTH,ERR" -> {
+                _securityState.value = BleSecurityState.AuthorizationFailed
+                return
+            }
+        }
         _deviceState.value = text
         RgbDeviceState.parse(text)?.let {
             _rgbState.value = it
@@ -519,11 +610,14 @@ class BleManager(private val context: Context) {
         handler.removeCallbacks(writeTimeout)
         handler.removeCallbacks(gpioPoll)
         handler.removeCallbacks(gpioReadTimeout)
+        handler.removeCallbacks(bondPoll)
         gpioReadInFlight = false
         gpioPollingDisabled = false
         _gpioPins.value = null
         mtuReady = false
         _connectedAddress.value = null
+        // Closing the link revokes authorization; the firmware does the same.
+        _securityState.value = BleSecurityState.Disconnected
         synchronized(pending) {
             pending.clear()
             writeInFlight = false

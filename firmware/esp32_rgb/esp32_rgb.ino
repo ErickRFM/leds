@@ -18,6 +18,7 @@
 #include "core/RgbSettingsStore.h"
 #include "core/PhysicalProvisioningMode.h"
 #include "core/CompiCommandArbiter.h"
+#include "core/BleSecurityPolicy.h"
 #include "core/ComponentContract.h"
 #include "core/ComponentCatalog.h"
 #include "core/SensorTelemetry.h"
@@ -80,7 +81,12 @@ BLECharacteristic* stateCharacteristic = nullptr;
 BLECharacteristic* gpioStatusCharacteristic = nullptr;
 uint32_t lastGpioBleUpdateMs = 0;
 volatile bool connected = false;
+// Single source of truth for BLE link security and owner authorization.
+esp32core::BleSecurityPolicy bleSecurity;
+// BLE task callbacks transition the policy; the main loop reads the derived
+// state. Kept volatile so the loop observes callback updates without a lock.
 volatile esp32core::BleAuthState bleAuthState = esp32core::BleAuthState::DISCONNECTED;
+void syncBleAuthState() { bleAuthState = bleSecurity.state(); }
 bool connectedPreviously = false;
 uint32_t physicalProvisionHoldStarted = 0;
 uint32_t effectStarted = 0;
@@ -227,19 +233,54 @@ void reject() {
   }
 }
 
+// Transient owner-authorization reply over the existing STATE characteristic.
+// Never a new UUID; restored to the live RGB snapshot immediately after.
+void publishAuthResult(bool ok) {
+  Serial.println(ok ? "AUTH,OK" : "AUTH,ERR");
+  if (connected && stateCharacteristic != nullptr) {
+    stateCharacteristic->setValue(ok ? "AUTH,OK" : "AUTH,ERR");
+    stateCharacteristic->notify();
+    stateCharacteristic->setValue(stateString().c_str());
+  }
+}
+
 class ServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer*) override {
     connected = true;
-    bleAuthState = esp32core::BleAuthState::CONNECTED_UNAUTHENTICATED;
+    // Connecting never authenticates: the session starts fail-closed.
+    bleSecurity.onConnected();
+    syncBleAuthState();
     Serial.println("BLE connected (unauthenticated)");
   }
   void onDisconnect(BLEServer* server) override {
     connected = false;
-    bleAuthState = esp32core::BleAuthState::DISCONNECTED;
+    // Disconnect revokes authorization unconditionally.
+    bleSecurity.onDisconnected();
+    syncBleAuthState();
     Serial.println("BLE disconnected; restarting advertising");
     if (server) {
       BLEDevice::startAdvertising();
     }
+  }
+};
+
+// Real GAP security events. Bonding/encryption make an encrypted link available
+// but never authorize; the owner key must still be presented over that link.
+class BleLinkSecurityCallbacks : public BLESecurityCallbacks {
+  uint32_t onPassKeyRequest() override { return 0; }
+  void onPassKeyNotify(uint32_t) override {}
+  bool onSecurityRequest() override { return true; }
+  bool onConfirmPIN(uint32_t) override { return true; }
+  void onAuthenticationComplete(esp_ble_auth_cmpl_t param) override {
+    if (param.success) {
+      bleSecurity.onLinkSecured(param.key_present);
+      Serial.println(param.key_present ? "BLE link encrypted & bonded"
+                                       : "BLE link encrypted");
+    } else {
+      bleSecurity.onPairingFailed();
+      Serial.println("BLE pairing failed; channel stays unauthenticated");
+    }
+    syncBleAuthState();
   }
 };
 
@@ -313,7 +354,8 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* characteristic) override {
     const String command = characteristic->getValue();
     esp32core::RgbCommand parsed{};
-    const bool valid = esp32core::parseRgbCommand(command.c_str(), parsed);
+    const bool valid = esp32core::parseRgbCommand(command.c_str(), parsed) ||
+                       esp32core::BleSecurityPolicy::looksLikeAuth(command.c_str());
     portENTER_CRITICAL(&bleInboxMux);
     const bool accepted = valid && bleInbox.push(command.c_str());
     if (!accepted && bleRejected < 65535) ++bleRejected;
@@ -413,6 +455,15 @@ void processBleCommands() {
     const bool found = bleInbox.pop(buffer);
     portEXIT_CRITICAL(&bleInboxMux);
     if (!found) break;
+    // Owner authorization is evaluated on the main loop (single owner) and is
+    // only accepted from an encrypted link with the exact provisioned key.
+    if (esp32core::BleSecurityPolicy::looksLikeAuth(buffer)) {
+      const bool authorized = bleSecurity.authorize(
+          esp32core::BleSecurityPolicy::authKey(buffer), wifiLab.accessKey().c_str());
+      syncBleAuthState();
+      publishAuthResult(authorized);
+      continue;
+    }
     esp32core::RgbCommand parsed{};
     if (!esp32core::parseRgbCommand(buffer, parsed)) {
       reject();
@@ -484,6 +535,14 @@ void setup() {
   // STATE frames can be longer than the 20-byte default notification payload.
   // Android requests 128 as well; peers must negotiate before subscribing.
   BLEDevice::setMTU(128);
+  // Just-works Secure Connections bonding: provides an encrypted channel only.
+  // It NEVER authorizes; the owner key must still be presented over that link.
+  BLESecurity securitySetup;
+  securitySetup.setCapability(ESP_IO_CAP_NONE);
+  securitySetup.setAuthenticationMode(ESP_LE_AUTH_REQ_SC_BOND);
+  securitySetup.setInitEncryptionKey(ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK);
+  BLEDevice::setSecurityCallbacks(new BleLinkSecurityCallbacks());
+  BLEDevice::setEncryptionLevel(ESP_BLE_SEC_ENCRYPT);
   BLEServer* server = BLEDevice::createServer();
   server->setCallbacks(new ServerCallbacks());
   BLEService* service = server->createService(SERVICE_UUID);
