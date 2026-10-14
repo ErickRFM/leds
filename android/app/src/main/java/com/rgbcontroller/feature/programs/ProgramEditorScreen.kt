@@ -28,6 +28,7 @@ import com.rgbcontroller.core.programs.EditorReplacementPolicy
 import com.rgbcontroller.core.programs.EditorDraftSnapshot
 import com.rgbcontroller.core.data.EditorDraftStore
 import com.rgbcontroller.core.programs.ProgramLanguage
+import com.rgbcontroller.core.programs.ProjectModuleHints
 import com.rgbcontroller.core.programs.ProgramSourcePolicy
 import com.rgbcontroller.core.wifi.LocalLabClient
 import com.rgbcontroller.core.wifi.CompiLabSession
@@ -404,6 +405,16 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
             if (language == ProgramLanguage.LAB_SCRIPT) "Modo script" else "Modo Arduino C++",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+        val moduleHints = ProjectModuleHints.suggestions(source, language, laboratoryMode)
+        if (moduleHints.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                moduleHints.forEach { hint ->
+                    Text(hint, style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
