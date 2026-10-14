@@ -2,6 +2,7 @@ package com.rgbcontroller
 
 import com.rgbcontroller.core.model.RgbDeviceState
 import com.rgbcontroller.core.wifi.CompiLabSession
+import com.rgbcontroller.core.wifi.LabHttpException
 import com.rgbcontroller.core.wifi.LabTransport
 import com.rgbcontroller.core.wifi.LabConnectionState
 import org.junit.Assert.*
@@ -132,5 +133,53 @@ class CompiLabSessionTest {
         val (epoch, _) = session.beginVerification()
         session.failed(epoch, "ESP32 rechazó la operación: unauthorized")
         assertEquals(LabConnectionState.AUTH_FAILED, session.connectionState)
+    }
+
+    @Test fun http409ConflictDoesNotInvalidateAuthorizedSession() {
+        val session = CompiLabSession()
+        session.selectTransport(LabTransport.WIFI_LAB)
+        session.updateNetworkRouteAvailable(true)
+        session.updateKey("1234567890abcdef")
+        val (epoch, key) = session.beginVerification()
+        assertTrue(session.verified(epoch, key, red))
+        assertEquals(LabConnectionState.AUTHORIZED, session.connectionState)
+        assertTrue(session.wifiReady)
+
+        // Operational conflict (409) happens
+        session.failed(epoch, LabHttpException.Conflict(409, "Operación simultánea en curso"))
+
+        // Session must REMAIN authorized and wifiReady!
+        assertEquals(LabConnectionState.AUTHORIZED, session.connectionState)
+        assertTrue(session.wifiReady)
+        assertEquals("Operación simultánea en curso", session.message)
+    }
+
+    @Test fun http401UnauthorizedInvalidatesSessionToAuthFailed() {
+        val session = CompiLabSession()
+        session.selectTransport(LabTransport.WIFI_LAB)
+        session.updateNetworkRouteAvailable(true)
+        session.updateKey("1234567890abcdef")
+        val (epoch, key) = session.beginVerification()
+        assertTrue(session.verified(epoch, key, red))
+
+        // Unauthorized (401)
+        session.failed(epoch, LabHttpException.Unauthorized(401, "Clave denegada"))
+        assertEquals(LabConnectionState.AUTH_FAILED, session.connectionState)
+        assertFalse(session.wifiReady)
+    }
+
+    @Test fun http400BadRequestDoesNotInvalidateAuthorizedSession() {
+        val session = CompiLabSession()
+        session.selectTransport(LabTransport.WIFI_LAB)
+        session.updateNetworkRouteAvailable(true)
+        session.updateKey("1234567890abcdef")
+        val (epoch, key) = session.beginVerification()
+        assertTrue(session.verified(epoch, key, red))
+
+        // Bad request (400)
+        session.failed(epoch, LabHttpException.BadRequest(400, "Parámetro inválido"))
+        assertEquals(LabConnectionState.AUTHORIZED, session.connectionState)
+        assertTrue(session.wifiReady)
+        assertEquals("Parámetro inválido", session.message)
     }
 }

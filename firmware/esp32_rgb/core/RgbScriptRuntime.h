@@ -15,6 +15,7 @@ class RgbScriptRuntime final {
   static constexpr size_t kMaxSourceBytes = 512;
   static constexpr size_t kMaxInstructions = 32;
   static constexpr uint32_t kMaxDurationMs = 20000;
+  static constexpr uint32_t kJitterToleranceMs = 500;
   enum class Op : uint8_t { RGB, WAIT, ON, OFF, STOP };
   struct Instruction {
     Op op = Op::STOP;
@@ -47,8 +48,8 @@ class RgbScriptRuntime final {
   /** Never blocks: at most 32 instantaneous commands per tick. */
   bool tick(uint32_t nowMs, RgbCommand send, void* context) {
     if (!active_) return true;
-    // Allow scripts up to kMaxDurationMs to complete their final action without premature cutoff.
-    if (!send || static_cast<uint32_t>(nowMs - startedMs_) > kMaxDurationMs) {
+    // Allow scripts up to kMaxDurationMs + kJitterToleranceMs to complete their final action under loop jitter.
+    if (!send || static_cast<uint32_t>(nowMs - startedMs_) > (kMaxDurationMs + kJitterToleranceMs)) {
       stop();
       return false;
     }

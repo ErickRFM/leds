@@ -36,18 +36,52 @@ int main() {
 
   assert(runner.start("ON\nWAIT 1000\nOFF", 0));
   assert(runner.tick(0, record, &received));
-  assert(!runner.tick(20001, record, &received));  // safety expiry past 20000ms
+  assert(!runner.tick(21000, record, &received));  // safety expiry past 20000ms + jitter tolerance
   assert(!runner.active());
 
-  // Regression test for 20-second max duration script completing with OFF at exactly 20000ms
+  // Regression test for 20-second max duration script completing with OFF under various jitter delays
   std::string maxScript = "RGB 255 0 0\n";
   for (int i = 0; i < 10; ++i) maxScript += "WAIT 2000\n";
   maxScript += "OFF";
   assert(RgbScriptRuntime::validate(maxScript.c_str()));
+
+  // Exact 20000ms
   assert(runner.start(maxScript.c_str(), 0));
   received.clear();
-  assert(runner.tick(0, record, &received)); // RGB
-  assert(runner.tick(20000, record, &received)); // finishes final WAIT 2000 and executes OFF
+  assert(runner.tick(0, record, &received));
+  assert(runner.tick(20000, record, &received));
+  assert(!runner.active());
+  assert(received.back() == "OFF");
+
+  // 1ms jitter (20001ms)
+  assert(runner.start(maxScript.c_str(), 0));
+  received.clear();
+  assert(runner.tick(0, record, &received));
+  assert(runner.tick(20001, record, &received));
+  assert(!runner.active());
+  assert(received.back() == "OFF");
+
+  // 5ms jitter (20005ms)
+  assert(runner.start(maxScript.c_str(), 0));
+  received.clear();
+  assert(runner.tick(0, record, &received));
+  assert(runner.tick(20005, record, &received));
+  assert(!runner.active());
+  assert(received.back() == "OFF");
+
+  // 20ms jitter (20020ms)
+  assert(runner.start(maxScript.c_str(), 0));
+  received.clear();
+  assert(runner.tick(0, record, &received));
+  assert(runner.tick(20020, record, &received));
+  assert(!runner.active());
+  assert(received.back() == "OFF");
+
+  // 100ms jitter (20100ms)
+  assert(runner.start(maxScript.c_str(), 0));
+  received.clear();
+  assert(runner.tick(0, record, &received));
+  assert(runner.tick(20100, record, &received));
   assert(!runner.active());
   assert(received.back() == "OFF");
 

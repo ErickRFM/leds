@@ -1,47 +1,43 @@
-# Implementation Plan - Compi V9 Reference UI & V12 Automation Integration
+# Implementation Plan - Compi V14.2 → V15 Continuous Engineering & Stabilization
 
-This plan outlines the complete execution of **Compi V9 Reference UI** integration across all four core screens (`DashboardScreen`, `LedModuleScreen`, `ProgramEditorScreen`, `LabHubScreen`) matching the 4 reference UI screenshots, while fully unifying V12 automation capabilities, Bluetooth, Wi-Fi, GPIO, ADC telemetry, and Compi Studio scripting.
+This implementation plan details the step-by-step engineering, stabilization, error typing, and runtime safety enhancements across Android, ESP32 firmware, and CI/CD pipelines.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> - **Pixel-Perfect Reference UI:** All four views (Inicio, LED RGB, Studio, Hardware Lab) will be meticulously styled using Jetpack Compose and `RgbTheme` (`core/ui/RgbTheme.kt`, `core/ui/CompiComponents.kt`) to match the 4 reference screenshots.
-> - **V12 Automations Integration:** Hardware Lab (`LabHubScreen.kt`) and Compi Studio (`ProgramEditorScreen.kt`) will preserve and integrate all V12 automation logic, GPIO controls, ADC sensors, script compilers, and local Wi-Fi client policies.
+> - **Typed HTTP Exceptions (Phase 02):** Replacing string-matching HTTP error handling with typed `LabHttpException` sealed hierarchy in `LocalLabClient.kt` and `CompiLabSession.kt` to prevent non-auth HTTP status codes (e.g. 409 Conflict) from prematurely invalidating authorized SoftAP sessions.
+> - **Script Runtime Safety (Phase 01):** Refining `RgbScriptRuntime.h` to distinguish execution duration bounds from loop tick jitter, verified with C++ host tests.
 
 ## Proposed Changes
 
-### Design System & Compi Components
-#### [MODIFY] [CompiComponents.kt](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/android/app/src/main/java/com/rgbcontroller/core/ui/CompiComponents.kt)
-- Enhance or refine dark mate card containers, purple accent buttons, bottom navigation bar with V9 icons (Inicio, LED, Studio, Hardware), status indicators, and headers.
+### Core Firmware & Runtime
+#### [MODIFY] [RgbScriptRuntime.h](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/firmware/esp32_rgb/core/RgbScriptRuntime.h)
+- Refine deadline safety check and tick jitter tolerance in `RgbScriptRuntime.h`.
+#### [MODIFY] [rgb_script_runtime_test.cpp](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/tests/rgb_script_runtime_test.cpp)
+- Add host C++ regression tests for tick delays (1ms, 5ms, 20ms, 100ms) and max duration bounds.
 
-### Screen 1: Dashboard / Inicio
-#### [MODIFY] [DashboardScreen.kt](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/android/app/src/main/java/com/rgbcontroller/feature/home/DashboardScreen.kt)
-- Implement exact V9 Home layout: Compi header, ESP32 status card with illustration, quick access buttons (LED RGB, Compi Studio, Hardware Lab, Dispositivos), main tools cards, and recent activity feed.
+### Android Core & Network API
+#### [NEW] [LabHttpException.kt](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/android/app/src/main/java/com/rgbcontroller/core/wifi/LabHttpException.kt)
+- Create typed HTTP exception hierarchy (`Unauthorized`, `Forbidden`, `Conflict`, `BadRequest`, `NetworkUnavailable`, `ServerError`).
+#### [MODIFY] [LocalLabClient.kt](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/android/app/src/main/java/com/rgbcontroller/core/wifi/LocalLabClient.kt)
+- Throw typed `LabHttpException` based on HTTP response code instead of generic string exceptions.
+#### [MODIFY] [CompiLabSession.kt](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/android/app/src/main/java/com/rgbcontroller/core/wifi/CompiLabSession.kt)
+- Handle `LabHttpException` in `failed()` to preserve `AUTHORIZED` connection state when non-auth HTTP errors occur.
 
-### Screen 2: LED RGB Module
-#### [MODIFY] [LedModuleScreen.kt](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/android/app/src/main/java/com/rgbcontroller/feature/led/LedModuleScreen.kt)
-- Implement exact V9 LED RGB layout: Bluetooth/Wi-Fi toggle header, connected device card, Color control panel with interactive color wheel and hex preview, R/G/B sliders with numeric text fields, Brightness slider, Power toggle with active status, Favorites color pills, and Effects selector (Rainbow, Breathe, Fade) with speed slider.
-
-### Screen 3: Compi Studio
-#### [MODIFY] [ProgramEditorScreen.kt](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/android/app/src/main/java/com/rgbcontroller/feature/programs/ProgramEditorScreen.kt)
-- Implement exact V9 Compi Studio layout: Header with subtitle, Local Editor card with toolbar (Import, Paste, Export, Copy), Project type selector (Laboratorio vs Arduino C++), code editor with line numbers and syntax highlighting, size/line counters, Run RGB / Stop controls, and "Mis proyectos" list with open/delete actions.
-
-### Screen 4: Hardware Lab
-#### [MODIFY] [LabHubScreen.kt](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/android/app/src/main/java/com/rgbcontroller/feature/hub/LabHubScreen.kt)
-- Implement exact V9 Hardware Lab layout: Top tab selector (Conexión, GPIO, Sensores, Diagnóstico), Laboratory Wi-Fi connection card with secure key and status, Device state card (Chip, Flash, RAM, RSSI), GPIO control card with pin selector and HIGH/LOW/Read actions, Sensors ADC1 card with real-time waveform chart, and Autodiagnostic execution card.
-
-### Navigation & ViewModel Unification
-#### [MODIFY] [MainActivity.kt](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/android/app/src/main/java/com/rgbcontroller/MainActivity.kt)
-- Unify bottom navigation bar to display exactly 4 tabs (Inicio, LED, Studio, Hardware) corresponding to the reference design without duplication.
-#### [MODIFY] [RgbControllerViewModel.kt](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/android/app/src/main/java/com/rgbcontroller/RgbControllerViewModel.kt)
-- Ensure all states (BLE connection, RGB colors, effects, GPIO, ADC telemetry, script execution, Wi-Fi lab session) are robustly managed and synchronized.
+### Testing & CI Workflow
+#### [MODIFY] [CompiLabSessionTest.kt](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/android/app/src/test/java/com/rgbcontroller/CompiLabSessionTest.kt)
+- Add unit tests for typed HTTP exceptions and session preservation on HTTP 409 Conflict.
+#### [MODIFY] [android-ci.yml](file:///.github/workflows/android-ci.yml)
+- Verify and include any missing C++ host test executions in the GitHub Actions pipeline.
 
 ## Verification Plan
 
 ### Automated Tests
-- Run unit tests and instrumentation tests:
-  `cd android && ./gradlew testDebugUnitTest lintDebug assembleDebug`
-- Calculate SHA-256 of `app-debug.apk`.
+- Execute C++ host tests:
+  `g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/rgb_script_runtime_test.cpp -o /tmp/rgb_script_runtime_test && /tmp/rgb_script_runtime_test`
+- Execute Android build & JVM unit tests:
+  `Remove-Item Env:\ANDROID_PREFS_ROOT -ErrorAction SilentlyContinue; powershell -ExecutionPolicy Bypass -File .\android\build-debug.ps1`
+- Calculate SHA-256 hash of output `app-debug.apk`.
 
-### Manual / Visual Verification
-- Compare composable screens against the 4 reference UI screenshots (Dashboard, LED RGB, Hardware Lab, Compi Studio).
+### Manual / CI Verification
+- Push commit to GitHub, verify all CI jobs (`android`, `windows-board-profile`, `firmware-core-tests`, `firmware`) return `SUCCESS`.

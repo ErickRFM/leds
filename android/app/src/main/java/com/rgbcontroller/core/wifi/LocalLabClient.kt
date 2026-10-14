@@ -171,8 +171,8 @@ class LocalLabClient(private val context: Context) {
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
             val raw = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: ""
             if (code !in 200..299) {
-                val reason = runCatching { JSONObject(raw).optString("error") }.getOrDefault("HTTP " + code)
-                error("ESP32 rechazó la operación: " + reason)
+                val reason = runCatching { JSONObject(raw).optString("error") }.getOrDefault("HTTP $code")
+                throw LabHttpException.fromStatusCode(code, reason)
             }
             JSONObject(raw)
         } finally {

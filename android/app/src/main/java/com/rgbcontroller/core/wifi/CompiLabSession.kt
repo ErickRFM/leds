@@ -180,12 +180,27 @@ class CompiLabSession {
         return true
     }
 
-    fun failed(epoch: Int, details: String) {
+    fun failed(epoch: Int, error: Any) {
         if (epoch == revision && transport == LabTransport.WIFI_LAB) {
-            val targetState = if (details.contains("rechazó", ignoreCase = true) || details.contains("clave", ignoreCase = true)) {
-                LabConnectionState.AUTH_FAILED
-            } else {
-                LabConnectionState.NETWORK_ERROR
+            val details = when (error) {
+                is LabHttpException -> error.message
+                is Throwable -> error.message ?: "Error de comunicación Wi-Fi"
+                else -> error.toString()
+            }
+            val targetState = when (error) {
+                is LabHttpException.Unauthorized, is LabHttpException.Forbidden -> LabConnectionState.AUTH_FAILED
+                is LabHttpException.Conflict, is LabHttpException.BadRequest -> {
+                    // Operational conflicts or bad payloads do NOT invalidate an authorized session.
+                    message = details
+                    return
+                }
+                else -> {
+                    if (details.contains("rechazó", ignoreCase = true) || details.contains("clave", ignoreCase = true)) {
+                        LabConnectionState.AUTH_FAILED
+                    } else {
+                        LabConnectionState.NETWORK_ERROR
+                    }
+                }
             }
             invalidate(details, preserveErrorState = true)
             connectionState = targetState
