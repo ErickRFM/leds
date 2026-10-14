@@ -40,6 +40,7 @@ import com.rgbcontroller.feature.programs.ProgramEditorScreen
 import com.rgbcontroller.feature.devices.DevicesScreen
 import com.rgbcontroller.feature.home.DashboardScreen
 import com.rgbcontroller.feature.hub.LabHubScreen
+import com.rgbcontroller.feature.hardwarelab.HardwareLabScreen
 import com.rgbcontroller.feature.led.LedModuleScreen
 import com.rgbcontroller.feature.settings.SettingsScreen
 import androidx.compose.ui.unit.dp
@@ -202,7 +203,7 @@ fun MainAppNavHost(
                     DevicesScreen(bleManager, preferencesRepository,
                         onInspectSecurity = { navController.navigate(Screen.Hub.route) })
                 }
-                composable(Screen.Hub.route) { LabHubScreen(session, bleManager) }
+                composable(Screen.Hub.route) { HardwareLabScreen() }
             }
         }
     }
