@@ -198,7 +198,7 @@ class RgbScriptRuntime final {
     return hasAction && count != 0;
   }
 
-  size_t boundedLength(const char* p) {
+  static size_t boundedLength(const char* p) {
     size_t n = 0;
     while (n <= kMaxSourceBytes && p[n] != '\0') ++n;
     return n;
