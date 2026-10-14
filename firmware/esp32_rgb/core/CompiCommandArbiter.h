@@ -4,6 +4,21 @@
 namespace esp32core {
 
 /**
+ * Explicit BLE Security and Authorization State Machine.
+ * Unauthenticated or revoked connections cannot execute protected commands.
+ */
+enum class BleAuthState : uint8_t {
+  DISCONNECTED = 0,
+  CONNECTED_UNAUTHENTICATED = 1,
+  PAIRING = 2,
+  ENCRYPTED = 3,
+  BONDED = 4,
+  AUTHORIZED = 5,
+  REVOKED = 6,
+  FAILED = 7
+};
+
+/**
  * Thread-safe, deterministic command arbiter for the ESP32 laboratory.
  * Coordinates execution priority across BLE GATT, Wi-Fi SoftAP, active RGB scripts,
  * and background automations to ensure unauthenticated channels cannot disrupt
@@ -31,6 +46,12 @@ struct ArbiterResult {
 class CompiCommandArbiter final {
  public:
   CompiCommandArbiter() = default;
+
+  static CommandSource mapBleSource(BleAuthState state) {
+    return (state == BleAuthState::AUTHORIZED || state == BleAuthState::BONDED)
+        ? CommandSource::BLE_AUTHENTICATED
+        : CommandSource::BLE_UNAUTHENTICATED;
+  }
 
   void setActiveMode(ActiveMode mode, CommandSource owner) {
     currentMode_ = mode;

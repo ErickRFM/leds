@@ -40,7 +40,7 @@ BLECharacteristic* stateCharacteristic = nullptr;
 BLECharacteristic* gpioStatusCharacteristic = nullptr;
 uint32_t lastGpioBleUpdateMs = 0;
 volatile bool connected = false;
-volatile bool bleAuthenticated = false; // Fail-closed BLE channel authorization
+volatile esp32core::BleAuthState bleAuthState = esp32core::BleAuthState::DISCONNECTED;
 bool connectedPreviously = false;
 uint32_t physicalProvisionHoldStarted = 0;
 uint32_t effectStarted = 0;
@@ -125,12 +125,12 @@ void reject() {
 class ServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer*) override {
     connected = true;
-    bleAuthenticated = false; // Reset to unauthenticated until pairing verified
-    Serial.println("BLE connected");
+    bleAuthState = esp32core::BleAuthState::CONNECTED_UNAUTHENTICATED;
+    Serial.println("BLE connected (unauthenticated)");
   }
   void onDisconnect(BLEServer* server) override {
     connected = false;
-    bleAuthenticated = false; // Revoke authorization immediately on disconnect
+    bleAuthState = esp32core::BleAuthState::DISCONNECTED;
     Serial.println("BLE disconnected; restarting advertising");
     if (server) {
       BLEDevice::startAdvertising();
@@ -281,7 +281,7 @@ void processBleCommands() {
       continue;
     }
     const bool isStop = (parsed.action == esp32core::RgbAction::StopEffect || parsed.action == esp32core::RgbAction::Off);
-    const auto channelSource = bleAuthenticated ? esp32core::CommandSource::BLE_AUTHENTICATED : esp32core::CommandSource::BLE_UNAUTHENTICATED;
+    const auto channelSource = esp32core::CompiCommandArbiter::mapBleSource(bleAuthState);
     auto evaluation = commandArbiter.evaluate(channelSource, isStop);
     if (!evaluation.allowed) {
       reject();

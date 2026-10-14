@@ -5,9 +5,17 @@
 using esp32core::CompiCommandArbiter;
 using esp32core::CommandSource;
 using esp32core::ActiveMode;
+using esp32core::BleAuthState;
 
 int main() {
   CompiCommandArbiter arbiter;
+
+  // BleAuthState mapping assertions
+  assert(CompiCommandArbiter::mapBleSource(BleAuthState::DISCONNECTED) == CommandSource::BLE_UNAUTHENTICATED);
+  assert(CompiCommandArbiter::mapBleSource(BleAuthState::CONNECTED_UNAUTHENTICATED) == CommandSource::BLE_UNAUTHENTICATED);
+  assert(CompiCommandArbiter::mapBleSource(BleAuthState::AUTHORIZED) == CommandSource::BLE_AUTHENTICATED);
+  assert(CompiCommandArbiter::mapBleSource(BleAuthState::BONDED) == CommandSource::BLE_AUTHENTICATED);
+  assert(CompiCommandArbiter::mapBleSource(BleAuthState::REVOKED) == CommandSource::BLE_UNAUTHENTICATED);
 
   // 1. Unauthenticated BLE is rejected by default
   assert(arbiter.currentMode() == ActiveMode::IDLE);
