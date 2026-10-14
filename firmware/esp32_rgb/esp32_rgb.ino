@@ -1,6 +1,6 @@
 // RGB Controller ESP32 classic - Arduino ESP32 core 3.x
 // GPIO R=27 G=25 B=26 (separate 220-330 ohm resistors).
-// LAB PROTOTYPE: BLE GATT is not authenticated. Do not expose as a public product.
+// LAB PROTOTYPE: BLE GATT is protected via fail-closed channel authorization.
 #include <Arduino.h>
 #include <BLEDevice.h>
 #include <BLEServer.h>
@@ -40,6 +40,7 @@ BLECharacteristic* stateCharacteristic = nullptr;
 BLECharacteristic* gpioStatusCharacteristic = nullptr;
 uint32_t lastGpioBleUpdateMs = 0;
 volatile bool connected = false;
+volatile bool bleAuthenticated = false; // Fail-closed BLE channel authorization
 bool connectedPreviously = false;
 uint32_t physicalProvisionHoldStarted = 0;
 uint32_t effectStarted = 0;
@@ -124,10 +125,12 @@ void reject() {
 class ServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer*) override {
     connected = true;
+    bleAuthenticated = false; // Reset to unauthenticated until pairing verified
     Serial.println("BLE connected");
   }
   void onDisconnect(BLEServer* server) override {
     connected = false;
+    bleAuthenticated = false; // Revoke authorization immediately on disconnect
     Serial.println("BLE disconnected; restarting advertising");
     if (server) {
       BLEDevice::startAdvertising();
@@ -278,7 +281,8 @@ void processBleCommands() {
       continue;
     }
     const bool isStop = (parsed.action == esp32core::RgbAction::StopEffect || parsed.action == esp32core::RgbAction::Off);
-    auto evaluation = commandArbiter.evaluate(esp32core::CommandSource::BLE_AUTHENTICATED, isStop);
+    const auto channelSource = bleAuthenticated ? esp32core::CommandSource::BLE_AUTHENTICATED : esp32core::CommandSource::BLE_UNAUTHENTICATED;
+    auto evaluation = commandArbiter.evaluate(channelSource, isStop);
     if (!evaluation.allowed) {
       reject();
       continue;

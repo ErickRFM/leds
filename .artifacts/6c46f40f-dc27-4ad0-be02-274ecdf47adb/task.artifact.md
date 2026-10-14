@@ -1,9 +1,7 @@
-# Tasks - Compi V15 Firmware Reconciliation & Master Integration
+# Tasks - Compi V15 Master Security Integration & Release
 
-- [x] Reconcile `deviceIdentity.begin()` initialization in `setup()` (`esp32_rgb.ino`) `[id: 1]`
-- [x] Restore BLE re-advertising on disconnect in `ServerCallbacks::onDisconnect` (`esp32_rgb.ino`) `[id: 2]`
-- [x] Refine `CompiCommandArbiter.h` to strictly reject `BLE_UNAUTHENTICATED` writes `[id: 3]`
-- [x] Update C++ host test `tests/compi_arbiter_test.cpp` and verify passing assertions `[id: 4]`
-- [x] Run local Android build verification, unit tests, and assemble debug APK (`app-debug.apk`) `[id: 5]`
-- [x] Commit, push feature branch (`fix/compi-v15-arbiter-identity-reconciliation`), merge into `main` (`fb0edf3`), and push `origin/main` `[id: 6]`
-- [x] Final delivery report with commit SHA, CI status, and artifact details `[id: 7]`
+- [/] Phase 03 & 04: Implement dynamic BLE channel authorization & GATT write characteristic protection (`CompiCommandArbiter.h`, `esp32_rgb.ino`) `[id: 1]`
+- [ ] Phase 11: Add `compi_arbiter_test` to `.github/workflows/android-ci.yml` `[id: 2]`
+- [ ] Execute local Android build verification, unit tests, and assemble debug APK (`app-debug.apk`) `[id: 3]`
+- [ ] Git commit, push feature branch (`fix/compi-v15-dynamic-ble-auth-ci`), merge into `main`, and verify origin `[id: 4]`
+- [ ] Final post-merge audit and release technical report `[id: 5]`

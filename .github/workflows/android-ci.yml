@@ -51,6 +51,10 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/rgb_script_runtime_test.cpp -o /tmp/rgb_script_runtime_test
           /tmp/rgb_script_runtime_test
+      - name: Command arbiter host tests
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/compi_arbiter_test.cpp -o /tmp/compi_arbiter_test
+          /tmp/compi_arbiter_test
       - name: Experiment runtime host tests
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic -I tests/stubs tests/experiment_runtime_test.cpp -o /tmp/experiment_runtime_test
