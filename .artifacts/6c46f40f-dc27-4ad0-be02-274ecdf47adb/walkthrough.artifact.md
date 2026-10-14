@@ -1,28 +1,33 @@
-# Walkthrough - Compi V14.1 → V15 Corrective Execution
+# Walkthrough - Compi V14.2 → V15 Implementation
 
-This walkthrough summarizes the execution of Phase 00 (baseline audit) and Phase 01 (fixing the 20-second script runtime timeout) for **Compi V14.1 → V15**, complete with successful local builds, passing unit tests, and merge into `main`.
+This walkthrough summarizes the execution of Phase 01 (RGB Script Runtime Jitter Tolerance) and Phase 02 (Typed HTTP Exceptions & Session Preservation) for **Compi V14.2 → V15**, complete with passing unit tests, local build verification, and merge into `main`.
 
 ## Changes Made
 
-### 1. Firmware Script Runtime Fix (`RgbScriptRuntime.h`, `rgb_script_runtime_test.cpp`)
-- Resolved the bug where scripts with a total wait time equal to `kMaxDurationMs` (20000ms) were prematurely cut off by the `>= kMaxDurationMs` tick check before executing final actions like `OFF`.
-- Changed the tick elapsed check to strict inequality `>` (`nowMs - startedMs_ > kMaxDurationMs`), allowing scripts that complete within 20000ms to successfully execute their final instruction.
-- Added a comprehensive C++ regression test in `tests/rgb_script_runtime_test.cpp` verifying the 20-second script execution.
+### 1. Firmware RGB Script Runtime Safety (`RgbScriptRuntime.h`, `rgb_script_runtime_test.cpp`)
+- Added `kJitterToleranceMs` (500ms) to allow loop tick delays (1ms, 5ms, 20ms, 100ms) to complete final script actions (such as `OFF`) at or past 20000ms without being prematurely killed.
+- Added host C++ regression tests in `tests/rgb_script_runtime_test.cpp` covering 20-second max script execution across 1ms, 5ms, 20ms, and 100ms tick delays.
 
-### 2. Local Android Verification & APK Generation
-- **Unit Tests & Lint:** All unit tests (`testDebugUnitTest`) and lint checks (`lintDebug`) passed successfully (72 tests passed).
+### 2. Typed HTTP Exceptions (`LabHttpException.kt`, `LocalLabClient.kt`, `CompiLabSession.kt`, `CompiLabSessionTest.kt`)
+- Implemented `LabHttpException` sealed class hierarchy (`BadRequest`, `Unauthorized`, `Forbidden`, `Conflict`, `RateLimited`, `ServerError`, `NetworkUnavailable`, `ProtocolError`).
+- Updated `LocalLabClient.kt` to throw typed `LabHttpException` based on HTTP status code rather than matching error string substrings.
+- Updated `CompiLabSession.kt` to handle `LabHttpException` in `failed()` so that non-authorization errors (such as HTTP 409 Conflict or HTTP 400 Bad Request) do **not** invalidate an active `AUTHORIZED` session.
+- Added unit tests in `CompiLabSessionTest.kt` verifying HTTP 409, HTTP 400, and HTTP 401 behavior.
+
+### 3. Local Android Verification & APK Generation
+- **Unit Tests & Lint:** All 75 unit tests passed (`testDebugUnitTest`). Linter passed.
 - **Generated APK Path:**
   `android/app/build/outputs/apk/debug/app-debug.apk`
 - **APK SHA-256 Hash:**
-  `53C259951B731F0DD43A6998E2C1CA9A44BDA7A9CD7D45B305EB2864682B2AA9`
+  `8B1482E1B519E6F55AE697361FB638DCDBD42A83DD33D6728ED82AD006EE608A`
 
-### 3. Git & Integration
-- Committed and pushed changes to `origin/fix/compi-v14-runtime-and-security`, merged into `main`, and pushed to `origin/main` (Commit SHA: `63e41fe`).
+### 4. Git & Integration
+- Committed and pushed changes to `origin/fix/compi-v15-typed-errors-runtime`, merged into `main`, and pushed to `origin/main` (Commit SHA: `988a5e0`).
 
 ## Verification Results
 
 ### Automated Tests & Local Build
-- **Unit Tests:** PASSED (72 tests)
+- **Unit Tests:** PASSED (75 tests)
 - **Lint Check:** PASSED
 - **APK Compilation & Hashing:** PASSED (`app-debug.apk` compiled and hashed successfully)
 
