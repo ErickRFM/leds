@@ -26,6 +26,26 @@ object RgbDeviceCommand {
             return fields[2].isNotEmpty() && fields[2].all { ch -> ch in '0'..'9' } &&
                 fields[2].toIntOrNull()?.let { it in 10..1000 } == true
         }
+        if (command.startsWith(AUTH_PREFIX)) {
+            val key = command.substring(AUTH_PREFIX.length)
+            return key.isNotEmpty() && key.length <= MAX_KEY_LENGTH &&
+                key.all { it.isLetterOrDigit() }
+        }
         return false
     }
+
+    /**
+     * Owner-authorization frame. The key is a device-provisioned secret; this
+     * only serializes it. Authorization is decided by the firmware over an
+     * encrypted link, never by this codec.
+     */
+    fun auth(ownerKey: String): String? {
+        val key = ownerKey.trim()
+        if (key.isEmpty() || key.length > MAX_KEY_LENGTH) return null
+        if (!key.all { it.isLetterOrDigit() }) return null
+        return AUTH_PREFIX + key
+    }
+
+    private const val AUTH_PREFIX = "AUTH "
+    private const val MAX_KEY_LENGTH = 32
 }

@@ -41,6 +41,11 @@ class LocalWifiControl final {
     telemetryContext_ = context;
   }
 
+  // Owner key printed over the physical serial console. Shared by the SoftAP
+  // HTTP header check and the BLE owner-authorization challenge. Never logged
+  // or transmitted after provisioning.
+  String accessKey() const { return accessKey_; }
+
   void begin() {
     prefs_.begin("rgb-lab-v2", false);
     String password = prefs_.getString("ap", "");

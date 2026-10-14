@@ -21,6 +21,7 @@ Todos los comandos se escriben como texto ASCII/UTF-8, sin nueva línea, hasta 4
 - `FX,BREATHE,120`: respiración; velocidad 10..1000.
 - `FX,FADE,120`: fundido de colores; velocidad 10..1000.
 - `FX,STOP`: detiene cualquier efecto y vuelve a color estático.
+- `AUTH <clave>`: presenta la clave de propietario de 16 caracteres (impresa solo por consola serie física) para autorizar la sesión. Solo se acepta sobre un enlace ya cifrado/emparejado; si la clave no coincide o el enlace no está cifrado, se rechaza sin otorgar control. Los comandos RGB siguen rechazándose mientras la sesión no esté autorizada; la desconexión revoca la autorización de inmediato.
 
 ## Respuesta READ / NOTIFY
 `STATE,r,g,b,brillo,power,mode,speed`, donde power es 0 ó 1 y mode es NONE,RAINBOW,BREATHE,FADE.
@@ -28,12 +29,15 @@ Ejemplo: `STATE,255,120,0,200,1,RAINBOW,120`.
 
 Los clientes pueden admitir el estado anterior de 6 campos, pero el firmware nuevo publica 8.
 Para un comando inválido se notifica `ERR,INVALID_COMMAND`; no modifica el estado del LED.
+El resultado de `AUTH` se notifica transitoriamente como `AUTH,OK` o `AUTH,ERR` sobre la misma característica STATE; el valor se restaura de inmediato al snapshot `STATE,...`.
 
 ## Sincronización
 Android habilita notificaciones mediante CCCD y espera confirmación; después lee STATE. En V4 lee opcionalmente la característica de identidad pública antes de READY. En firmware anterior, que no la anuncia, mantiene compatibilidad RGB; nunca interpreta el ID como prueba de propiedad. Solo al finalizar lectura y validación del estado declara GATT Ready. Todas las operaciones GATT deben serializarse y el estado de la UI debe distinguir cambios locales de valores confirmados.
 
 ## Seguridad y limitaciones
-Firmware **experimental**: no incluye emparejamiento seguro ni autorización BLE. Cualquier cliente BLE cercano que conozca el UUID podría enviar comandos. Antes de distribución fuera de laboratorio, implementar bonding/enrolamiento de dispositivo y autorización de escrituras; no asumir que la cercanía protege el dispositivo.
+Firmware **experimental de laboratorio**. V15.1 añade autorización de propietario real sobre BLE: el firmware exige bonding+enlace cifrado y la clave física de propietario (`AUTH`) antes de aceptar comandos protegidos; el estado no autorizado se rechaza de forma *fail-closed* y la desconexión revoca la autorización. El emparejamiento por sí solo (just-works, sin MITM) **no** autoriza ni otorga control, y no proporciona resistencia MITM; este transporte sigue siendo solo para banco de pruebas local. La autorización de propietario **no** está validada físicamente (PENDING_HARDWARE_VALIDATION).
+
+Antes de distribución fuera de laboratorio: sustituir el bonding just-works por enrolamiento con MITM/anti-replay, añadir TLS en los canales locales y no asumir que la cercanía protege el dispositivo.
 
 El ESP32 ejecuta efectos autónomamente, aunque Android salga de primer plano. No hay nube ni servidor HTTP.
 

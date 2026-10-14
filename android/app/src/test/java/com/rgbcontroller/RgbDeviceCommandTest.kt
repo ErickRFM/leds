@@ -28,4 +28,16 @@ class RgbDeviceCommandTest {
         assertThrows(IllegalArgumentException::class.java) { RgbDeviceCommand.effect("UNKNOWN", 200) }
         assertThrows(IllegalArgumentException::class.java) { RgbDeviceCommand.effect("RAINBOW", 0) }
     }
+
+    @Test fun ownerKeyAuthorizationFrameIsSerializedButNeverTrustedHere() {
+        assertEquals("AUTH 0123456789abcdef", RgbDeviceCommand.auth("0123456789abcdef"))
+        assertTrue(RgbDeviceCommand.allowed("AUTH 0123456789abcdef"))
+        assertNull(RgbDeviceCommand.auth(""))
+        assertNull(RgbDeviceCommand.auth("   "))
+        assertNull(RgbDeviceCommand.auth("bad key"))
+        assertNull(RgbDeviceCommand.auth("a".repeat(33)))
+        assertFalse(RgbDeviceCommand.allowed("AUTH "))
+        assertFalse(RgbDeviceCommand.allowed("AUTH bad key"))
+        assertFalse(RgbDeviceCommand.allowed("AUTH " + "a".repeat(33)))
+    }
 }
