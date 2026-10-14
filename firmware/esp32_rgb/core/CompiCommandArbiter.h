@@ -5,7 +5,7 @@ namespace esp32core {
 
 /**
  * Explicit BLE Security and Authorization State Machine.
- * Unauthenticated or revoked connections cannot execute protected commands.
+ * Unauthenticated, bonded-only (without session auth) or revoked connections cannot execute protected commands.
  */
 enum class BleAuthState : uint8_t {
   DISCONNECTED = 0,
@@ -47,8 +47,12 @@ class CompiCommandArbiter final {
  public:
   CompiCommandArbiter() = default;
 
+  /**
+   * Only explicitly AUTHORIZED sessions grant protected BLE access.
+   * BONDED, ENCRYPTED, PAIRING or UNCONNECTED states are strictly mapped to BLE_UNAUTHENTICATED.
+   */
   static CommandSource mapBleSource(BleAuthState state) {
-    return (state == BleAuthState::AUTHORIZED || state == BleAuthState::BONDED)
+    return (state == BleAuthState::AUTHORIZED)
         ? CommandSource::BLE_AUTHENTICATED
         : CommandSource::BLE_UNAUTHENTICATED;
   }

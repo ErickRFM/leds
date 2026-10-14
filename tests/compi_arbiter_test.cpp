@@ -10,12 +10,15 @@ using esp32core::BleAuthState;
 int main() {
   CompiCommandArbiter arbiter;
 
-  // BleAuthState mapping assertions
+  // BleAuthState mapping assertions: ONLY AUTHORIZED maps to BLE_AUTHENTICATED
   assert(CompiCommandArbiter::mapBleSource(BleAuthState::DISCONNECTED) == CommandSource::BLE_UNAUTHENTICATED);
   assert(CompiCommandArbiter::mapBleSource(BleAuthState::CONNECTED_UNAUTHENTICATED) == CommandSource::BLE_UNAUTHENTICATED);
-  assert(CompiCommandArbiter::mapBleSource(BleAuthState::AUTHORIZED) == CommandSource::BLE_AUTHENTICATED);
-  assert(CompiCommandArbiter::mapBleSource(BleAuthState::BONDED) == CommandSource::BLE_AUTHENTICATED);
+  assert(CompiCommandArbiter::mapBleSource(BleAuthState::PAIRING) == CommandSource::BLE_UNAUTHENTICATED);
+  assert(CompiCommandArbiter::mapBleSource(BleAuthState::ENCRYPTED) == CommandSource::BLE_UNAUTHENTICATED);
+  assert(CompiCommandArbiter::mapBleSource(BleAuthState::BONDED) == CommandSource::BLE_UNAUTHENTICATED);
   assert(CompiCommandArbiter::mapBleSource(BleAuthState::REVOKED) == CommandSource::BLE_UNAUTHENTICATED);
+  assert(CompiCommandArbiter::mapBleSource(BleAuthState::FAILED) == CommandSource::BLE_UNAUTHENTICATED);
+  assert(CompiCommandArbiter::mapBleSource(BleAuthState::AUTHORIZED) == CommandSource::BLE_AUTHENTICATED);
 
   // 1. Unauthenticated BLE is rejected by default
   assert(arbiter.currentMode() == ActiveMode::IDLE);
