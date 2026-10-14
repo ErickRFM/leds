@@ -203,7 +203,7 @@ fun MainAppNavHost(
                     DevicesScreen(bleManager, preferencesRepository,
                         onInspectSecurity = { navController.navigate(Screen.Hub.route) })
                 }
-                composable(Screen.Hub.route) { HardwareLabScreen() }
+                composable(Screen.Hub.route) { HardwareLabScreen(session = session) }
             }
         }
     }

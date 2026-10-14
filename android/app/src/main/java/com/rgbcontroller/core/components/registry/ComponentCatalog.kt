@@ -10,8 +10,8 @@ object ComponentCatalog {
             type = ComponentType.SENSOR,
             interfaces = setOf(HardwareInterface.GPIO, HardwareInterface.DIGITAL),
             capabilities = setOf("humidity", "temperature", "environmental"),
-            requiredPins = setOf(2),
-            description = "Sensor de temperatura y humedad ambiental DHT22",
+            requiredPins = setOf(32),
+            description = "Sensor de temperatura y humedad ambiental DHT22 (GPIO digital)",
             category = "sensors"
         ),
         HardwareComponentDescriptor(
@@ -46,12 +46,12 @@ object ComponentCatalog {
         ),
         HardwareComponentDescriptor(
             id = "analog_sensor",
-            name = "Sensor Analógico",
+            name = "Sensor Analï¿½gico",
             type = ComponentType.SENSOR,
             interfaces = setOf(HardwareInterface.ADC),
             capabilities = setOf("analog", "raw"),
             requiredPins = emptySet(),
-            description = "Sensor genérico analógico ADC1",
+            description = "Sensor genï¿½rico analï¿½gico ADC1",
             category = "sensors"
         ),
         HardwareComponentDescriptor(
@@ -61,12 +61,12 @@ object ComponentCatalog {
             interfaces = setOf(HardwareInterface.DIGITAL, HardwareInterface.GPIO),
             capabilities = setOf("digital", "input"),
             requiredPins = emptySet(),
-            description = "Sensor digital genérico",
+            description = "Sensor digital genï¿½rico",
             category = "sensors"
         ),
         HardwareComponentDescriptor(
             id = "actuator_relay",
-            name = "Relé/Actuador",
+            name = "Relï¿½/Actuador",
             type = ComponentType.ACTUATOR,
             interfaces = setOf(HardwareInterface.GPIO, HardwareInterface.DIGITAL),
             capabilities = setOf("actuator", "control"),
