@@ -1,17 +1,16 @@
-# Walkthrough - Compi V15 Master Integration (Phases 03–13)
+# Walkthrough - Compi V15 Firmware Reconciliation & Integration
 
-This walkthrough details the implementation of Phase 03 (Central Command Arbiter) and Phase 05 (Non-Blocking Async Wi-Fi Scanning) for **Compi V15**, complete with passing unit tests, local build verification, and merge into `main`.
+This walkthrough details the reconciliation of device identity initialization, BLE re-advertising restoration, and command arbiter rule hardening for **Compi V15**, complete with local build verification, passing unit tests, and merge into `main`.
 
 ## Changes Made
 
-### 1. Firmware Central Command Arbiter (`CompiCommandArbiter.h`, `esp32_rgb.ino`, `compi_arbiter_test.cpp`)
-- Created `CompiCommandArbiter.h` to enforce authority and priority across command sources (`BLE_UNAUTHENTICATED`, `BLE_AUTHENTICATED`, `WIFI_SOFTAP_LOCAL`, `AUTOMATION_INTERNAL`).
-- Integrated `commandArbiter` in `esp32_rgb.ino` to evaluate incoming BLE inbox commands before execution. Unauthenticated BLE writes cannot disrupt or alter active Wi-Fi SoftAP scripts or automations.
-- Created `tests/compi_arbiter_test.cpp` to verify source permissions and emergency stop priorities.
+### 1. Firmware Initialization Reconciliation (`esp32_rgb.ino`)
+- Added missing `deviceIdentity.begin();` in `setup()` before accessing `deviceIdentity.value()`.
+- Restored `BLEDevice::startAdvertising()` inside `ServerCallbacks::onDisconnect()` to ensure automatic BLE re-advertising upon client disconnection.
 
-### 2. Asynchronous Non-Blocking Wi-Fi Scanning (`LocalWifiControl.h`)
-- Refactored `/v2/wifi/scan` in `LocalWifiControl.h` to use non-blocking asynchronous scanning (`WiFi.scanNetworks(true, true)`).
-- Implemented state machine checking `WiFi.scanComplete()` to return `202 Accepted` with `{"status":"SCANNING"}` while scanning is in progress and `200 OK` with network results when completed, avoiding loop blocking.
+### 2. Command Arbiter Rule Hardening (`CompiCommandArbiter.h`, `compi_arbiter_test.cpp`)
+- Updated `CompiCommandArbiter.h` to strictly reject `CommandSource::BLE_UNAUTHENTICATED` writes across all active modes (including `IDLE`).
+- Updated `tests/compi_arbiter_test.cpp` host test suite to verify rejection of unauthenticated BLE commands and acceptance of authenticated Wi-Fi SoftAP and BLE commands.
 
 ### 3. Local Android Verification & APK Generation
 - **Unit Tests & Lint:** All 75 unit tests passed (`testDebugUnitTest`). Linter passed.
@@ -21,7 +20,7 @@ This walkthrough details the implementation of Phase 03 (Central Command Arbiter
   `F9874685BE1D020094B95B57C9744E71667011062C60053D452A3F7C8578D80C`
 
 ### 4. Git & Integration
-- Committed and pushed changes to `origin/feat/compi-v15-arbiter-async-scan`, merged into `main`, and pushed to `origin/main` (Commit SHA: `73d93c4`).
+- Committed and pushed changes to `origin/fix/compi-v15-arbiter-identity-reconciliation`, merged into `main`, and pushed to `origin/main` (Commit SHA: `fb0edf3`).
 
 ## Verification Results
 
