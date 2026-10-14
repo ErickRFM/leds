@@ -438,7 +438,10 @@ void setup() {
   Serial.begin(115200);
   Serial.println("\n--- COMPI ESP32 LAB V15 ---");
 
-  deviceIdentity.begin();
+  if (!deviceIdentity.begin()) {
+    Serial.println("ERROR: V4 identity NVS unavailable; control services disabled");
+    while (true) delay(1000);
+  }
 
   pinManager.registerSystemPin(LED_R, "led.rgb");
   pinManager.registerSystemPin(LED_G, "led.rgb");
@@ -456,7 +459,10 @@ void setup() {
     rgb.r = 255; rgb.g = 255; rgb.b = 255; rgb.brightness = 255; rgb.power = true;
   }
 
-  moduleRegistry.add(rgbModule);
+  if (!moduleRegistry.add(rgbModule)) {
+    Serial.println("ERROR: RGB module failed to reserve/attach PWM");
+    while (true) delay(1000);
+  }
 #if COMPI_ENABLE_DHT22
   moduleRegistry.add(dht22Module);
 #endif
@@ -466,7 +472,10 @@ void setup() {
 #if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
   moduleRegistry.add(oledModule);
 #endif
-  moduleRegistry.startAll(pinManager);
+  if (!moduleRegistry.startAll(pinManager)) {
+    Serial.println("ERROR: module start failed; control services disabled");
+    while (true) delay(1000);
+  }
 
   wifiLab.setComponentTelemetry(collectComponentTelemetry, nullptr);
   wifiLab.begin();
