@@ -13,6 +13,7 @@
 #include "GpioTelemetryCodec.h"
 #include "CompiCapabilities.h"
 #include "RgbAutomationClock.h"
+#include "ComponentCatalog.h"
 
 namespace esp32core {
 
@@ -26,11 +27,19 @@ class LocalWifiControl final {
   using RgbState = String (*)();
   using RgbCommand = bool (*)(const String&);
   using DeviceId = String (*)();
+  // Fills a bounded JSON payload with the freshest telemetry from active
+  // components. Returning false means "no component currently provides data".
+  using ComponentTelemetry = bool (*)(char* output, size_t capacity, void* context);
 
   LocalWifiControl(PinManager& pins, RgbState state, RgbCommand manualCommand,
                    RgbCommand runtimeCommand, DeviceId deviceId)
       : pins_(pins), rgbState_(state), rgbCommand_(manualCommand),
         rgbRuntime_(runtimeCommand), deviceId_(deviceId) {}
+
+  void setComponentTelemetry(ComponentTelemetry source, void* context) {
+    telemetry_ = source;
+    telemetryContext_ = context;
+  }
 
   void begin() {
     prefs_.begin("rgb-lab-v2", false);
@@ -116,6 +125,26 @@ class LocalWifiControl final {
       body += ",\"capabilityBits\":" + String(profile.advertisedCapabilities);
       body += ",\"secureBleWrites\":false,\"otaUploadEnabled\":false";
       body += ",\"runtime\":\"lab\"}";
+      server_.send(200, "application/json", body);
+    });
+
+    server_.on("/v2/components/catalog", HTTP_GET, [this]() {
+      if (!authorized()) return;
+      char body[384];
+      if (!encodeCatalog(body, sizeof(body))) {
+        jsonError(500, "catalog_encode_failed");
+        return;
+      }
+      server_.send(200, "application/json", body);
+    });
+
+    server_.on("/v2/components/telemetry", HTTP_GET, [this]() {
+      if (!authorized()) return;
+      char body[640];
+      if (telemetry_ == nullptr || !telemetry_(body, sizeof(body), telemetryContext_)) {
+        jsonError(503, "telemetry_unavailable");
+        return;
+      }
       server_.send(200, "application/json", body);
     });
 
@@ -486,6 +515,8 @@ class LocalWifiControl final {
   RgbAutomationClock automation_;
   uint8_t automationEdges_ = 0;
   DeviceId deviceId_;
+  ComponentTelemetry telemetry_ = nullptr;
+  void* telemetryContext_ = nullptr;
   Preferences prefs_;
   WebServer server_{80};
   ExperimentRuntime experiment_;

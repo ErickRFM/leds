@@ -51,8 +51,30 @@ class PinManager final {
     return false;
   }
 
+  // Pins owned by a fixed system module (for example the RGB engine). A
+  // reserved pin can only ever be acquired by its registered owner, so a
+  // sensor cannot silently steal GPIO 25/26/27 from the RGB module.
+  static constexpr bool reservedForRgb(uint8_t pin) {
+    return pin == 25 || pin == 26 || pin == 27;
+  }
+
+  bool registerSystemPin(uint8_t pin, const char* owner) {
+    if (pin >= kPinCount || !owner || !owner[0] || reserved_[pin]) return false;
+    reserved_[pin] = owner;
+    return true;
+  }
+
+  const char* systemOwner(uint8_t pin) const {
+    return pin < kPinCount ? reserved_[pin] : nullptr;
+  }
+
+  bool isSystemReserved(uint8_t pin) const {
+    return pin < kPinCount && reserved_[pin] != nullptr;
+  }
+
   bool acquire(uint8_t pin, const char* owner, PinFunction function) {
     if (!canUse(pin, function) || !owner || !owner[0] || leases_[pin].owner) return false;
+    if (reserved_[pin] && std::strcmp(reserved_[pin], owner) != 0) return false;
     leases_[pin] = {owner, function};
     return true;
   }
@@ -81,5 +103,6 @@ class PinManager final {
 
  private:
   PinLease leases_[kPinCount] = {};
+  const char* reserved_[kPinCount] = {};
 };
 }  // namespace esp32core

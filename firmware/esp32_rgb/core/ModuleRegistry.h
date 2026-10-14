@@ -56,6 +56,18 @@ class ModuleRegistry final {
     started_ = false;
   }
 
+  // Alias used by the sketch's declarative registration path. Returns false
+  // for a null pointer or a duplicate id; never throws.
+  bool registerModule(IModule* module) { return module != nullptr && add(*module); }
+
+  const IModule* find(const char* id) const {
+    if (!id) return nullptr;
+    for (size_t i = 0; i < size_; ++i) {
+      if (std::strcmp(modules_[i]->id(), id) == 0) return modules_[i];
+    }
+    return nullptr;
+  }
+
   bool started() const { return started_; }
   size_t size() const { return size_; }
   const IModule* at(size_t index) const { return index < size_ ? modules_[index] : nullptr; }

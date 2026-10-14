@@ -18,6 +18,46 @@
 #include "core/RgbSettingsStore.h"
 #include "core/PhysicalProvisioningMode.h"
 #include "core/CompiCommandArbiter.h"
+#include "core/ComponentContract.h"
+#include "core/ComponentCatalog.h"
+#include "core/SensorTelemetry.h"
+#include "core/SensorTelemetryCodec.h"
+#include "modules/Dht22Module.h"
+#include "modules/SoilMoistureModule.h"
+#include "modules/OledSsd1306Module.h"
+
+// ---------------------------------------------------------------------------
+// Optional modular hardware components.
+//
+// Everything below defaults to OFF because the lab board may not have any
+// sensor wired. A component is only registered when explicitly enabled at
+// compile time AND its driver is available; the firmware never pretends a
+// component exists just because the Android catalog lists it.
+// ---------------------------------------------------------------------------
+#ifndef COMPI_ENABLE_DHT22
+#define COMPI_ENABLE_DHT22 0
+#endif
+#ifndef COMPI_DHT22_PIN
+#define COMPI_DHT22_PIN 32
+#endif
+#ifndef COMPI_ENABLE_SOIL
+#define COMPI_ENABLE_SOIL 0
+#endif
+#ifndef COMPI_SOIL_PIN
+#define COMPI_SOIL_PIN 34
+#endif
+#ifndef COMPI_ENABLE_OLED
+#define COMPI_ENABLE_OLED 0
+#endif
+#ifndef COMPI_OLED_SDA
+#define COMPI_OLED_SDA 21
+#endif
+#ifndef COMPI_OLED_SCL
+#define COMPI_OLED_SCL 22
+#endif
+#ifndef COMPI_OLED_ADDRESS
+#define COMPI_OLED_ADDRESS 0x3C
+#endif
 
 constexpr uint8_t LED_R = 27, LED_G = 25, LED_B = 26;
 constexpr bool COMMON_ANODE = true;  // Set false for verified common cathode.
@@ -44,6 +84,71 @@ volatile esp32core::BleAuthState bleAuthState = esp32core::BleAuthState::DISCONN
 bool connectedPreviously = false;
 uint32_t physicalProvisionHoldStarted = 0;
 uint32_t effectStarted = 0;
+
+#if COMPI_ENABLE_DHT22
+// Bit-banged AM2302/DHT22 read. Returns ok=false on timeout or checksum error;
+// callers must treat that as "no data", never as a valid 0% reading.
+esp32core::Dht22Module::Reading dht22Read(void*) {
+  esp32core::Dht22Module::Reading result{false, 0.0f, 0.0f};
+  uint8_t data[5] = {0, 0, 0, 0, 0};
+  pinMode(COMPI_DHT22_PIN, OUTPUT);
+  digitalWrite(COMPI_DHT22_PIN, LOW);
+  delay(2);
+  digitalWrite(COMPI_DHT22_PIN, HIGH);
+  delayMicroseconds(40);
+  pinMode(COMPI_DHT22_PIN, INPUT_PULLUP);
+  if (pulseIn(COMPI_DHT22_PIN, LOW, 1000) == 0) return result;
+  if (pulseIn(COMPI_DHT22_PIN, HIGH, 1000) == 0) return result;
+  for (int i = 0; i < 40; ++i) {
+    const unsigned long highDuration = pulseIn(COMPI_DHT22_PIN, HIGH, 1000);
+    if (highDuration == 0) return result;
+    data[i / 8] <<= 1;
+    if (highDuration > 40) data[i / 8] |= 1;
+  }
+  const uint8_t checksum = static_cast<uint8_t>(data[0] + data[1] + data[2] + data[3]);
+  if (checksum != data[4]) return result;
+  const uint16_t rawHumidity = (static_cast<uint16_t>(data[0]) << 8) | data[1];
+  int16_t rawTemperature = ((static_cast<uint16_t>(data[2] & 0x7F) << 8) | data[3]);
+  if (data[2] & 0x80) rawTemperature = -rawTemperature;
+  result.humidityPercent = static_cast<float>(rawHumidity) / 10.0f;
+  result.temperatureC = static_cast<float>(rawTemperature) / 10.0f;
+  result.ok = true;
+  return result;
+}
+#endif  // COMPI_ENABLE_DHT22
+
+#if COMPI_ENABLE_SOIL
+int soilAdcRead(uint8_t pin, void*) { return analogRead(pin); }
+#endif  // COMPI_ENABLE_SOIL
+
+#if COMPI_ENABLE_OLED
+#include <Wire.h>
+#if __has_include(<Adafruit_SSD1306.h>)
+#include <Adafruit_SSD1306.h>
+#define COMPI_OLED_LIBRARY 1
+Adafruit_SSD1306 oledDriver(128, 64, &Wire, -1);
+bool oledInit(uint8_t address, uint8_t sda, uint8_t scl, void*) {
+  Wire.begin(sda, scl);
+  if (!oledDriver.begin(SSD1306_SWITCHCAPVCC, address)) return false;
+  oledDriver.clearDisplay();
+  oledDriver.display();
+  return true;
+}
+bool oledPresent(uint8_t, const char* text, void*) {
+  oledDriver.clearDisplay();
+  oledDriver.setTextSize(1);
+  oledDriver.setCursor(0, 0);
+  oledDriver.println(text ? text : "");
+  oledDriver.display();
+  return true;
+}
+#else
+// No display library available: the module is intentionally left unsupported
+// rather than claiming pixels were drawn.
+#define COMPI_OLED_LIBRARY 0
+#endif
+#endif  // COMPI_ENABLE_OLED
+
 esp32core::RgbSettingsStore rgbStorage;
 bool rgbDirty = false;
 // Only explicit manual RGB choices become persistent. Temporary scripts and
@@ -257,6 +362,39 @@ esp32core::LedRgbModule rgbModule(
     LED_R, LED_G, LED_B, COMMON_ANODE,
     renderStatic, renderEffect,
     []() { return rgb.mode != Mode::NONE; });
+
+#if COMPI_ENABLE_DHT22
+esp32core::Dht22Module dht22Module(COMPI_DHT22_PIN, dht22Read, nullptr, 2000);
+#endif
+#if COMPI_ENABLE_SOIL
+esp32core::SoilMoistureModule soilModule(COMPI_SOIL_PIN, soilAdcRead, nullptr, 1000);
+#endif
+#if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
+esp32core::OledSsd1306Module oledModule(COMPI_OLED_ADDRESS, COMPI_OLED_SDA,
+    COMPI_OLED_SCL, oledInit, oledPresent, nullptr, 250);
+#endif
+
+// Collects the freshest measurement from every active component. Returns false
+// only when the codec cannot fit the payload; an empty (but valid) list is a
+// legitimate response while no component is active.
+bool collectComponentTelemetry(char* output, size_t capacity, void*) {
+  esp32core::Measurement entries[8];
+  size_t count = 0;
+#if COMPI_ENABLE_DHT22
+  if (dht22Module.ready()) {
+    entries[count++] = dht22Module.humidityReading();
+    entries[count++] = dht22Module.temperatureReading();
+  }
+#endif
+#if COMPI_ENABLE_SOIL
+  if (soilModule.ready()) {
+    entries[count++] = soilModule.rawReading();
+    entries[count++] = soilModule.moistureReading();
+  }
+#endif
+  return esp32core::SensorTelemetryCodec::encode(entries, count, output, capacity);
+}
+
 esp32core::LocalWifiControl wifiLab(pinManager, stateString, applyRgbCommand,
     applyRgbRuntimeCommand, []() { return deviceIdentity.value(); });
 
@@ -308,19 +446,29 @@ void setup() {
 
   esp32core::RgbSaved saved{};
   if (rgbStorage.load(saved)) {
-    rgb.r = saved.r;
-    rgb.g = saved.g;
-    rgb.b = saved.b;
+    rgb.r = saved.red;
+    rgb.g = saved.green;
+    rgb.b = saved.blue;
     rgb.brightness = saved.brightness;
-    rgb.power = saved.power;
+    rgb.power = saved.power != 0;
     Serial.println("Restored explicit RGB user choice from NVS");
   } else {
     rgb.r = 255; rgb.g = 255; rgb.b = 255; rgb.brightness = 255; rgb.power = true;
   }
 
   moduleRegistry.registerModule(&rgbModule);
-  moduleRegistry.setupAll();
+#if COMPI_ENABLE_DHT22
+  moduleRegistry.registerModule(&dht22Module);
+#endif
+#if COMPI_ENABLE_SOIL
+  moduleRegistry.registerModule(&soilModule);
+#endif
+#if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
+  moduleRegistry.registerModule(&oledModule);
+#endif
+  moduleRegistry.startAll(pinManager);
 
+  wifiLab.setComponentTelemetry(collectComponentTelemetry, nullptr);
   wifiLab.begin();
 
   BLEDevice::init(DEVICE_NAME);
