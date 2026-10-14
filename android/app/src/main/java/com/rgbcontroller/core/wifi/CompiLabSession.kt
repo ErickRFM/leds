@@ -194,13 +194,9 @@ class CompiLabSession {
                     message = details
                     return
                 }
-                else -> {
-                    if (details.contains("rechazó", ignoreCase = true) || details.contains("clave", ignoreCase = true)) {
-                        LabConnectionState.AUTH_FAILED
-                    } else {
-                        LabConnectionState.NETWORK_ERROR
-                    }
-                }
+                is LabHttpException.RateLimited, is LabHttpException.ServerError,
+                is LabHttpException.NetworkUnavailable, is LabHttpException.ProtocolError -> LabConnectionState.NETWORK_ERROR
+                else -> LabConnectionState.NETWORK_ERROR
             }
             invalidate(details, preserveErrorState = true)
             connectionState = targetState

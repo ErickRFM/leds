@@ -131,7 +131,7 @@ class CompiLabSessionTest {
         session.selectTransport(LabTransport.WIFI_LAB)
         session.updateNetworkRouteAvailable(true)
         val (epoch, _) = session.beginVerification()
-        session.failed(epoch, "ESP32 rechazó la operación: unauthorized")
+        session.failed(epoch, LabHttpException.Unauthorized(401, "ESP32 rechazó la operación: unauthorized"))
         assertEquals(LabConnectionState.AUTH_FAILED, session.connectionState)
     }
 
