@@ -30,6 +30,10 @@ class LocalWifiControl final {
   // Fills a bounded JSON payload with the freshest telemetry from active
   // components. Returning false means "no component currently provides data".
   using ComponentTelemetry = bool (*)(char* output, size_t capacity, void* context);
+  // Fills a bounded JSON payload with the authoritative runtime component
+  // status (resolved pins + lifecycle). The firmware is the final GPIO
+  // authority; clients never infer pin ownership from their own config.
+  using ComponentStatus = bool (*)(char* output, size_t capacity, void* context);
 
   LocalWifiControl(PinManager& pins, RgbState state, RgbCommand manualCommand,
                    RgbCommand runtimeCommand, DeviceId deviceId)
@@ -39,6 +43,11 @@ class LocalWifiControl final {
   void setComponentTelemetry(ComponentTelemetry source, void* context) {
     telemetry_ = source;
     telemetryContext_ = context;
+  }
+
+  void setComponentStatus(ComponentStatus source, void* context) {
+    status_ = source;
+    statusContext_ = context;
   }
 
   // Owner key printed over the physical serial console. Shared by the SoftAP
@@ -148,6 +157,16 @@ class LocalWifiControl final {
       char body[640];
       if (telemetry_ == nullptr || !telemetry_(body, sizeof(body), telemetryContext_)) {
         jsonError(503, "telemetry_unavailable");
+        return;
+      }
+      server_.send(200, "application/json", body);
+    });
+
+    server_.on("/v2/components/status", HTTP_GET, [this]() {
+      if (!authorized()) return;
+      char body[640];
+      if (status_ == nullptr || !status_(body, sizeof(body), statusContext_)) {
+        jsonError(503, "status_unavailable");
         return;
       }
       server_.send(200, "application/json", body);
@@ -522,6 +541,8 @@ class LocalWifiControl final {
   DeviceId deviceId_;
   ComponentTelemetry telemetry_ = nullptr;
   void* telemetryContext_ = nullptr;
+  ComponentStatus status_ = nullptr;
+  void* statusContext_ = nullptr;
   Preferences prefs_;
   WebServer server_{80};
   ExperimentRuntime experiment_;

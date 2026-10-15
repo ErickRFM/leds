@@ -61,6 +61,11 @@ class LedRgbModule final : public IModule {
     releaseClaims(manager);
   }
 
+  bool ready() const { return ready_; }
+  uint8_t redPin() const { return pins_[0]; }
+  uint8_t greenPin() const { return pins_[1]; }
+  uint8_t bluePin() const { return pins_[2]; }
+
  private:
   void releaseClaims(PinManager& manager) {
     for (const uint8_t pin : pins_) manager.release(pin, id());
