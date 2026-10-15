@@ -160,6 +160,13 @@ fun HardwareLabScreen(
             item {
                 OledStatusCard(state = state)
             }
+            item {
+                Text("Historial de telemetría (local)",
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            item {
+                TelemetryHistoryCard(state = state)
+            }
 
             syncMessage?.let { message ->
                 item {
@@ -405,6 +412,46 @@ private fun OledStatusCard(state: ComponentDashboardState) {
         live = live,
         modifier = Modifier.testTag("component_oled_status")
     )
+}
+
+@Composable
+private fun TelemetryHistoryCard(state: ComponentDashboardState) {
+    val history = state.deviceHistory
+    Card(Modifier.fillMaxWidth().testTag("component_telemetry_history")) {
+        Column(Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("${history.size} muestras · dispositivo ${state.deviceId ?: "—"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (history.isEmpty()) {
+                Text("Sin historial local todavía. Nada se simula sin lecturas reales.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                return@Column
+            }
+            val series = history.groupBy { it.componentId to it.measurementType }
+                .toSortedMap(compareBy({ it.first }, { it.second }))
+            for ((key, samples) in series) {
+                val (componentId, type) = key
+                val valid = samples.count { it.isPlottable }
+                val last = samples.maxByOrNull { it.recordedAtMs }
+                Text(
+                    "$componentId · $type · ${samples.size} muestras ($valid válidas)",
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "Último: ${last?.value?.let { formatValue(it) } ?: "sin valor"} " +
+                        "${last?.unit ?: ""} · ${last?.status ?: "—"} · ${formatTime(last?.recordedAtMs)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+private fun formatValue(value: Float): String {
+    val rounded = (value * 100f).toInt() / 100f
+    return rounded.toString()
 }
 
 /** Human label for a firmware component lifecycle state. */
