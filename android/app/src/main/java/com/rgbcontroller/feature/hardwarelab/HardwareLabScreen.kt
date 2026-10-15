@@ -20,6 +20,8 @@ import com.rgbcontroller.core.components.model.ComponentRuntimeStatus
 import com.rgbcontroller.core.components.model.ComponentState
 import com.rgbcontroller.core.components.model.ComponentStatusCodec
 import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
+import com.rgbcontroller.core.components.telemetry.TelemetryChart
+import com.rgbcontroller.core.components.widgets.TelemetryChartCard
 import com.rgbcontroller.core.components.model.HardwareComponentDescriptor
 import com.rgbcontroller.core.components.registry.ComponentCatalog
 import com.rgbcontroller.core.components.status.ComponentDashboardState
@@ -152,6 +154,13 @@ fun HardwareLabScreen(
             }
             item {
                 SoilTelemetryCard(state = state)
+            }
+            item {
+                Text("Gráficas (ventana de 30 min)",
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            item {
+                TelemetryChartsSection(state = state)
             }
             item {
                 Text("Pantalla OLED (display)",
@@ -412,6 +421,36 @@ private fun OledStatusCard(state: ComponentDashboardState) {
         live = live,
         modifier = Modifier.testTag("component_oled_status")
     )
+}
+
+@Composable
+private fun TelemetryChartsSection(state: ComponentDashboardState) {
+    val now = System.currentTimeMillis()
+    val live = state.telemetryFreshness == ComponentStatusFreshness.LIVE
+    val disconnected = !state.connected
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        TelemetryChartCard(
+            title = "Temperatura ambiental (DHT22)",
+            geometry = TelemetryChart.build(
+                "dht22", "temperature", state.series("dht22", "temperature"),
+                nowMs = now, disconnected = disconnected),
+            live = live
+        )
+        TelemetryChartCard(
+            title = "Humedad ambiental (DHT22)",
+            geometry = TelemetryChart.build(
+                "dht22", "humidity", state.series("dht22", "humidity"),
+                nowMs = now, disconnected = disconnected),
+            live = live
+        )
+        TelemetryChartCard(
+            title = "Humedad del suelo",
+            geometry = TelemetryChart.build(
+                "soil_moisture", "soil_moisture", state.series("soil_moisture", "soil_moisture"),
+                nowMs = now, disconnected = disconnected),
+            live = live
+        )
+    }
 }
 
 @Composable
