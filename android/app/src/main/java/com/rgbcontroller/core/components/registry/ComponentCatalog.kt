@@ -77,4 +77,19 @@ object ComponentCatalog {
     )
 
     fun get(id: String): HardwareComponentDescriptor? = components.find { it.id == id }
+
+    /**
+     * Translates a firmware component id (what `GET /v2/components/status`
+     * reports, e.g. `sensor.soil_moisture` or `led.rgb`) into this catalog's id
+     * (`soil_moisture`, `led_rgb`). Without this, an enabled firmware module
+     * would still be listed as an undetected template. Unknown ids are returned
+     * unchanged so a new firmware module is never silently hidden.
+     */
+    fun catalogIdForFirmwareId(firmwareId: String): String = when (firmwareId) {
+        "sensor.dht22" -> "dht22"
+        "sensor.soil_moisture" -> "soil_moisture"
+        "led.rgb" -> "led_rgb"
+        "display.ssd1306" -> "ssd1306_oled"
+        else -> firmwareId
+    }
 }
