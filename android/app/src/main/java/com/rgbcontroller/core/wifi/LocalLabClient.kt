@@ -79,6 +79,9 @@ class LocalLabClient(private val context: Context) {
     /** Freshest read-only telemetry from active components; never fabricated. */
     suspend fun componentTelemetry(key: String): JSONObject =
         request("GET", "/v2/components/telemetry", key)
+    /** Authoritative firmware runtime status (resolved pins + lifecycle). */
+    suspend fun componentStatus(key: String): JSONObject =
+        request("GET", "/v2/components/status", key)
     suspend fun blink(key: String, pin: Int, intervalMs: Int, cycles: Int): JSONObject {
         require(allowedOutput(pin) && pin !in setOf(25,26,27))
         require(intervalMs in 100..2000 && cycles in 1..20)

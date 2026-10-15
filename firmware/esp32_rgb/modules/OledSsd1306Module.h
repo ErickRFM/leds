@@ -100,6 +100,8 @@ class OledSsd1306Module final : public IModule {
   bool confirmed() const { return confirmed_; }
   bool pending() const { return dirty_; }
   uint8_t address() const { return address_; }
+  uint8_t sda() const { return sda_; }
+  uint8_t scl() const { return scl_; }
   const char* text() const { return text_; }
 
  private:

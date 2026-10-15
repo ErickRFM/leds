@@ -21,6 +21,7 @@
 #include "core/BleSecurityPolicy.h"
 #include "core/ComponentContract.h"
 #include "core/ComponentCatalog.h"
+#include "core/ComponentStatus.h"
 #include "core/SensorTelemetry.h"
 #include "core/SensorTelemetryCodec.h"
 #include "modules/Dht22Module.h"
@@ -437,6 +438,76 @@ bool collectComponentTelemetry(char* output, size_t capacity, void*) {
   return esp32core::SensorTelemetryCodec::encode(entries, count, output, capacity);
 }
 
+// Authoritative runtime component status. The firmware owns every pin; this
+// report exposes the exact pins currently leased by each started module and its
+// lifecycle, so clients never infer GPIO ownership from their local config.
+bool collectComponentStatus(char* output, size_t capacity, void*) {
+  esp32core::ComponentStatusEntry entries[8];
+  size_t count = 0;
+
+  {
+    esp32core::ComponentStatusEntry& entry = entries[count++];
+    entry = {};
+    entry.id = rgbModule.id();
+    entry.type = esp32core::ComponentType::Actuator;
+    entry.interfaceType = esp32core::HardwareInterface::Pwm;
+    entry.pins[0] = rgbModule.redPin();
+    entry.pins[1] = rgbModule.greenPin();
+    entry.pins[2] = rgbModule.bluePin();
+    entry.pinCount = 3;
+    entry.active = rgbModule.ready();
+    entry.state = entry.active ? esp32core::ComponentState::Active
+                               : esp32core::ComponentState::Error;
+  }
+
+#if COMPI_ENABLE_DHT22
+  {
+    esp32core::ComponentStatusEntry& entry = entries[count++];
+    entry = {};
+    entry.id = dht22Module.id();
+    entry.type = esp32core::ComponentType::Sensor;
+    entry.interfaceType = esp32core::HardwareInterface::OneWire;
+    entry.pins[0] = dht22Module.pin();
+    entry.pinCount = 1;
+    entry.active = dht22Module.ready();
+    entry.state = entry.active ? esp32core::ComponentState::Active
+                               : esp32core::ComponentState::Error;
+  }
+#endif
+#if COMPI_ENABLE_SOIL
+  {
+    esp32core::ComponentStatusEntry& entry = entries[count++];
+    entry = {};
+    entry.id = soilModule.id();
+    entry.type = esp32core::ComponentType::Sensor;
+    entry.interfaceType = esp32core::HardwareInterface::Adc;
+    entry.pins[0] = soilModule.pin();
+    entry.pinCount = 1;
+    entry.active = soilModule.ready();
+    entry.state = entry.active ? esp32core::ComponentState::Active
+                               : esp32core::ComponentState::Error;
+  }
+#endif
+#if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
+  {
+    esp32core::ComponentStatusEntry& entry = entries[count++];
+    entry = {};
+    entry.id = oledModule.id();
+    entry.type = esp32core::ComponentType::Display;
+    entry.interfaceType = esp32core::HardwareInterface::I2c;
+    entry.pins[0] = oledModule.sda();
+    entry.pins[1] = oledModule.scl();
+    entry.pinCount = 2;
+    entry.active = oledModule.ready();
+    entry.state = entry.active ? esp32core::ComponentState::Active
+                               : esp32core::ComponentState::Error;
+  }
+#endif
+
+  return esp32core::encodeComponentStatus(entries, count, output, capacity);
+}
+
+
 esp32core::LocalWifiControl wifiLab(pinManager, stateString, applyRgbCommand,
     applyRgbRuntimeCommand, []() { return deviceIdentity.value(); });
 
@@ -529,6 +600,7 @@ void setup() {
   }
 
   wifiLab.setComponentTelemetry(collectComponentTelemetry, nullptr);
+  wifiLab.setComponentStatus(collectComponentStatus, nullptr);
   wifiLab.begin();
 
   BLEDevice::init(DEVICE_NAME);

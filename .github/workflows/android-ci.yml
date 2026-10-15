@@ -75,6 +75,10 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/component_modules_test.cpp -o /tmp/component_modules_test
           /tmp/component_modules_test
+      - name: Component GPIO status authority host tests
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/component_status_test.cpp -o /tmp/component_status_test
+          /tmp/component_status_test
 
       - name: Read-only diagnostics security contract
         run: python3 scripts/check-diagnostics-contract.py
