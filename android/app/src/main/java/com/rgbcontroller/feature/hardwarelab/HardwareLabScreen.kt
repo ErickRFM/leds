@@ -73,9 +73,7 @@ fun HardwareLabScreen(
     val confirmed = state.firmwareStatus?.components
     val lastKnown = state.lastKnownStatus?.components
     val freshness = state.freshness
-    val knownIds = (state.authoritative ?: state.persisted).orEmpty()
-        .map { ComponentCatalog.catalogIdForFirmwareId(it.id) }
-        .toSet()
+    val knownIds = state.confirmedCatalogIds
     val missingTemplates = ComponentCatalog.components.filter { it.id !in knownIds }
 
     Scaffold(
@@ -196,7 +194,7 @@ fun HardwareLabScreen(
                 }
             } else {
                 items(state.desiredConfig.components, key = { "desired_${it.id}" }) { desired ->
-                    DesiredComponentCard(desired = desired, confirmed = confirmed)
+                    DesiredComponentCard(desired = desired, confirmedCatalogIds = knownIds)
                 }
             }
 
@@ -314,9 +312,9 @@ private fun FirmwareComponentCard(component: ComponentRuntimeStatus, live: Boole
 @Composable
 private fun DesiredComponentCard(
     desired: LocalDesiredComponent,
-    confirmed: List<ComponentRuntimeStatus>?
+    confirmedCatalogIds: Set<String>
 ) {
-    val accepted = confirmed?.any { it.id == desired.id } == true
+    val accepted = desired.id in confirmedCatalogIds
     Card(Modifier.fillMaxWidth().testTag("desired_${desired.id}")) {
         Column(Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -401,6 +399,7 @@ private fun OledStatusCard(state: ComponentDashboardState) {
         operative = oled.operative,
         sda = oled.sda,
         scl = oled.scl,
+        address = if (oled.detected) OledRuntime.DEFAULT_ADDRESS else null,
         stateLabel = if (oled.detected) firmwareStateLabel(oled.state) else null,
         lastSync = sync,
         live = live,

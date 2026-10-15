@@ -25,6 +25,7 @@ fun OledDisplayWidget(
     operative: Boolean = false,
     sda: Int? = null,
     scl: Int? = null,
+    address: Int? = null,
     stateLabel: String? = null,
     lastSync: Long? = null,
     live: Boolean = true,
@@ -58,11 +59,13 @@ fun OledDisplayWidget(
                     else "I²C: pines no confirmados por el firmware",
                     style = MaterialTheme.typography.bodySmall
                 )
-                Text(
-                    "Direccion I²C: 0x3C (predeterminada)",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if (address != null) {
+                    Text(
+                        "Direccion I²C: 0x${address.toString(16).uppercase()} (declarada por el catalogo)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
             if (stateLabel != null) {
                 Text(

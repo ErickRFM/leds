@@ -2,6 +2,7 @@ package com.rgbcontroller.core.components.status
 
 import com.rgbcontroller.core.components.model.ComponentMeasurement
 import com.rgbcontroller.core.components.model.ComponentRuntimeStatus
+import com.rgbcontroller.core.components.registry.ComponentCatalog
 
 /**
  * Local configuration the user requested. This is a DESIRE, never proof that the
@@ -83,6 +84,17 @@ data class ComponentDashboardState(
     /** Persisted components for the CURRENT device, explicitly not live. */
     val persisted: List<ComponentRuntimeStatus>?
         get() = lastKnownStatus?.takeIf { it.deviceId == deviceId }?.components
+
+    /**
+     * Catalog ids the firmware confirmed for the current device, with firmware
+     * ids (`sensor.dht22`) mapped to catalog ids (`dht22`). This is the only
+     * correct way to compare a local desired configuration against the
+     * firmware report, since it never carries the catalog id directly.
+     */
+    val confirmedCatalogIds: Set<String>
+        get() = (authoritative ?: persisted).orEmpty()
+            .map { ComponentCatalog.catalogIdForFirmwareId(it.id) }
+            .toSet()
 
     /**
      * Real live readings for the CURRENT device only. Never returns persisted
