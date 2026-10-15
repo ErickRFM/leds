@@ -27,6 +27,7 @@ import com.rgbcontroller.core.components.status.ComponentStatusFreshness
 import com.rgbcontroller.core.components.status.LocalDesiredComponent
 import com.rgbcontroller.core.components.status.LocalDesiredConfig
 import com.rgbcontroller.core.components.widgets.HumidityTemperatureWidget
+import com.rgbcontroller.core.components.widgets.SoilMoistureWidget
 import com.rgbcontroller.core.wifi.CompiLabSession
 import com.rgbcontroller.core.wifi.LabConnectionState
 import kotlinx.coroutines.launch
@@ -70,7 +71,9 @@ fun HardwareLabScreen(
     val confirmed = state.firmwareStatus?.components
     val lastKnown = state.lastKnownStatus?.components
     val freshness = state.freshness
-    val knownIds = (state.authoritative ?: state.persisted).orEmpty().map { it.id }.toSet()
+    val knownIds = (state.authoritative ?: state.persisted).orEmpty()
+        .map { ComponentCatalog.catalogIdForFirmwareId(it.id) }
+        .toSet()
     val missingTemplates = ComponentCatalog.components.filter { it.id !in knownIds }
 
     Scaffold(
@@ -146,6 +149,9 @@ fun HardwareLabScreen(
             }
             item {
                 Dht22TelemetryCard(state = state)
+            }
+            item {
+                SoilTelemetryCard(state = state)
             }
 
             syncMessage?.let { message ->
@@ -341,6 +347,35 @@ private fun Dht22TelemetryCard(state: ComponentDashboardState) {
         live = live,
         status = status?.let { telemetryStatusLabel(it) },
         modifier = Modifier.testTag("component_telemetry_dht22")
+    )
+}
+
+@Composable
+private fun SoilTelemetryCard(state: ComponentDashboardState) {
+    val live = state.telemetryFreshness == ComponentStatusFreshness.LIVE
+    val measurements = state.authoritativeTelemetry ?: state.persistedTelemetry
+    val moisture = measurements?.let { ComponentTelemetryCodec.find(it, "soil_moisture") }
+    val raw = measurements?.let { ComponentTelemetryCodec.find(it, "adc_raw") }
+    // A percentage is only shown for a calibrated, fresh, valid moisture reading.
+    val calibrated = moisture?.status == "fresh" && moisture.valid
+    val moisturePercent = moisture?.takeIf { calibrated }?.value
+    val rawValue = raw?.takeIf { it.valid }?.value?.toInt()
+    val hasData = rawValue != null || moisture != null
+    val timestamp = if (live) {
+        moisture?.timestampMs?.takeIf { it > 0L } ?: raw?.timestampMs?.takeIf { it > 0L }
+    } else {
+        state.lastKnownTelemetry?.confirmedAtMs
+    }
+    val status = moisture?.status ?: raw?.status
+    SoilMoistureWidget(
+        moisturePercent = moisturePercent,
+        rawAdc = rawValue,
+        calibrated = calibrated,
+        hasData = hasData,
+        lastUpdate = timestamp,
+        live = live,
+        status = status?.let { telemetryStatusLabel(it) },
+        modifier = Modifier.testTag("component_telemetry_soil_moisture")
     )
 }
 

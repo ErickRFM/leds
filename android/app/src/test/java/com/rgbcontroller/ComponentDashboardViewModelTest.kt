@@ -1,5 +1,6 @@
 package com.rgbcontroller
 
+import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
 import com.rgbcontroller.core.components.status.ComponentStatusFreshness
 import com.rgbcontroller.core.components.status.ComponentStatusRepository
 import com.rgbcontroller.feature.hardwarelab.ComponentDashboardViewModel
@@ -19,6 +20,20 @@ class ComponentDashboardViewModelTest {
         {"version":1,"measurements":[
           {"type":"humidity","status":"fresh","valid":true,"value":48.30,"unit":"%","timestampMs":1200},
           {"type":"temperature","status":"fresh","valid":true,"value":21.70,"unit":"C","timestampMs":1200}
+        ]}
+    """.trimIndent()
+
+    private val calibratedSoilTelemetry = """
+        {"version":1,"measurements":[
+          {"type":"adc_raw","status":"fresh","valid":true,"value":2100,"unit":"raw","timestampMs":1300},
+          {"type":"soil_moisture","status":"fresh","valid":true,"value":42.50,"unit":"%","timestampMs":1300}
+        ]}
+    """.trimIndent()
+
+    private val uncalibratedSoilTelemetry = """
+        {"version":1,"measurements":[
+          {"type":"adc_raw","status":"fresh","valid":true,"value":2500,"unit":"raw","timestampMs":1350},
+          {"type":"soil_moisture","status":"not_calibrated","valid":false,"value":0,"unit":"%","timestampMs":1350}
         ]}
     """.trimIndent()
 
@@ -107,6 +122,37 @@ class ComponentDashboardViewModelTest {
         assertEquals(before.firmwareStatus, after.firmwareStatus)
         assertEquals(before.firmwareTelemetry, after.firmwareTelemetry)
         assertNotNull(after.authorityError)
+    }
+
+    @Test fun authorizedFetchIngestsCalibratedSoilTelemetry() = runBlocking {
+        val h = Harness().apply { response = validPayload; telemetryResponse = calibratedSoilTelemetry }
+        h.viewModel.refresh()
+        val state = h.viewModel.uiState.value
+        assertEquals(ComponentStatusFreshness.LIVE, state.telemetryFreshness)
+        val moisture = state.authoritativeTelemetry?.let {
+            ComponentTelemetryCodec.find(it, "soil_moisture")
+        }
+        assertNotNull(moisture)
+        assertTrue(moisture!!.valid)
+        assertEquals("fresh", moisture.status)
+        assertEquals(42.5f, moisture.value, 0.01f)
+        assertEquals(1, h.storage.saveTelemetryCount)
+    }
+
+    @Test fun uncalibratedSoilKeepsRawAdcButNoPercent() = runBlocking {
+        val h = Harness().apply { response = validPayload; telemetryResponse = uncalibratedSoilTelemetry }
+        h.viewModel.refresh()
+        val decoded = h.viewModel.uiState.value.authoritativeTelemetry
+        val moisture = decoded?.let {
+            ComponentTelemetryCodec.find(it, "soil_moisture")
+        }
+        val raw = decoded?.let {
+            ComponentTelemetryCodec.find(it, "adc_raw")
+        }
+        assertFalse("an uncalibrated reading must never be valid", moisture!!.valid)
+        assertEquals("not_calibrated", moisture.status)
+        assertTrue(raw!!.valid)
+        assertEquals(2500f, raw.value, 0.01f)
     }
 
     @Test fun connectionChangeTriggersRefreshWhenAuthorized() = runBlocking {

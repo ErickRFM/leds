@@ -124,4 +124,20 @@ class ComponentTelemetryCodecTest {
         assertEquals("dht22", ComponentCatalog.get("dht22")?.id)
         assertNull(ComponentCatalog.get("does_not_exist"))
     }
+
+    @Test fun catalogIdForFirmwareIdResolvesFirmwarePrefixes() {
+        assertEquals("dht22", ComponentCatalog.catalogIdForFirmwareId("sensor.dht22"))
+        assertEquals("soil_moisture", ComponentCatalog.catalogIdForFirmwareId("sensor.soil_moisture"))
+        assertEquals("led_rgb", ComponentCatalog.catalogIdForFirmwareId("led.rgb"))
+        assertEquals("ssd1306_oled", ComponentCatalog.catalogIdForFirmwareId("display.ssd1306"))
+        // An unknown module is returned unchanged so it is never silently hidden.
+        assertEquals("future.thing", ComponentCatalog.catalogIdForFirmwareId("future.thing"))
+    }
+
+    @Test fun rawAdcAloneMakesSoilActiveWithoutACalibratedPercent() {
+        val decoded = ComponentTelemetryCodec.decode(
+            """{"version":1,"measurements":[{"type":"adc_raw","status":"fresh","valid":true,"value":2500,"unit":"raw","timestampMs":1}]}"""
+        )
+        assertEquals(ComponentState.ACTIVE, ComponentTelemetryCodec.stateFor("soil_moisture", decoded))
+    }
 }
