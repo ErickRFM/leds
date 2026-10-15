@@ -11,106 +11,163 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.rgbcontroller.core.components.model.ComponentMeasurement
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.rgbcontroller.core.ble.BleManager
+import com.rgbcontroller.core.components.model.ComponentRuntimeStatus
 import com.rgbcontroller.core.components.model.ComponentState
-import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
-import com.rgbcontroller.core.components.model.ConfiguredComponent
+import com.rgbcontroller.core.components.model.ComponentStatusCodec
 import com.rgbcontroller.core.components.registry.ComponentCatalog
-import com.rgbcontroller.core.components.ui.ComponentRenderer
+import com.rgbcontroller.core.components.status.ComponentStatusFreshness
+import com.rgbcontroller.core.components.status.LocalDesiredComponent
+import com.rgbcontroller.core.components.status.LocalDesiredConfig
 import com.rgbcontroller.core.wifi.CompiLabSession
-import com.rgbcontroller.core.wifi.LocalLabClient
+import com.rgbcontroller.core.wifi.LabConnectionState
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
+/**
+ * Persistent component dashboard. Authoritative GPIO/lifecycle come only from the
+ * firmware (`GET /v2/components/status`); the local desired configuration is
+ * always shown separately and never treated as accepted. Offline mode shows the
+ * last confirmed snapshot, clearly labelled as not live.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HardwareLabScreen(
-    session: CompiLabSession? = null
+    session: CompiLabSession? = null,
+    bleManager: BleManager? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var components by remember { mutableStateOf(emptyList<ConfiguredComponent>()) }
-    var measurements by remember { mutableStateOf<List<ComponentMeasurement>?>(null) }
-    var syncMessage by remember { mutableStateOf<String?>(null) }
+    val viewModel: ComponentDashboardViewModel = viewModel(
+        factory = remember(session, bleManager) {
+            ComponentDashboardViewModel.factory(context.applicationContext, session, bleManager)
+        }
+    )
+    val state by viewModel.uiState.collectAsState()
     var showCatalog by remember { mutableStateOf(false) }
+    var syncMessage by remember { mutableStateOf<String?>(null) }
 
-    val canSync = session != null && LocalLabClient.validKey(session.key)
+    val sessionConnection = session?.connectionState
+    val authorized = sessionConnection == LabConnectionState.AUTHORIZED
 
-    fun syncFromDevice() {
-        val active = session
-        if (active == null || !LocalLabClient.validKey(active.key)) {
-            syncMessage = "Conecta y autoriza el ESP32 (clave de 16 hex) para leer componentes."
-            return
-        }
-        scope.launch {
-            try {
-                val client = LocalLabClient(context)
-                val payload = active.userOperation("Leer componentes") {
-                    client.componentTelemetry(active.key)
-                }
-                val decoded = ComponentTelemetryCodec.decode(payload.toString())
-                measurements = decoded
-                components = components.map {
-                    it.copy(state = ComponentTelemetryCodec.stateFor(it.id, decoded))
-                }
-                syncMessage = when {
-                    decoded == null -> "El ESP32 devolvió telemetría no válida."
-                    decoded.isEmpty() -> "Sin componentes activos en el ESP32."
-                    else -> "Telemetría sincronizada (${decoded.size} lecturas)."
-                }
-            } catch (failure: Exception) {
-                syncMessage = failure.message ?: "No se pudo sincronizar con el ESP32."
-            }
-        }
+    LaunchedEffect(Unit) { viewModel.loadPersisted() }
+    LaunchedEffect(sessionConnection) {
+        viewModel.onConnectionChanged()
+        syncMessage = if (authorized) "Estado sincronizado desde el firmware."
+        else "Sin conexión autorizada: se muestra el último estado confirmado."
     }
+
+    val confirmed = state.firmwareStatus?.components
+    val lastKnown = state.lastKnownStatus?.components
+    val freshness = state.freshness
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Hardware Component Studio") },
+                title = { Text("Dashboard de componentes") },
                 actions = {
-                    IconButton(onClick = { syncFromDevice() }, enabled = canSync) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Sincronizar con ESP32")
-                    }
+                    IconButton(
+                        onClick = {
+                            scope.launch {
+                                viewModel.refresh()
+                            }
+                        },
+                        modifier = Modifier.testTag("component_refresh")
+                    ) { Icon(Icons.Default.Refresh, contentDescription = "Actualizar estado") }
                 }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { showCatalog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Agregar componente")
-            }
         }
     ) { padding ->
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Catálogo de componentes modulares reutilizables", style = MaterialTheme.typography.bodyMedium)
-            syncMessage?.let { message ->
-                Spacer(Modifier.height(8.dp))
-                Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            item {
+                AuthorityCard(connected = state.connected, authorized = authorized,
+                    error = state.authorityError)
             }
-
-            Spacer(Modifier.height(16.dp))
-
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (components.isEmpty()) {
+            item {
+                Text("Estado confirmado por el firmware",
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            when {
+                freshness == ComponentStatusFreshness.LIVE && confirmed != null -> {
                     item {
-                        Card(Modifier.fillMaxWidth()) {
-                            Column(
-                                Modifier.fillMaxWidth().padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text("No hay componentes configurados")
-                                Text("Agrega componentes desde el catálogo", style = MaterialTheme.typography.bodySmall)
+                        Text("En vivo · actualizado ${formatTime(state.firmwareStatus?.receivedAtMs)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.testTag("component_live"))
+                    }
+                    items(confirmed, key = { it.id }) { component ->
+                        FirmwareComponentCard(component = component, live = true)
+                    }
+                }
+                freshness == ComponentStatusFreshness.LAST_KNOWN && lastKnown != null -> {
+                    item {
+                        Text("Último estado confirmado ${formatTime(state.lastKnownStatus?.confirmedAtMs)} · no es telemetría en vivo",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.testTag("component_last_known"))
+                    }
+                    items(lastKnown, key = { it.id }) { component ->
+                        FirmwareComponentCard(component = component, live = false)
+                    }
+                }
+                else -> {
+                    item {
+                        Card(Modifier.fillMaxWidth().testTag("component_none")) {
+                            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                                Text("Sin estado confirmado")
+                                Text("Conecta y autoriza el ESP32 para leer GPIO reales. " +
+                                    "Nada se simula mientras está desconectado.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
                 }
-                items(components.sortedBy { it.order }, key = { it.instanceId }) { component ->
-                    ComponentRenderer(component = component, measurements = measurements)
+            }
+            syncMessage?.let { message ->
+                item {
+                    Text(message, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            item {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Configuración local (pendiente)",
+                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    TextButton(onClick = { showCatalog = true },
+                        modifier = Modifier.testTag("component_add")) {
+                        Icon(Icons.Default.Add, contentDescription = null); Text("Agregar")
+                    }
+                }
+            }
+            item {
+                Text("Esta configuración es un deseo local; no implica que el ESP32 la haya aceptado.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (state.desiredConfig.components.isEmpty()) {
+                item {
+                    Card(Modifier.fillMaxWidth()) {
+                        Text("No hay componentes locales configurados",
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            } else {
+                items(state.desiredConfig.components, key = { "desired_${it.id}" }) { desired ->
+                    DesiredComponentCard(desired = desired, confirmed = confirmed)
                 }
             }
         }
@@ -125,13 +182,15 @@ fun HardwareLabScreen(
                     items(ComponentCatalog.components, key = { it.id }) { desc ->
                         Card(
                             onClick = {
-                                val newComp = ConfiguredComponent(
-                                    id = desc.id,
-                                    descriptor = desc,
-                                    order = components.size,
-                                    state = if (desc.supported) ComponentState.NOT_CONFIGURED else ComponentState.INCOMPATIBLE
-                                )
-                                components = components + newComp
+                                val next = state.desiredConfig.components.toMutableList()
+                                if (next.none { it.id == desc.id }) {
+                                    next += LocalDesiredComponent(
+                                        id = desc.id,
+                                        type = desc.type.name.lowercase(Locale.getDefault()),
+                                        pins = desc.requiredPins.sorted()
+                                    )
+                                }
+                                scope.launch { viewModel.setLocalDesired(LocalDesiredConfig(next)) }
                                 showCatalog = false
                             },
                             modifier = Modifier.fillMaxWidth()
@@ -139,7 +198,6 @@ fun HardwareLabScreen(
                             Column(Modifier.padding(12.dp)) {
                                 Text(desc.name, style = MaterialTheme.typography.titleSmall)
                                 Text(desc.description, style = MaterialTheme.typography.bodySmall)
-                                Text("Categoría: ${desc.category}", style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
@@ -148,4 +206,87 @@ fun HardwareLabScreen(
             confirmButton = { TextButton(onClick = { showCatalog = false }) { Text("Cerrar") } }
         )
     }
+}
+
+@Composable
+private fun AuthorityCard(connected: Boolean, authorized: Boolean, error: String?) {
+    val title = when {
+        authorized -> "Conectado y autorizado"
+        connected -> "Conexión sin autorizar"
+        else -> "ESP32 desconectado"
+    }
+    val color = if (authorized) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.onSurfaceVariant
+    Card(Modifier.fillMaxWidth().testTag("component_authority"),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, fontWeight = FontWeight.SemiBold, color = color)
+            Text("Autoridad GPIO: firmware. Los GPIO actuales provienen del ESP32, nunca de la configuración local.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            error?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("component_error"))
+            }
+        }
+    }
+}
+
+@Composable
+private fun FirmwareComponentCard(component: ComponentRuntimeStatus, live: Boolean) {
+    val state = ComponentStatusCodec.stateFor(component)
+    Card(Modifier.fillMaxWidth().testTag("component_${component.id}")) {
+        Column(Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()) {
+                Text(component.id, fontWeight = FontWeight.SemiBold)
+                Text(
+                    when (state) {
+                        ComponentState.ACTIVE -> if (live) "ACTIVO" else "ÚLTIMO"
+                        ComponentState.ERROR -> "ERROR"
+                        ComponentState.INCOMPATIBLE -> "NO SOPORTADO"
+                        ComponentState.DISCONNECTED -> "DESCONECTADO"
+                        else -> "DESCONOCIDO"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (live && component.active && component.state == "active")
+                        MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text("Tipo: ${component.type} · Interfaz: ${component.interfaceType}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("GPIO: ${if (component.pins.isEmpty()) "—" else component.pins.joinToString(", ")}",
+                style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun DesiredComponentCard(
+    desired: LocalDesiredComponent,
+    confirmed: List<ComponentRuntimeStatus>?
+) {
+    val accepted = confirmed?.any { it.id == desired.id } == true
+    Card(Modifier.fillMaxWidth().testTag("desired_${desired.id}")) {
+        Column(Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(desired.id, fontWeight = FontWeight.SemiBold)
+            Text("Deseado localmente · ${if (accepted) "coincide con el firmware" else "sin confirmar por el firmware"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("GPIO deseados: ${if (desired.pins.isEmpty()) "—" else desired.pins.joinToString(", ")}",
+                style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+private fun formatTime(epochMs: Long?): String {
+    if (epochMs == null || epochMs <= 0L) return "—"
+    return SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(epochMs))
 }
