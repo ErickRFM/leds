@@ -242,6 +242,17 @@ int main() {
     assert(pins2.lease(21) == nullptr);
     assert(pins2.lease(22) == nullptr);
     assert(!OledSsd1306Module::validAddress(0x3B));
+
+    // A pin already leased by another module must block the OLED (default SDA
+    // GPIO21 / SCL GPIO22, address 0x3C) without stealing or leaking it.
+    PinManager pins3;
+    assert(pins3.acquire(21, "led.rgb", PinFunction::PwmOutput));
+    OledDouble oledConflict;
+    OledSsd1306Module conflict(0x3C, 21, 22, oledInit, oledPresent, &oledConflict, 250);
+    assert(!conflict.begin(pins3));
+    assert(!conflict.ready());
+    assert(pins3.belongsTo(21, "led.rgb"));  // the OLED never took GPIO21
+    assert(pins3.lease(22) == nullptr);      // and never held SCL after failing
   }
 
   // --- Registry integration + system pin reservations ----------------------

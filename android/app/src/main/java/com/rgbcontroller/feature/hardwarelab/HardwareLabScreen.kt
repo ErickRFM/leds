@@ -24,9 +24,11 @@ import com.rgbcontroller.core.components.model.HardwareComponentDescriptor
 import com.rgbcontroller.core.components.registry.ComponentCatalog
 import com.rgbcontroller.core.components.status.ComponentDashboardState
 import com.rgbcontroller.core.components.status.ComponentStatusFreshness
+import com.rgbcontroller.core.components.status.OledRuntime
 import com.rgbcontroller.core.components.status.LocalDesiredComponent
 import com.rgbcontroller.core.components.status.LocalDesiredConfig
 import com.rgbcontroller.core.components.widgets.HumidityTemperatureWidget
+import com.rgbcontroller.core.components.widgets.OledDisplayWidget
 import com.rgbcontroller.core.components.widgets.SoilMoistureWidget
 import com.rgbcontroller.core.wifi.CompiLabSession
 import com.rgbcontroller.core.wifi.LabConnectionState
@@ -152,6 +154,13 @@ fun HardwareLabScreen(
             }
             item {
                 SoilTelemetryCard(state = state)
+            }
+            item {
+                Text("Pantalla OLED (display)",
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            item {
+                OledStatusCard(state = state)
             }
 
             syncMessage?.let { message ->
@@ -377,6 +386,38 @@ private fun SoilTelemetryCard(state: ComponentDashboardState) {
         status = status?.let { telemetryStatusLabel(it) },
         modifier = Modifier.testTag("component_telemetry_soil_moisture")
     )
+}
+
+@Composable
+private fun OledStatusCard(state: ComponentDashboardState) {
+    val live = state.freshness == ComponentStatusFreshness.LIVE
+    val status = (state.authoritative ?: state.persisted)
+        ?.let { ComponentStatusCodec.find(it, OledRuntime.FIRMWARE_ID) }
+    val oled = OledRuntime.from(status)
+    val sync = if (live) state.firmwareStatus?.receivedAtMs else state.lastKnownStatus?.confirmedAtMs
+    OledDisplayWidget(
+        detected = oled.detected,
+        configured = oled.configured,
+        operative = oled.operative,
+        sda = oled.sda,
+        scl = oled.scl,
+        stateLabel = if (oled.detected) firmwareStateLabel(oled.state) else null,
+        lastSync = sync,
+        live = live,
+        modifier = Modifier.testTag("component_oled_status")
+    )
+}
+
+/** Human label for a firmware component lifecycle state. */
+private fun firmwareStateLabel(state: String): String = when (state) {
+    "active" -> "activo"
+    "error" -> "error"
+    "unsupported" -> "no soportado"
+    "disconnected" -> "desconectado"
+    "configured" -> "configurado"
+    "detected" -> "detectado"
+    "catalog" -> "solo catálogo"
+    else -> state
 }
 
 /** Human label for a firmware measurement status; never upgrades an invalid one. */
