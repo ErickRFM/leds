@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.rgbcontroller.core.ble.BleManager
+import com.rgbcontroller.core.components.automation.AutomationAction
+import com.rgbcontroller.core.components.automation.AutomationActionSink
 import com.rgbcontroller.core.components.status.ComponentDashboardState
 import com.rgbcontroller.core.components.status.ComponentStatusRepository
 import com.rgbcontroller.core.components.status.LocalDesiredConfig
@@ -24,7 +26,8 @@ class ComponentDashboardViewModel(
     private val isLinkAuthorized: () -> Boolean,
     private val currentDeviceId: () -> String?,
     private val fetchStatus: suspend () -> String?,
-    private val fetchTelemetry: suspend () -> String? = { null }
+    private val fetchTelemetry: suspend () -> String? = { null },
+    private val automationSink: AutomationActionSink? = null
 ) : ViewModel() {
 
     val uiState: StateFlow<ComponentDashboardState> = repository.state
@@ -70,8 +73,8 @@ class ComponentDashboardViewModel(
             repository.reportError(failure.message ?: "Error al leer la telemetría del ESP32.")
             return
         }
-        if (telemetry != null) {
-            repository.ingestTelemetry(telemetry)
+        if (telemetry != null && repository.ingestTelemetry(telemetry)) {
+            repository.runAutomations(automationSink, isLinkAuthorized())
         }
     }
 
@@ -102,8 +105,26 @@ class ComponentDashboardViewModel(
                 val fetchTelemetry = suspend {
                     if (authorized()) client.componentTelemetry(session!!.key).toString() else null
                 }
+                // Hardware automation actions reuse the EXISTING command path:
+                // the authorized Wi-Fi client (with readback) or the BLE queue.
+                // No second transport is created here.
+                val automationSink = AutomationActionSink { action ->
+                    when (action) {
+                        is AutomationAction.SetRgb ->
+                            if (authorized() && session != null) {
+                                client.setRgbConfirmed(
+                                    session.key, action.red, action.green, action.blue, action.brightness
+                                )
+                                true
+                            } else {
+                                false
+                            }
+                        is AutomationAction.UpdateOled -> false
+                        is AutomationAction.Notify -> true
+                    }
+                }
                 return ComponentDashboardViewModel(
-                    repository, authorized, deviceId, fetch, fetchTelemetry
+                    repository, authorized, deviceId, fetch, fetchTelemetry, automationSink
                 ) as T
             }
         }

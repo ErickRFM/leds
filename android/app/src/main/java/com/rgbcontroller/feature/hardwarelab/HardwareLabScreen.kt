@@ -18,6 +18,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.components.alerts.AlertComparison
 import com.rgbcontroller.core.components.alerts.AlertSeverity
+import com.rgbcontroller.core.components.automation.AutomationEventStatus
 import com.rgbcontroller.core.components.model.ComponentRuntimeStatus
 import com.rgbcontroller.core.components.model.ComponentState
 import com.rgbcontroller.core.components.model.ComponentStatusCodec
@@ -170,6 +171,13 @@ fun HardwareLabScreen(
             }
             item {
                 TelemetryChartsSection(state = state)
+            }
+            item {
+                Text("Automatizaciones",
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            item {
+                AutomationCard(state = state)
             }
             item {
                 Text("Pantalla OLED (display)",
@@ -476,6 +484,70 @@ private fun AlertsCard(state: ComponentDashboardState) {
             }
         }
     }
+}
+
+@Composable
+private fun AutomationCard(state: ComponentDashboardState) {
+    val rules = state.automationRules
+    val recent = state.automationEvents.take(5)
+    Card(Modifier.fillMaxWidth().testTag("component_automations")) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (rules.isEmpty()) {
+                Text("Sin automatizaciones configuradas.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                for (rule in rules) {
+                    Text(
+                        "${rule.action.label} · ${rule.componentId} · ${rule.measurementType} " +
+                            "${if (rule.comparison == AlertComparison.ABOVE) "≥" else "≤"} ${formatValue(rule.threshold)}" +
+                            (if (rule.enabled) "" else " (deshabilitada)"),
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (rule.enabled) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Text(
+                "Las acciones de hardware (RGB/OLED) solo se ejecutan por el canal ya " +
+                    "autorizado; si el enlace no está autorizado quedan bloqueadas, nunca simuladas.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (recent.isNotEmpty()) {
+                HorizontalDivider()
+                Text("Últimas automatizaciones",
+                    style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                for (event in recent) {
+                    Text(
+                        "${event.componentId} · ${event.action.label} · " +
+                            "${statusLabel(event.status)} (${formatValue(event.value)})",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = when (event.status) {
+                            AutomationEventStatus.DISPATCHED -> MaterialTheme.colorScheme.primary
+                            AutomationEventStatus.FAILED, AutomationEventStatus.BLOCKED ->
+                                MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        })
+                }
+            }
+            if (rules.any { !it.enabled && it.isHardware }) {
+                Text("Las acciones sobre hardware están desactivadas hasta que el usuario las habilite.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+private fun automationActionLabel(rule: com.rgbcontroller.core.components.automation.AutomationRule): String =
+    if (rule.isHardware) rule.action.label else rule.action.label
+
+private fun statusLabel(status: AutomationEventStatus): String = when (status) {
+    AutomationEventStatus.NOTIFIED -> "avisada"
+    AutomationEventStatus.PENDING -> "pendiente"
+    AutomationEventStatus.DISPATCHED -> "ejecutada"
+    AutomationEventStatus.BLOCKED -> "bloqueada (sin autorización)"
+    AutomationEventStatus.FAILED -> "fallida"
 }
 
 @Composable

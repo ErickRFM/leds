@@ -4,6 +4,10 @@ import com.rgbcontroller.core.components.alerts.AlertEvent
 import com.rgbcontroller.core.components.alerts.AlertRule
 import com.rgbcontroller.core.components.alerts.AlertState
 import com.rgbcontroller.core.components.alerts.DefaultAlertRules
+import com.rgbcontroller.core.components.automation.AutomationEvent
+import com.rgbcontroller.core.components.automation.AutomationEventStatus
+import com.rgbcontroller.core.components.automation.AutomationRule
+import com.rgbcontroller.core.components.automation.DefaultAutomationRules
 import com.rgbcontroller.core.components.model.ComponentMeasurement
 import com.rgbcontroller.core.components.model.ComponentRuntimeStatus
 import com.rgbcontroller.core.components.registry.ComponentCatalog
@@ -74,6 +78,9 @@ data class ComponentDashboardState(
     val alertRules: List<AlertRule> = DefaultAlertRules.defaults(),
     val alertStates: Map<String, AlertState> = emptyMap(),
     val alertEvents: List<AlertEvent> = emptyList(),
+    val automationRules: List<AutomationRule> = DefaultAutomationRules.defaults(),
+    val automationStates: Map<String, AlertState> = emptyMap(),
+    val automationEvents: List<AutomationEvent> = emptyList(),
     val connected: Boolean = false,
     val authorityError: String? = null
 ) {
@@ -141,6 +148,10 @@ data class ComponentDashboardState(
     /** Most recent alert transitions first, bounded. */
     val recentAlertEvents: List<AlertEvent>
         get() = alertEvents.take(MAX_ALERT_EVENTS)
+
+    /** Automation actions still waiting for the transport to run them. */
+    val pendingAutomations: List<AutomationEvent>
+        get() = automationEvents.filter { it.status == AutomationEventStatus.PENDING }
 
     companion object {
         const val MAX_ALERT_EVENTS = 50
