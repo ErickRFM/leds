@@ -3,6 +3,8 @@ package com.rgbcontroller.core.data
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.rgbcontroller.core.components.alerts.AlertRule
+import com.rgbcontroller.core.components.alerts.AlertRulesCodec
 import com.rgbcontroller.core.components.status.ComponentStatusStorage
 import com.rgbcontroller.core.components.status.LastKnownStatus
 import com.rgbcontroller.core.components.status.LastKnownStatusCodec
@@ -28,6 +30,7 @@ class DataStoreComponentStatusStorage(private val context: Context) : ComponentS
         private val DESIRED = stringPreferencesKey("component_desired_v1")
         private val TELEMETRY = stringPreferencesKey("component_telemetry_v1")
         private val HISTORY = stringPreferencesKey("component_telemetry_history_v1")
+        private val ALERT_RULES = stringPreferencesKey("component_alert_rules_v1")
     }
 
     override suspend fun loadLastKnown(): LastKnownStatus? =
@@ -60,5 +63,13 @@ class DataStoreComponentStatusStorage(private val context: Context) : ComponentS
     override suspend fun saveHistory(samples: List<TelemetrySample>) {
         val encoded = TelemetryHistoryCodec.encode(samples)
         context.dataStore.edit { prefs -> prefs[HISTORY] = encoded }
+    }
+
+    override suspend fun loadAlertRules(): List<AlertRule> =
+        AlertRulesCodec.decode(context.dataStore.data.first()[ALERT_RULES])
+
+    override suspend fun saveAlertRules(rules: List<AlertRule>) {
+        val encoded = AlertRulesCodec.encode(rules)
+        context.dataStore.edit { prefs -> prefs[ALERT_RULES] = encoded }
     }
 }

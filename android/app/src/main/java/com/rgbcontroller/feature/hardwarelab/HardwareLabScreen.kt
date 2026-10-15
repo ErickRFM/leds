@@ -16,6 +16,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rgbcontroller.core.ble.BleManager
+import com.rgbcontroller.core.components.alerts.AlertComparison
+import com.rgbcontroller.core.components.alerts.AlertSeverity
 import com.rgbcontroller.core.components.model.ComponentRuntimeStatus
 import com.rgbcontroller.core.components.model.ComponentState
 import com.rgbcontroller.core.components.model.ComponentStatusCodec
@@ -154,6 +156,13 @@ fun HardwareLabScreen(
             }
             item {
                 SoilTelemetryCard(state = state)
+            }
+            item {
+                Text("Alertas",
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            item {
+                AlertsCard(state = state)
             }
             item {
                 Text("Gráficas (ventana de 30 min)",
@@ -421,6 +430,52 @@ private fun OledStatusCard(state: ComponentDashboardState) {
         live = live,
         modifier = Modifier.testTag("component_oled_status")
     )
+}
+
+@Composable
+private fun AlertsCard(state: ComponentDashboardState) {
+    val active = state.alertRules.filter { state.alertStates[it.id]?.active == true }
+    val recent = state.alertEvents.take(5)
+    Card(Modifier.fillMaxWidth().testTag("component_alerts")) {
+        Column(Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (active.isEmpty()) {
+                Text("Sin alertas activas. Los umbrales son locales y no implican aceptación del firmware.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                for (rule in active) {
+                    val value = state.alertStates[rule.id]?.lastValue
+                    val color = when (rule.severity) {
+                        AlertSeverity.CRITICAL -> MaterialTheme.colorScheme.error
+                        AlertSeverity.WARNING -> MaterialTheme.colorScheme.tertiary
+                        AlertSeverity.INFO -> MaterialTheme.colorScheme.primary
+                    }
+                    Text(
+                        "${rule.componentId} · ${rule.measurementType} " +
+                            "${if (rule.comparison == AlertComparison.ABOVE) "≥" else "≤"} ${formatValue(rule.threshold)} " +
+                            "(${rule.severity.name.lowercase()})",
+                        fontWeight = FontWeight.SemiBold, color = color,
+                        style = MaterialTheme.typography.bodySmall)
+                    Text("Último valor: ${value?.let { formatValue(it) } ?: "—"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            if (recent.isNotEmpty()) {
+                HorizontalDivider()
+                Text("Historial reciente", fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodySmall)
+                for (event in recent) {
+                    Text(
+                        "${formatTime(event.atMs)} · ${if (event.clear) "normalizada" else "activada"} " +
+                            "${event.ruleId} · ${formatValue(event.value)} (umbral ${formatValue(event.threshold)})",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
 }
 
 @Composable
