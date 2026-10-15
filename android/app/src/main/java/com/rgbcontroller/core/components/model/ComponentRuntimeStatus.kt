@@ -1,5 +1,6 @@
 package com.rgbcontroller.core.components.model
 
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -33,6 +34,11 @@ object ComponentStatusCodec {
         if (root.optInt("version", 0) != 1) return null
         if (root.optString("gpioAuthority", "") != GPIO_AUTHORITY) return null
         val array = root.optJSONArray("components") ?: return null
+        return parseComponents(array)
+    }
+
+    /** Bounded parser for the `components` array shared by transport and persistence. */
+    fun parseComponents(array: JSONArray): List<ComponentRuntimeStatus> {
         val limit = minOf(array.length(), MAX_COMPONENTS)
         val out = ArrayList<ComponentRuntimeStatus>(limit)
         for (i in 0 until limit) {
@@ -57,6 +63,22 @@ object ComponentStatusCodec {
             )
         }
         return out
+    }
+
+    /** Encodes a bounded component list (no credentials, no transport fields). */
+    fun encodeComponents(components: List<ComponentRuntimeStatus>): JSONArray {
+        val array = JSONArray()
+        for (component in components.take(MAX_COMPONENTS)) {
+            val entry = JSONObject()
+            entry.put("id", component.id)
+            entry.put("type", component.type)
+            entry.put("interface", component.interfaceType)
+            entry.put("state", component.state)
+            entry.put("active", component.active)
+            entry.put("pins", JSONArray(component.pins))
+            array.put(entry)
+        }
+        return array
     }
 
     fun find(statuses: List<ComponentRuntimeStatus>, id: String): ComponentRuntimeStatus? =
