@@ -3,6 +3,8 @@ package com.rgbcontroller.core.components.status
 import com.rgbcontroller.core.components.model.ComponentMeasurement
 import com.rgbcontroller.core.components.model.ComponentRuntimeStatus
 import com.rgbcontroller.core.components.registry.ComponentCatalog
+import com.rgbcontroller.core.components.telemetry.TelemetryHistory
+import com.rgbcontroller.core.components.telemetry.TelemetrySample
 
 /**
  * Local configuration the user requested. This is a DESIRE, never proof that the
@@ -64,6 +66,7 @@ data class ComponentDashboardState(
     val lastKnownStatus: LastKnownStatus? = null,
     val firmwareTelemetry: FirmwareReportedTelemetry? = null,
     val lastKnownTelemetry: LastKnownTelemetry? = null,
+    val history: List<TelemetrySample> = emptyList(),
     val connected: Boolean = false,
     val authorityError: String? = null
 ) {
@@ -114,4 +117,12 @@ data class ComponentDashboardState(
             persistedTelemetry != null -> ComponentStatusFreshness.LAST_KNOWN
             else -> ComponentStatusFreshness.NONE
         }
+
+    /** Bounded telemetry history for the CURRENT device only (never another device's). */
+    val deviceHistory: List<TelemetrySample>
+        get() = TelemetryHistory.samplesForDevice(history, deviceId)
+
+    /** One series of the current device's history, oldest first. */
+    fun series(componentId: String, measurementType: String): List<TelemetrySample> =
+        TelemetryHistory.samplesForSeries(deviceHistory, componentId, measurementType)
 }

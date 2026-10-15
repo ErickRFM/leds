@@ -2,6 +2,9 @@ package com.rgbcontroller.core.components.status
 
 import com.rgbcontroller.core.components.model.ComponentStatusCodec
 import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
+import com.rgbcontroller.core.components.telemetry.TelemetryHistory
+import com.rgbcontroller.core.components.telemetry.TelemetryHistoryLimits
+import com.rgbcontroller.core.components.telemetry.TelemetryProvenance
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,22 +23,42 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class ComponentStatusRepository(
     private val storage: ComponentStatusStorage,
-    private val clock: () -> Long = { System.currentTimeMillis() }
+    private val clock: () -> Long = { System.currentTimeMillis() },
+    private val historyLimits: TelemetryHistoryLimits = TelemetryHistoryLimits()
 ) {
     private val _state = MutableStateFlow(ComponentDashboardState())
     val state: StateFlow<ComponentDashboardState> = _state.asStateFlow()
 
     private var deviceId: String? = null
 
-    /** Restore persisted last-known status, telemetry and local desired config. */
+    /** Restore persisted last-known status, telemetry, history and desired config. */
     suspend fun loadPersisted() {
         val lastKnown = storage.loadLastKnown()
         val desired = storage.loadDesired()
         val telemetry = storage.loadTelemetry()
+        val storedHistory = storage.loadHistory()
+        // If no history was ever recorded but a last-known snapshot exists, seed a
+        // single LAST_KNOWN sample per reading so a chart is never empty-handed.
+        val history = if (storedHistory.isEmpty() && telemetry != null) {
+            val seeded = TelemetryHistory.append(
+                existing = emptyList(),
+                incoming = TelemetryHistory.samplesFromMeasurements(
+                    telemetry.measurements, telemetry.deviceId,
+                    telemetry.confirmedAtMs, TelemetryProvenance.LAST_KNOWN
+                ),
+                limits = historyLimits,
+                nowMs = telemetry.confirmedAtMs
+            )
+            if (seeded.isNotEmpty()) storage.saveHistory(seeded)
+            seeded
+        } else {
+            storedHistory
+        }
         _state.value = _state.value.copy(
             lastKnownStatus = lastKnown,
             desiredConfig = desired,
-            lastKnownTelemetry = telemetry
+            lastKnownTelemetry = telemetry,
+            history = history
         )
     }
 
@@ -121,7 +144,17 @@ class ComponentStatusRepository(
         _state.value = _state.value.copy(firmwareTelemetry = reported, authorityError = null)
         val lastKnown = LastKnownTelemetry(current, measurements, now)
         storage.saveTelemetry(lastKnown)
-        _state.value = _state.value.copy(lastKnownTelemetry = lastKnown)
+        val samples = TelemetryHistory.samplesFromMeasurements(
+            measurements, current, now, TelemetryProvenance.FIRMWARE
+        )
+        val history = TelemetryHistory.append(
+            existing = _state.value.history,
+            incoming = samples,
+            limits = historyLimits,
+            nowMs = now
+        )
+        storage.saveHistory(history)
+        _state.value = _state.value.copy(lastKnownTelemetry = lastKnown, history = history)
         return true
     }
 }
