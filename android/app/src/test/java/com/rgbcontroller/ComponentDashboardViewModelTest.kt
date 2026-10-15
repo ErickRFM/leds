@@ -155,6 +155,15 @@ class ComponentDashboardViewModelTest {
         assertEquals(2500f, raw.value, 0.01f)
     }
 
+    @Test fun confirmedCatalogIdsMapFirmwareIdsToCatalogIds() = runBlocking {
+        val h = Harness().apply { response = validPayload }
+        h.viewModel.refresh()
+        val known = h.viewModel.uiState.value.confirmedCatalogIds
+        // The firmware reports `led.rgb`; the local desired config uses `led_rgb`.
+        assertTrue("a confirmed component must be recognised by its catalog id", "led_rgb" in known)
+        assertFalse("firmware ids must not leak into the catalog-id set", "led.rgb" in known)
+    }
+
     @Test fun connectionChangeTriggersRefreshWhenAuthorized() = runBlocking {
         val h = Harness().apply { response = validPayload }
         h.viewModel.onConnectionChanged()
