@@ -80,6 +80,11 @@ class ComponentDashboardViewModel(
 
     suspend fun setLocalDesired(config: LocalDesiredConfig) = repository.setDesired(config)
 
+    suspend fun setSoilCalibration(dryRaw: Int, wetRaw: Int): Boolean =
+        repository.setSoilCalibration(dryRaw, wetRaw)
+
+    suspend fun clearSoilCalibration() = repository.clearSoilCalibration()
+
     companion object {
         fun factory(
             context: Context,

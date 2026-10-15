@@ -9,6 +9,7 @@ import com.rgbcontroller.core.components.automation.AutomationEngine
 import com.rgbcontroller.core.components.automation.AutomationEventStatus
 import com.rgbcontroller.core.components.automation.AutomationRule
 import com.rgbcontroller.core.components.automation.DefaultAutomationRules
+import com.rgbcontroller.core.components.calibration.StoredSoilCalibration
 import com.rgbcontroller.core.components.model.ComponentStatusCodec
 import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
 import com.rgbcontroller.core.components.telemetry.TelemetryHistory
@@ -48,6 +49,7 @@ class ComponentStatusRepository(
         val storedHistory = storage.loadHistory()
         val storedRules = storage.loadAlertRules()
         val storedAutomations = storage.loadAutomationRules()
+        val storedCalibration = storage.loadSoilCalibration()
         // If no history was ever recorded but a last-known snapshot exists, seed a
         // single LAST_KNOWN sample per reading so a chart is never empty-handed.
         val history = if (storedHistory.isEmpty() && telemetry != null) {
@@ -75,8 +77,30 @@ class ComponentStatusRepository(
             lastKnownTelemetry = telemetry,
             history = history,
             alertRules = rules,
-            automationRules = automations
+            automationRules = automations,
+            soilCalibration = storedCalibration
         )
+    }
+
+    /**
+     * Persist a soil calibration bound to the CURRENT device. Rejects (returns
+     * false) an invalid pair or a missing device, so no calibration is stored for
+     * "no device". A stored calibration for another device is kept but never
+     * applied (see [ComponentDashboardState.activeSoilCalibration]).
+     */
+    suspend fun setSoilCalibration(dryRaw: Int, wetRaw: Int): Boolean {
+        val device = _state.value.deviceId ?: return false
+        val stored = runCatching {
+            StoredSoilCalibration(deviceId = device, dryRaw = dryRaw, wetRaw = wetRaw)
+        }.getOrNull() ?: return false
+        _state.value = _state.value.copy(soilCalibration = stored)
+        storage.saveSoilCalibration(stored)
+        return true
+    }
+
+    suspend fun clearSoilCalibration() {
+        _state.value = _state.value.copy(soilCalibration = null)
+        storage.saveSoilCalibration(null)
     }
 
     /** Replace the configurable alert thresholds and persist them. */

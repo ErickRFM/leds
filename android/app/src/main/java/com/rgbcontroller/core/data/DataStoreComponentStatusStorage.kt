@@ -7,6 +7,8 @@ import com.rgbcontroller.core.components.alerts.AlertRule
 import com.rgbcontroller.core.components.alerts.AlertRulesCodec
 import com.rgbcontroller.core.components.automation.AutomationRule
 import com.rgbcontroller.core.components.automation.AutomationRulesCodec
+import com.rgbcontroller.core.components.calibration.SoilCalibrationCodec
+import com.rgbcontroller.core.components.calibration.StoredSoilCalibration
 import com.rgbcontroller.core.components.status.ComponentStatusStorage
 import com.rgbcontroller.core.components.status.LastKnownStatus
 import com.rgbcontroller.core.components.status.LastKnownStatusCodec
@@ -34,6 +36,7 @@ class DataStoreComponentStatusStorage(private val context: Context) : ComponentS
         private val HISTORY = stringPreferencesKey("component_telemetry_history_v1")
         private val ALERT_RULES = stringPreferencesKey("component_alert_rules_v1")
         private val AUTOMATION_RULES = stringPreferencesKey("component_automation_rules_v1")
+        private val SOIL_CALIBRATION = stringPreferencesKey("component_soil_calibration_v1")
     }
 
     override suspend fun loadLastKnown(): LastKnownStatus? =
@@ -82,5 +85,18 @@ class DataStoreComponentStatusStorage(private val context: Context) : ComponentS
     override suspend fun saveAutomationRules(rules: List<AutomationRule>) {
         val encoded = AutomationRulesCodec.encode(rules)
         context.dataStore.edit { prefs -> prefs[AUTOMATION_RULES] = encoded }
+    }
+
+    override suspend fun loadSoilCalibration(): StoredSoilCalibration? =
+        SoilCalibrationCodec.decode(context.dataStore.data.first()[SOIL_CALIBRATION])
+
+    override suspend fun saveSoilCalibration(calibration: StoredSoilCalibration?) {
+        context.dataStore.edit { prefs ->
+            if (calibration == null) {
+                prefs.remove(SOIL_CALIBRATION)
+            } else {
+                prefs[SOIL_CALIBRATION] = SoilCalibrationCodec.encode(calibration)
+            }
+        }
     }
 }

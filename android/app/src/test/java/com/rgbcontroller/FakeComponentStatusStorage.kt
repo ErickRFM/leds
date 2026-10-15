@@ -5,6 +5,7 @@ import com.rgbcontroller.core.components.status.LastKnownStatus
 import com.rgbcontroller.core.components.status.LastKnownTelemetry
 import com.rgbcontroller.core.components.alerts.AlertRule
 import com.rgbcontroller.core.components.automation.AutomationRule
+import com.rgbcontroller.core.components.calibration.StoredSoilCalibration
 import com.rgbcontroller.core.components.status.LocalDesiredConfig
 import com.rgbcontroller.core.components.telemetry.TelemetrySample
 
@@ -16,12 +17,14 @@ class FakeComponentStatusStorage : ComponentStatusStorage {
     var history: List<TelemetrySample> = emptyList()
     var alertRules: List<AlertRule> = emptyList()
     var automationRules: List<AutomationRule> = emptyList()
+    var soilCalibration: StoredSoilCalibration? = null
     var saveLastKnownCount = 0
     var saveDesiredCount = 0
     var saveTelemetryCount = 0
     var saveHistoryCount = 0
     var saveAlertRulesCount = 0
     var saveAutomationRulesCount = 0
+    var saveSoilCalibrationCount = 0
 
     override suspend fun loadLastKnown(): LastKnownStatus? = lastKnown
 
@@ -63,5 +66,12 @@ class FakeComponentStatusStorage : ComponentStatusStorage {
     override suspend fun saveAutomationRules(rules: List<AutomationRule>) {
         automationRules = rules
         saveAutomationRulesCount++
+    }
+
+    override suspend fun loadSoilCalibration(): StoredSoilCalibration? = soilCalibration
+
+    override suspend fun saveSoilCalibration(calibration: StoredSoilCalibration?) {
+        soilCalibration = calibration
+        saveSoilCalibrationCount++
     }
 }

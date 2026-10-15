@@ -159,6 +159,11 @@ fun HardwareLabScreen(
                 SoilTelemetryCard(state = state)
             }
             item {
+                SoilCalibrationCard(state = state, onClear = {
+                    scope.launch { viewModel.clearSoilCalibration() }
+                })
+            }
+            item {
                 Text("Alertas",
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
@@ -417,6 +422,44 @@ private fun SoilTelemetryCard(state: ComponentDashboardState) {
         status = status?.let { telemetryStatusLabel(it) },
         modifier = Modifier.testTag("component_telemetry_soil_moisture")
     )
+}
+
+@Composable
+private fun SoilCalibrationCard(state: ComponentDashboardState, onClear: () -> Unit) {
+    val stored = state.soilCalibration
+    val active = state.activeSoilCalibration
+    Card(Modifier.fillMaxWidth().testTag("component_soil_calibration")) {
+        Column(Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Calibración de suelo", fontWeight = FontWeight.SemiBold)
+            when {
+                active != null -> {
+                    Text(
+                        "Activa para este dispositivo · seco ${active.dryRaw} / húmedo ${active.wetRaw}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary)
+                }
+                stored != null -> {
+                    Text(
+                        "La calibración guardada pertenece a otro dispositivo (${stored.deviceId}) " +
+                            "y se ignora: no se aplica a este sensor.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = onClear,
+                        modifier = Modifier.testTag("component_soil_calibration_clear")) {
+                        Text("Descartar calibración incompatible")
+                    }
+                }
+                else -> {
+                    Text(
+                        "Sin calibración para este dispositivo. Sin referencias seco/húmedo " +
+                            "no se muestra un porcentaje de humedad.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
 }
 
 @Composable
