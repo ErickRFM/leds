@@ -1,6 +1,7 @@
 package com.rgbcontroller.core.components.status
 
 import com.rgbcontroller.core.components.model.ComponentStatusCodec
+import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,20 +27,26 @@ class ComponentStatusRepository(
 
     private var deviceId: String? = null
 
-    /** Restore persisted last-known status and local desired configuration. */
+    /** Restore persisted last-known status, telemetry and local desired config. */
     suspend fun loadPersisted() {
         val lastKnown = storage.loadLastKnown()
         val desired = storage.loadDesired()
-        _state.value = _state.value.copy(lastKnownStatus = lastKnown, desiredConfig = desired)
+        val telemetry = storage.loadTelemetry()
+        _state.value = _state.value.copy(
+            lastKnownStatus = lastKnown,
+            desiredConfig = desired,
+            lastKnownTelemetry = telemetry
+        )
     }
 
     fun setDevice(next: String?) {
         if (deviceId == next) return
         deviceId = next
-        // Another device's live status must never apply to the new device.
+        // Another device's live status/readings must never apply to the new device.
         _state.value = _state.value.copy(
             deviceId = next,
             firmwareStatus = null,
+            firmwareTelemetry = null,
             authorityError = null
         )
     }
@@ -49,8 +56,12 @@ class ComponentStatusRepository(
         _state.value = if (connected) {
             _state.value.copy(connected = true)
         } else {
-            // Offline: drop authoritative status so nothing is shown as live.
-            _state.value.copy(connected = false, firmwareStatus = null)
+            // Offline: drop authoritative status/readings so nothing is shown as live.
+            _state.value.copy(
+                connected = false,
+                firmwareStatus = null,
+                firmwareTelemetry = null
+            )
         }
     }
 
@@ -85,6 +96,32 @@ class ComponentStatusRepository(
         val lastKnown = LastKnownStatus(current, components, now)
         storage.saveLastKnown(lastKnown)
         _state.value = _state.value.copy(lastKnownStatus = lastKnown)
+        return true
+    }
+
+    /**
+     * Accept a firmware telemetry payload. Returns true only when the document
+     * was well-formed (an empty but valid list counts). An unreadable payload
+     * never overwrites confirmed readings and is surfaced as an error instead of
+     * fabricating numbers.
+     */
+    suspend fun ingestTelemetry(raw: String?): Boolean {
+        val current = deviceId
+        if (current == null) {
+            reportError("Dispositivo sin identificar; no se pueden confirmar lecturas.")
+            return false
+        }
+        val measurements = ComponentTelemetryCodec.decode(raw)
+        if (measurements == null) {
+            reportError("Telemetría de sensores no autoritativa, vacía o ilegible.")
+            return false
+        }
+        val now = clock()
+        val reported = FirmwareReportedTelemetry(current, measurements, now)
+        _state.value = _state.value.copy(firmwareTelemetry = reported, authorityError = null)
+        val lastKnown = LastKnownTelemetry(current, measurements, now)
+        storage.saveTelemetry(lastKnown)
+        _state.value = _state.value.copy(lastKnownTelemetry = lastKnown)
         return true
     }
 }

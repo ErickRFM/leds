@@ -17,6 +17,13 @@ class ComponentStatusRepositoryTest {
         ]}
     """.trimIndent()
 
+    private val validTelemetry = """
+        {"version":1,"measurements":[
+          {"type":"humidity","status":"fresh","valid":true,"value":48.30,"unit":"%","timestampMs":1200},
+          {"type":"temperature","status":"fresh","valid":true,"value":21.70,"unit":"C","timestampMs":1200}
+        ]}
+    """.trimIndent()
+
     private fun newRepo(storage: FakeComponentStatusStorage = FakeComponentStatusStorage()) =
         ComponentStatusRepository(storage, clock = { 1000L })
 
@@ -114,6 +121,86 @@ class ComponentStatusRepositoryTest {
         assertEquals(1, state.authoritative?.size)
         assertEquals(1, storage.saveDesiredCount)
         assertNotEquals(state.desiredConfig.components.first().id, state.authoritative?.first()?.id)
+    }
+
+    @Test fun validTelemetryBecomesLiveAndPersists() = runBlocking {
+        val storage = FakeComponentStatusStorage()
+        val repo = newRepo(storage)
+        repo.setDevice("device-a")
+        repo.setConnected(true)
+        repo.ingest(validPayload)
+        assertTrue(repo.ingestTelemetry(validTelemetry))
+        val state = repo.state.value
+        assertEquals(ComponentStatusFreshness.LIVE, state.telemetryFreshness)
+        assertEquals(2, state.authoritativeTelemetry?.size)
+        assertEquals(1, storage.saveTelemetryCount)
+        assertEquals("device-a", storage.lastKnownTelemetry?.deviceId)
+    }
+
+    @Test fun invalidTelemetryNeverOverwritesConfirmedReadings() = runBlocking {
+        val storage = FakeComponentStatusStorage()
+        val repo = newRepo(storage)
+        repo.setDevice("device-a")
+        repo.setConnected(true)
+        repo.ingest(validPayload)
+        repo.ingestTelemetry(validTelemetry)
+        val before = repo.state.value
+
+        assertFalse(repo.ingestTelemetry("{\"version\":2,\"measurements\":[]}"))
+        assertFalse(repo.ingestTelemetry("basura"))
+        assertFalse(repo.ingestTelemetry(null))
+
+        val after = repo.state.value
+        assertEquals(before.firmwareTelemetry, after.firmwareTelemetry)
+        assertEquals(ComponentStatusFreshness.LIVE, after.telemetryFreshness)
+        assertNotNull(after.authorityError)
+        assertEquals(1, storage.saveTelemetryCount)
+    }
+
+    @Test fun emptyButValidTelemetryIsAuthoritativeButHasNoNumbers() = runBlocking {
+        val repo = newRepo()
+        repo.setDevice("device-a")
+        repo.setConnected(true)
+        repo.ingest(validPayload)
+        assertTrue(repo.ingestTelemetry("{\"version\":1,\"measurements\":[]}"))
+        val state = repo.state.value
+        assertEquals(ComponentStatusFreshness.LIVE, state.telemetryFreshness)
+        assertTrue(state.authoritativeTelemetry!!.isEmpty())
+    }
+
+    @Test fun disconnectingRevokesLiveTelemetryButKeepsLastKnown() = runBlocking {
+        val storage = FakeComponentStatusStorage()
+        val repo = newRepo(storage)
+        repo.setDevice("device-a")
+        repo.setConnected(true)
+        repo.ingest(validPayload)
+        repo.ingestTelemetry(validTelemetry)
+        repo.setConnected(false)
+        val state = repo.state.value
+        assertNull(state.firmwareTelemetry)
+        assertNull(state.authoritativeTelemetry)
+        assertEquals(ComponentStatusFreshness.LAST_KNOWN, state.telemetryFreshness)
+        assertNotNull(state.persistedTelemetry)
+    }
+
+    @Test fun deviceChangeDropsLiveTelemetry() = runBlocking {
+        val storage = FakeComponentStatusStorage()
+        val repo = newRepo(storage)
+        repo.setDevice("device-a")
+        repo.setConnected(true)
+        repo.ingest(validPayload)
+        repo.ingestTelemetry(validTelemetry)
+
+        repo.setDevice("device-b")
+        assertEquals(ComponentStatusFreshness.NONE, repo.state.value.telemetryFreshness)
+        assertNull(repo.state.value.authoritativeTelemetry)
+    }
+
+    @Test fun telemetryWithoutDeviceIsRejected() = runBlocking {
+        val repo = newRepo()
+        assertFalse(repo.ingestTelemetry(validTelemetry))
+        assertNotNull(repo.state.value.authorityError)
+        assertNull(repo.state.value.firmwareTelemetry)
     }
 
     @Test fun ingestWithoutDeviceIsRejected() = runBlocking {

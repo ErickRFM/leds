@@ -1,5 +1,6 @@
 package com.rgbcontroller.core.components.model
 
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -34,6 +35,11 @@ object ComponentTelemetryCodec {
         val json = runCatching { JSONObject(raw) }.getOrNull() ?: return null
         if (json.optInt("version", -1) != 1) return null
         val array = json.optJSONArray("measurements") ?: return null
+        return parseMeasurements(array)
+    }
+
+    /** Bounded parser for the `measurements` array shared by transport and persistence. */
+    fun parseMeasurements(array: JSONArray): List<ComponentMeasurement> {
         val limit = minOf(array.length(), MAX_MEASUREMENTS)
         val out = ArrayList<ComponentMeasurement>(limit)
         for (i in 0 until limit) {
@@ -55,6 +61,35 @@ object ComponentTelemetryCodec {
             )
         }
         return out
+    }
+
+    /**
+     * Bounded encoder used only for local persistence of already-decoded
+     * measurements. Non-finite values are stored as JSON null so a persisted
+     * document can never resurrect a fabricated number; credentials are never
+     * encoded here.
+     */
+    fun encodeMeasurements(measurements: List<ComponentMeasurement>): JSONArray {
+        val array = JSONArray()
+        for (measurement in measurements.take(MAX_MEASUREMENTS)) {
+            val entry = JSONObject()
+            entry.put("type", measurement.type)
+            entry.put("status", measurement.status)
+            entry.put("valid", measurement.valid && measurement.value.isFinite())
+            entry.put("value", if (measurement.value.isFinite()) measurement.value.toDouble() else JSONObject.NULL)
+            entry.put("unit", measurement.unit)
+            entry.put("timestampMs", measurement.timestampMs)
+            array.put(entry)
+        }
+        return array
+    }
+
+    /** Wraps [encodeMeasurements] in the same `{"version":1,...}` document the firmware emits. */
+    fun encode(measurements: List<ComponentMeasurement>): JSONObject {
+        val root = JSONObject()
+        root.put("version", 1)
+        root.put("measurements", encodeMeasurements(measurements))
+        return root
     }
 
     fun find(measurements: List<ComponentMeasurement>, type: String): ComponentMeasurement? =

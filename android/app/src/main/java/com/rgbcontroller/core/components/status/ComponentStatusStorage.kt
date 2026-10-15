@@ -9,4 +9,6 @@ interface ComponentStatusStorage {
     suspend fun saveLastKnown(status: LastKnownStatus)
     suspend fun loadDesired(): LocalDesiredConfig
     suspend fun saveDesired(config: LocalDesiredConfig)
+    suspend fun loadTelemetry(): LastKnownTelemetry?
+    suspend fun saveTelemetry(telemetry: LastKnownTelemetry)
 }

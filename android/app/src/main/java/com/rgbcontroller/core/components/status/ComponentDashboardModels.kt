@@ -1,5 +1,6 @@
 package com.rgbcontroller.core.components.status
 
+import com.rgbcontroller.core.components.model.ComponentMeasurement
 import com.rgbcontroller.core.components.model.ComponentRuntimeStatus
 
 /**
@@ -27,6 +28,24 @@ data class FirmwareReportedStatus(
     val receivedAtMs: Long
 )
 
+/**
+ * Real sensor readings the firmware confirmed during the current session. An
+ * invalid/absent measurement is kept with [ComponentMeasurement.valid] false so
+ * the UI never upgrades it to a live number.
+ */
+data class FirmwareReportedTelemetry(
+    val deviceId: String,
+    val measurements: List<ComponentMeasurement>,
+    val receivedAtMs: Long
+)
+
+/** Last real firmware readings, persisted across sessions and explicitly not live. */
+data class LastKnownTelemetry(
+    val deviceId: String,
+    val measurements: List<ComponentMeasurement>,
+    val confirmedAtMs: Long
+)
+
 /** Persisted copy of a previously firmware-confirmed status. */
 data class LastKnownStatus(
     val deviceId: String,
@@ -42,6 +61,8 @@ data class ComponentDashboardState(
     val desiredConfig: LocalDesiredConfig = LocalDesiredConfig.EMPTY,
     val firmwareStatus: FirmwareReportedStatus? = null,
     val lastKnownStatus: LastKnownStatus? = null,
+    val firmwareTelemetry: FirmwareReportedTelemetry? = null,
+    val lastKnownTelemetry: LastKnownTelemetry? = null,
     val connected: Boolean = false,
     val authorityError: String? = null
 ) {
@@ -62,4 +83,23 @@ data class ComponentDashboardState(
     /** Persisted components for the CURRENT device, explicitly not live. */
     val persisted: List<ComponentRuntimeStatus>?
         get() = lastKnownStatus?.takeIf { it.deviceId == deviceId }?.components
+
+    /**
+     * Real live readings for the CURRENT device only. Never returns persisted
+     * values, so callers cannot display cached telemetry as live.
+     */
+    val authoritativeTelemetry: List<ComponentMeasurement>?
+        get() = firmwareTelemetry?.takeIf { it.deviceId == deviceId }?.measurements
+
+    /** Persisted real readings for the CURRENT device, explicitly not live. */
+    val persistedTelemetry: List<ComponentMeasurement>?
+        get() = lastKnownTelemetry?.takeIf { it.deviceId == deviceId }?.measurements
+
+    /** Freshness of the readings: LIVE only with current-device live telemetry. */
+    val telemetryFreshness: ComponentStatusFreshness
+        get() = when {
+            authoritativeTelemetry != null -> ComponentStatusFreshness.LIVE
+            persistedTelemetry != null -> ComponentStatusFreshness.LAST_KNOWN
+            else -> ComponentStatusFreshness.NONE
+        }
 }
