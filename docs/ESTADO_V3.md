@@ -84,3 +84,32 @@ Los siguientes PR ya se fusionaron a `main` tras los checks de Android, firmware
 **Desde la app:** `Ajustes → Centro ESP32 → Ejecutar autodiagnóstico (solo lectura)`, luego `Compartir reporte sin claves`. El informe **no valida** autorización BLE, OTA ni pines eléctricos. Para pruebas Wi-Fi, conectarse a `ESP32-Control-Lab` y aceptar mantener el Wi-Fi sin Internet; un gateway diferente a `192.168.4.1` se rechaza intencionalmente, no se usa celular como respaldo.
 
 **Próxima decisión:** interpretar resultados B1–F1 que entregue el usuario y priorizar problemas observados, sin exponer credenciales en logs. Seguridad BLE, OTA firmado, I²C, red multi-ESP32 y release formal siguen pendientes.
+
+## Iteración del Plan Maestro V15.1 (F00–F07)
+
+Incrementos fusionados a `main` con los cuatro checks de CI en verde (`android`,
+`firmware`, `firmware-core-tests`, `windows-board-profile`). Igual que en las
+iteraciones anteriores, la CI comprueba pruebas disponibles y compilación, pero
+**no sustituye** la validación en placa/teléfono.
+
+| Fase | PR | Incremento | Evidencia hardware |
+|---|---|---|---|
+| F00 | [#87](https://github.com/ErickRFM/leds/pull/87) | Base V15.1 sobre el laboratorio existente | Pendiente |
+| F01 | [#88](https://github.com/ErickRFM/leds/pull/88) | Autorización BLE real (sin regresión de transporte) | Pendiente |
+| F02 | [#89](https://github.com/ErickRFM/leds/pull/89) | Catálogo/disposición de componentes | Pendiente |
+| F03 | [#90](https://github.com/ErickRFM/leds/pull/90) | Dashboard de componentes persistente y autoritativo por firmware | Pendiente |
+| F04 | [#91](https://github.com/ErickRFM/leds/pull/91) | Telemetría real DHT22 en el dashboard | Pendiente |
+| F05 | [#92](https://github.com/ErickRFM/leds/pull/92) | Humedad de suelo real (ADC1) | Pendiente |
+| F06 | [#93](https://github.com/ErickRFM/leds/pull/93) | Estado OLED SSD1306 en el dashboard | Pendiente |
+| F06 aud. | [#94](https://github.com/ErickRFM/leds/pull/94) | Corrección de comparación de ids en tarjetas deseadas | No aplica |
+| F07.1 | [#95](https://github.com/ErickRFM/leds/pull/95) | Repositorio de telemetría unificado + historial persistente acotado | Pendiente |
+| F07.2 | [#96](https://github.com/ErickRFM/leds/pull/96) | Gráficas con válido/inválido/obsoleto/desconectado | Pendiente |
+| F07.3 | [#97](https://github.com/ErickRFM/leds/pull/97) | Alertas configurables con histéresis y límite de frecuencia | Pendiente |
+| F07.4 | [#98](https://github.com/ErickRFM/leds/pull/98) | Automatizaciones declarativas por la ruta de comando autorizada | Pendiente |
+| F07.5 | [#99](https://github.com/ErickRFM/leds/pull/99) | Plantillas deshabilitadas + calibración de suelo persistente por dispositivo | Pendiente |
+
+**Ver F07:** [F07_TELEMETRIA_HISTORIAL.md](F07_TELEMETRIA_HISTORIAL.md),
+[F07_GRAFICAS.md](F07_GRAFICAS.md), [F07_ALERTAS.md](F07_ALERTAS.md),
+[F07_AUTOMATIZACIONES.md](F07_AUTOMATIZACIONES.md),
+[F07_PLANTILLAS_CALIBRACION.md](F07_PLANTILLAS_CALIBRACION.md) y
+[F07_AUDITORIA_FINAL.md](F07_AUDITORIA_FINAL.md).

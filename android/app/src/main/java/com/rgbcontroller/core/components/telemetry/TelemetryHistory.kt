@@ -94,15 +94,16 @@ object TelemetryHistory {
         recordedAtMs: Long,
         provenance: TelemetryProvenance
     ): List<TelemetrySample> = measurements.map { measurement ->
-        val finite = measurement.value.isFinite()
         TelemetrySample(
             deviceId = deviceId,
             componentId = componentIdForMeasurementType(measurement.type),
             measurementType = measurement.type,
-            value = measurement.value.takeIf { it.isFinite() },
+            // An invalid reading keeps no numeric value: a chart or consumer can
+            // never mistake a stale/invalid sample for a real measurement.
+            value = measurement.value.takeIf { measurement.valid && it.isFinite() },
             unit = measurement.unit,
             status = measurement.status,
-            valid = measurement.valid && finite,
+            valid = measurement.valid,
             sourceTimestampMs = measurement.timestampMs,
             recordedAtMs = recordedAtMs,
             provenance = provenance

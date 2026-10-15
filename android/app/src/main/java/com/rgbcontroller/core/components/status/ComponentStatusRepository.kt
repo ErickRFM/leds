@@ -118,11 +118,16 @@ class ComponentStatusRepository(
     fun setDevice(next: String?) {
         if (deviceId == next) return
         deviceId = next
-        // Another device's live status/readings must never apply to the new device.
+        // Another device's live status, readings, alert/automation state and
+        // transitions must never apply to the new device.
         _state.value = _state.value.copy(
             deviceId = next,
             firmwareStatus = null,
             firmwareTelemetry = null,
+            alertStates = emptyMap(),
+            alertEvents = emptyList(),
+            automationStates = emptyMap(),
+            automationEvents = emptyList(),
             authorityError = null
         )
     }
