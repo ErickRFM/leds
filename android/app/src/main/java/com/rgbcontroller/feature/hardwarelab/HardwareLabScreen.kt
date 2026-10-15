@@ -19,10 +19,14 @@ import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.components.model.ComponentRuntimeStatus
 import com.rgbcontroller.core.components.model.ComponentState
 import com.rgbcontroller.core.components.model.ComponentStatusCodec
+import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
+import com.rgbcontroller.core.components.model.HardwareComponentDescriptor
 import com.rgbcontroller.core.components.registry.ComponentCatalog
+import com.rgbcontroller.core.components.status.ComponentDashboardState
 import com.rgbcontroller.core.components.status.ComponentStatusFreshness
 import com.rgbcontroller.core.components.status.LocalDesiredComponent
 import com.rgbcontroller.core.components.status.LocalDesiredConfig
+import com.rgbcontroller.core.components.widgets.HumidityTemperatureWidget
 import com.rgbcontroller.core.wifi.CompiLabSession
 import com.rgbcontroller.core.wifi.LabConnectionState
 import kotlinx.coroutines.launch
@@ -66,6 +70,8 @@ fun HardwareLabScreen(
     val confirmed = state.firmwareStatus?.components
     val lastKnown = state.lastKnownStatus?.components
     val freshness = state.freshness
+    val knownIds = (state.authoritative ?: state.persisted).orEmpty().map { it.id }.toSet()
+    val missingTemplates = ComponentCatalog.components.filter { it.id !in knownIds }
 
     Scaffold(
         topBar = {
@@ -134,6 +140,14 @@ fun HardwareLabScreen(
                     }
                 }
             }
+            item {
+                Text("Lecturas reales de sensores",
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            item {
+                Dht22TelemetryCard(state = state)
+            }
+
             syncMessage?.let { message ->
                 item {
                     Text(message, style = MaterialTheme.typography.bodySmall,
@@ -168,6 +182,21 @@ fun HardwareLabScreen(
             } else {
                 items(state.desiredConfig.components, key = { "desired_${it.id}" }) { desired ->
                     DesiredComponentCard(desired = desired, confirmed = confirmed)
+                }
+            }
+
+            if (missingTemplates.isNotEmpty()) {
+                item {
+                    Text("Plantillas no detectadas por el firmware",
+                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+                item {
+                    Text("Estos componentes del catálogo no están presentes/activos según el firmware.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                items(missingTemplates, key = { "template_${it.id}" }) { descriptor ->
+                    DisabledTemplateCard(descriptor = descriptor)
                 }
             }
         }
@@ -282,6 +311,66 @@ private fun DesiredComponentCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("GPIO deseados: ${if (desired.pins.isEmpty()) "—" else desired.pins.joinToString(", ")}",
                 style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun Dht22TelemetryCard(state: ComponentDashboardState) {
+    val live = state.telemetryFreshness == ComponentStatusFreshness.LIVE
+    val measurements = state.authoritativeTelemetry ?: state.persistedTelemetry
+    val humidity = ComponentTelemetryCodec.find(measurements.orEmpty(), "humidity")
+    val temperature = ComponentTelemetryCodec.find(measurements.orEmpty(), "temperature")
+    // Only firmware-validated numbers are ever shown; invalid/stale stay null.
+    val validHumidity = humidity?.takeIf { it.valid }?.value
+    val validTemperature = temperature?.takeIf { it.valid }?.value
+    val hasData = validHumidity != null && validTemperature != null
+    val timestamp = if (live) {
+        humidity?.timestampMs?.takeIf { it > 0L }
+            ?: temperature?.timestampMs?.takeIf { it > 0L }
+            ?: state.firmwareTelemetry?.receivedAtMs
+    } else {
+        state.lastKnownTelemetry?.confirmedAtMs
+    }
+    val status = humidity?.status ?: temperature?.status
+    HumidityTemperatureWidget(
+        humidity = validHumidity,
+        temperature = validTemperature,
+        hasData = hasData,
+        lastUpdate = timestamp,
+        live = live,
+        status = status?.let { telemetryStatusLabel(it) },
+        modifier = Modifier.testTag("component_telemetry_dht22")
+    )
+}
+
+/** Human label for a firmware measurement status; never upgrades an invalid one. */
+private fun telemetryStatusLabel(status: String): String = when (status) {
+    "fresh" -> "fresco"
+    "stale" -> "obsoleto"
+    "invalid" -> "inválido"
+    "sensor_error" -> "error del sensor"
+    "not_calibrated" -> "sin calibrar"
+    "absent" -> "ausente"
+    else -> status
+}
+
+@Composable
+private fun DisabledTemplateCard(descriptor: HardwareComponentDescriptor) {
+    Card(
+        modifier = Modifier.fillMaxWidth().testTag("template_${descriptor.id}"),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(descriptor.name, fontWeight = FontWeight.SemiBold)
+            Text("Plantilla · no detectado por el firmware",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(descriptor.description, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

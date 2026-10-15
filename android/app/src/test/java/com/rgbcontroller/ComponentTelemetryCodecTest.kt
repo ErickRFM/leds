@@ -1,5 +1,6 @@
 package com.rgbcontroller
 
+import com.rgbcontroller.core.components.model.ComponentMeasurement
 import com.rgbcontroller.core.components.model.ComponentState
 import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
 import com.rgbcontroller.core.components.registry.ComponentCatalog
@@ -89,6 +90,32 @@ class ComponentTelemetryCodecTest {
             """{"version":1,"measurements":[{"type":"humidity","status":"sensor_error","valid":false,"value":0,"unit":"%","timestampMs":1}]}"""
         )
         assertEquals(ComponentState.ERROR, ComponentTelemetryCodec.stateFor("dht22", errored))
+    }
+
+    @Test fun encodeThenDecodeRoundTripsRealReadings() {
+        val measurements = listOf(
+            ComponentMeasurement("humidity", "fresh", true, 48.3f, "%", 1200L),
+            ComponentMeasurement("temperature", "fresh", true, 21.7f, "C", 1200L)
+        )
+        val decoded = ComponentTelemetryCodec.decode(
+            ComponentTelemetryCodec.encode(measurements).toString()
+        )!!
+        assertEquals(2, decoded.size)
+        val humidity = ComponentTelemetryCodec.find(decoded, "humidity")!!
+        assertTrue(humidity.valid)
+        assertEquals(48.3f, humidity.value, 0.001f)
+        assertEquals(1200L, humidity.timestampMs)
+    }
+
+    @Test fun encodeNeverPersistsNonFiniteValueAsANumber() {
+        val encoded = ComponentTelemetryCodec.encode(
+            listOf(ComponentMeasurement("humidity", "fresh", true, Float.NaN, "%", 1L))
+        ).toString()
+        // NaN is stored as JSON null and must decode back to an invalid measurement.
+        assertFalse(encoded.contains("NaN"))
+        val decoded = ComponentTelemetryCodec.decode(encoded)!!
+        assertFalse(decoded.single().valid)
+        assertTrue(decoded.single().value.isNaN())
     }
 
     @Test fun catalogIdsMatchFirmwareContract() {

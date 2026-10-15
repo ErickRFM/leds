@@ -6,6 +6,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.rgbcontroller.core.components.status.ComponentStatusStorage
 import com.rgbcontroller.core.components.status.LastKnownStatus
 import com.rgbcontroller.core.components.status.LastKnownStatusCodec
+import com.rgbcontroller.core.components.status.LastKnownTelemetry
+import com.rgbcontroller.core.components.status.LastKnownTelemetryCodec
 import com.rgbcontroller.core.components.status.LocalDesiredConfig
 import com.rgbcontroller.core.components.status.LocalDesiredConfigCodec
 import kotlinx.coroutines.flow.first
@@ -22,6 +24,7 @@ class DataStoreComponentStatusStorage(private val context: Context) : ComponentS
     companion object {
         private val LAST_KNOWN = stringPreferencesKey("component_last_known_v1")
         private val DESIRED = stringPreferencesKey("component_desired_v1")
+        private val TELEMETRY = stringPreferencesKey("component_telemetry_v1")
     }
 
     override suspend fun loadLastKnown(): LastKnownStatus? =
@@ -38,5 +41,13 @@ class DataStoreComponentStatusStorage(private val context: Context) : ComponentS
     override suspend fun saveDesired(config: LocalDesiredConfig) {
         val encoded = LocalDesiredConfigCodec.encode(config)
         context.dataStore.edit { prefs -> prefs[DESIRED] = encoded }
+    }
+
+    override suspend fun loadTelemetry(): LastKnownTelemetry? =
+        LastKnownTelemetryCodec.decode(context.dataStore.data.first()[TELEMETRY])
+
+    override suspend fun saveTelemetry(telemetry: LastKnownTelemetry) {
+        val encoded = LastKnownTelemetryCodec.encode(telemetry)
+        context.dataStore.edit { prefs -> prefs[TELEMETRY] = encoded }
     }
 }
