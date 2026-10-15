@@ -1,5 +1,9 @@
 package com.rgbcontroller.core.components.status
 
+import com.rgbcontroller.core.components.alerts.AlertEvent
+import com.rgbcontroller.core.components.alerts.AlertRule
+import com.rgbcontroller.core.components.alerts.AlertState
+import com.rgbcontroller.core.components.alerts.DefaultAlertRules
 import com.rgbcontroller.core.components.model.ComponentMeasurement
 import com.rgbcontroller.core.components.model.ComponentRuntimeStatus
 import com.rgbcontroller.core.components.registry.ComponentCatalog
@@ -67,6 +71,9 @@ data class ComponentDashboardState(
     val firmwareTelemetry: FirmwareReportedTelemetry? = null,
     val lastKnownTelemetry: LastKnownTelemetry? = null,
     val history: List<TelemetrySample> = emptyList(),
+    val alertRules: List<AlertRule> = DefaultAlertRules.defaults(),
+    val alertStates: Map<String, AlertState> = emptyMap(),
+    val alertEvents: List<AlertEvent> = emptyList(),
     val connected: Boolean = false,
     val authorityError: String? = null
 ) {
@@ -125,4 +132,17 @@ data class ComponentDashboardState(
     /** One series of the current device's history, oldest first. */
     fun series(componentId: String, measurementType: String): List<TelemetrySample> =
         TelemetryHistory.samplesForSeries(deviceHistory, componentId, measurementType)
+
+    /** Rules currently tripped, with the last value seen for each. */
+    val activeAlerts: List<Pair<AlertRule, AlertState>>
+        get() = alertRules
+            .mapNotNull { rule -> alertStates[rule.id]?.takeIf { it.active }?.let { rule to it } }
+
+    /** Most recent alert transitions first, bounded. */
+    val recentAlertEvents: List<AlertEvent>
+        get() = alertEvents.take(MAX_ALERT_EVENTS)
+
+    companion object {
+        const val MAX_ALERT_EVENTS = 50
+    }
 }

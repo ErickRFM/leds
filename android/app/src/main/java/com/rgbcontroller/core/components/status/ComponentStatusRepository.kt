@@ -1,5 +1,8 @@
 package com.rgbcontroller.core.components.status
 
+import com.rgbcontroller.core.components.alerts.AlertEngine
+import com.rgbcontroller.core.components.alerts.AlertRule
+import com.rgbcontroller.core.components.alerts.DefaultAlertRules
 import com.rgbcontroller.core.components.model.ComponentStatusCodec
 import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
 import com.rgbcontroller.core.components.telemetry.TelemetryHistory
@@ -37,6 +40,7 @@ class ComponentStatusRepository(
         val desired = storage.loadDesired()
         val telemetry = storage.loadTelemetry()
         val storedHistory = storage.loadHistory()
+        val storedRules = storage.loadAlertRules()
         // If no history was ever recorded but a last-known snapshot exists, seed a
         // single LAST_KNOWN sample per reading so a chart is never empty-handed.
         val history = if (storedHistory.isEmpty() && telemetry != null) {
@@ -54,12 +58,21 @@ class ComponentStatusRepository(
         } else {
             storedHistory
         }
+        val rules = storedRules.ifEmpty { DefaultAlertRules.defaults() }
+        if (storedRules.isEmpty()) storage.saveAlertRules(rules)
         _state.value = _state.value.copy(
             lastKnownStatus = lastKnown,
             desiredConfig = desired,
             lastKnownTelemetry = telemetry,
-            history = history
+            history = history,
+            alertRules = rules
         )
+    }
+
+    /** Replace the configurable alert thresholds and persist them. */
+    suspend fun setAlertRules(rules: List<AlertRule>) {
+        _state.value = _state.value.copy(alertRules = rules)
+        storage.saveAlertRules(rules)
     }
 
     fun setDevice(next: String?) {
@@ -154,7 +167,26 @@ class ComponentStatusRepository(
             nowMs = now
         )
         storage.saveHistory(history)
-        _state.value = _state.value.copy(lastKnownTelemetry = lastKnown, history = history)
+        val previous = _state.value
+        val evaluation = AlertEngine.evaluate(
+            rules = previous.alertRules,
+            latest = AlertEngine.latestBySeries(
+                TelemetryHistory.samplesForDevice(history, this.deviceId)
+            ),
+            previous = previous.alertStates,
+            nowMs = now
+        )
+        val alertEvents = (evaluation.events + previous.alertEvents).take(MAX_ALERT_EVENTS)
+        _state.value = previous.copy(
+            lastKnownTelemetry = lastKnown,
+            history = history,
+            alertStates = evaluation.states,
+            alertEvents = alertEvents
+        )
         return true
+    }
+
+    private companion object {
+        const val MAX_ALERT_EVENTS = 200
     }
 }
