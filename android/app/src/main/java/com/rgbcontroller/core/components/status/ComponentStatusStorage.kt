@@ -1,6 +1,7 @@
 package com.rgbcontroller.core.components.status
 
 import com.rgbcontroller.core.components.alerts.AlertRule
+import com.rgbcontroller.core.components.automation.AutomationRule
 import com.rgbcontroller.core.components.telemetry.TelemetrySample
 
 /**
@@ -18,4 +19,6 @@ interface ComponentStatusStorage {
     suspend fun saveHistory(samples: List<TelemetrySample>)
     suspend fun loadAlertRules(): List<AlertRule>
     suspend fun saveAlertRules(rules: List<AlertRule>)
+    suspend fun loadAutomationRules(): List<AutomationRule>
+    suspend fun saveAutomationRules(rules: List<AutomationRule>)
 }

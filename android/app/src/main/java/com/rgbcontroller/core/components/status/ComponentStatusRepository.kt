@@ -3,6 +3,12 @@ package com.rgbcontroller.core.components.status
 import com.rgbcontroller.core.components.alerts.AlertEngine
 import com.rgbcontroller.core.components.alerts.AlertRule
 import com.rgbcontroller.core.components.alerts.DefaultAlertRules
+import com.rgbcontroller.core.components.automation.AutomationActionSink
+import com.rgbcontroller.core.components.automation.AutomationCoordinator
+import com.rgbcontroller.core.components.automation.AutomationEngine
+import com.rgbcontroller.core.components.automation.AutomationEventStatus
+import com.rgbcontroller.core.components.automation.AutomationRule
+import com.rgbcontroller.core.components.automation.DefaultAutomationRules
 import com.rgbcontroller.core.components.model.ComponentStatusCodec
 import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
 import com.rgbcontroller.core.components.telemetry.TelemetryHistory
@@ -41,6 +47,7 @@ class ComponentStatusRepository(
         val telemetry = storage.loadTelemetry()
         val storedHistory = storage.loadHistory()
         val storedRules = storage.loadAlertRules()
+        val storedAutomations = storage.loadAutomationRules()
         // If no history was ever recorded but a last-known snapshot exists, seed a
         // single LAST_KNOWN sample per reading so a chart is never empty-handed.
         val history = if (storedHistory.isEmpty() && telemetry != null) {
@@ -60,12 +67,15 @@ class ComponentStatusRepository(
         }
         val rules = storedRules.ifEmpty { DefaultAlertRules.defaults() }
         if (storedRules.isEmpty()) storage.saveAlertRules(rules)
+        val automations = storedAutomations.ifEmpty { DefaultAutomationRules.defaults() }
+        if (storedAutomations.isEmpty()) storage.saveAutomationRules(automations)
         _state.value = _state.value.copy(
             lastKnownStatus = lastKnown,
             desiredConfig = desired,
             lastKnownTelemetry = telemetry,
             history = history,
-            alertRules = rules
+            alertRules = rules,
+            automationRules = automations
         )
     }
 
@@ -73,6 +83,12 @@ class ComponentStatusRepository(
     suspend fun setAlertRules(rules: List<AlertRule>) {
         _state.value = _state.value.copy(alertRules = rules)
         storage.saveAlertRules(rules)
+    }
+
+    /** Replace the configurable automations and persist them. */
+    suspend fun setAutomationRules(rules: List<AutomationRule>) {
+        _state.value = _state.value.copy(automationRules = rules)
+        storage.saveAutomationRules(rules)
     }
 
     fun setDevice(next: String?) {
@@ -168,25 +184,58 @@ class ComponentStatusRepository(
         )
         storage.saveHistory(history)
         val previous = _state.value
+        val latest = AlertEngine.latestBySeries(
+            TelemetryHistory.samplesForDevice(history, this.deviceId)
+        )
         val evaluation = AlertEngine.evaluate(
             rules = previous.alertRules,
-            latest = AlertEngine.latestBySeries(
-                TelemetryHistory.samplesForDevice(history, this.deviceId)
-            ),
+            latest = latest,
             previous = previous.alertStates,
             nowMs = now
         )
         val alertEvents = (evaluation.events + previous.alertEvents).take(MAX_ALERT_EVENTS)
+        val automationOutcome = AutomationEngine.evaluate(
+            rules = previous.automationRules,
+            latest = latest,
+            previous = previous.automationStates,
+            nowMs = now
+        )
+        val automationEvents =
+            (automationOutcome.events + previous.automationEvents).take(MAX_AUTOMATION_EVENTS)
         _state.value = previous.copy(
             lastKnownTelemetry = lastKnown,
             history = history,
             alertStates = evaluation.states,
-            alertEvents = alertEvents
+            alertEvents = alertEvents,
+            automationStates = automationOutcome.states,
+            automationEvents = automationEvents
         )
         return true
     }
 
+    /**
+     * Run pending automation actions. Hardware actions go only through [sink]
+     * (the existing command path) and only while [authorized]; otherwise they are
+     * left BLOCKED instead of silently failing or being simulated.
+     */
+    suspend fun runAutomations(sink: AutomationActionSink?, authorized: Boolean) {
+        val pending = _state.value.pendingAutomations
+        if (pending.isEmpty()) return
+        val results = AutomationCoordinator.dispatch(pending, authorized, sink)
+        val byId = results.associate { it.eventId to it.status }
+        val updated = _state.value.automationEvents.map { event ->
+            val status = byId[event.id]
+            if (status != null && status != AutomationEventStatus.PENDING) {
+                event.copy(status = status)
+            } else {
+                event
+            }
+        }
+        _state.value = _state.value.copy(automationEvents = updated)
+    }
+
     private companion object {
         const val MAX_ALERT_EVENTS = 200
+        const val MAX_AUTOMATION_EVENTS = 200
     }
 }

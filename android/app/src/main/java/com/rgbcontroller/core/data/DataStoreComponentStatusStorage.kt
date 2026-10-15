@@ -5,6 +5,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.rgbcontroller.core.components.alerts.AlertRule
 import com.rgbcontroller.core.components.alerts.AlertRulesCodec
+import com.rgbcontroller.core.components.automation.AutomationRule
+import com.rgbcontroller.core.components.automation.AutomationRulesCodec
 import com.rgbcontroller.core.components.status.ComponentStatusStorage
 import com.rgbcontroller.core.components.status.LastKnownStatus
 import com.rgbcontroller.core.components.status.LastKnownStatusCodec
@@ -31,6 +33,7 @@ class DataStoreComponentStatusStorage(private val context: Context) : ComponentS
         private val TELEMETRY = stringPreferencesKey("component_telemetry_v1")
         private val HISTORY = stringPreferencesKey("component_telemetry_history_v1")
         private val ALERT_RULES = stringPreferencesKey("component_alert_rules_v1")
+        private val AUTOMATION_RULES = stringPreferencesKey("component_automation_rules_v1")
     }
 
     override suspend fun loadLastKnown(): LastKnownStatus? =
@@ -71,5 +74,13 @@ class DataStoreComponentStatusStorage(private val context: Context) : ComponentS
     override suspend fun saveAlertRules(rules: List<AlertRule>) {
         val encoded = AlertRulesCodec.encode(rules)
         context.dataStore.edit { prefs -> prefs[ALERT_RULES] = encoded }
+    }
+
+    override suspend fun loadAutomationRules(): List<AutomationRule> =
+        AutomationRulesCodec.decode(context.dataStore.data.first()[AUTOMATION_RULES])
+
+    override suspend fun saveAutomationRules(rules: List<AutomationRule>) {
+        val encoded = AutomationRulesCodec.encode(rules)
+        context.dataStore.edit { prefs -> prefs[AUTOMATION_RULES] = encoded }
     }
 }
