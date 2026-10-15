@@ -2,6 +2,7 @@ package com.rgbcontroller.core.components.status
 
 import com.rgbcontroller.core.components.alerts.AlertRule
 import com.rgbcontroller.core.components.automation.AutomationRule
+import com.rgbcontroller.core.components.calibration.StoredSoilCalibration
 import com.rgbcontroller.core.components.telemetry.TelemetrySample
 
 /**
@@ -21,4 +22,6 @@ interface ComponentStatusStorage {
     suspend fun saveAlertRules(rules: List<AlertRule>)
     suspend fun loadAutomationRules(): List<AutomationRule>
     suspend fun saveAutomationRules(rules: List<AutomationRule>)
+    suspend fun loadSoilCalibration(): StoredSoilCalibration?
+    suspend fun saveSoilCalibration(calibration: StoredSoilCalibration?)
 }

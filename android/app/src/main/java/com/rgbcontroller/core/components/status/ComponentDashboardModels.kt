@@ -8,6 +8,7 @@ import com.rgbcontroller.core.components.automation.AutomationEvent
 import com.rgbcontroller.core.components.automation.AutomationEventStatus
 import com.rgbcontroller.core.components.automation.AutomationRule
 import com.rgbcontroller.core.components.automation.DefaultAutomationRules
+import com.rgbcontroller.core.components.calibration.StoredSoilCalibration
 import com.rgbcontroller.core.components.model.ComponentMeasurement
 import com.rgbcontroller.core.components.model.ComponentRuntimeStatus
 import com.rgbcontroller.core.components.registry.ComponentCatalog
@@ -81,6 +82,7 @@ data class ComponentDashboardState(
     val automationRules: List<AutomationRule> = DefaultAutomationRules.defaults(),
     val automationStates: Map<String, AlertState> = emptyMap(),
     val automationEvents: List<AutomationEvent> = emptyList(),
+    val soilCalibration: StoredSoilCalibration? = null,
     val connected: Boolean = false,
     val authorityError: String? = null
 ) {
@@ -152,6 +154,20 @@ data class ComponentDashboardState(
     /** Automation actions still waiting for the transport to run them. */
     val pendingAutomations: List<AutomationEvent>
         get() = automationEvents.filter { it.status == AutomationEventStatus.PENDING }
+
+    /**
+     * Soil calibration usable for the CURRENT device. A record captured on
+     * another device (or an unsupported version) is treated as incompatible and
+     * returned as null instead of being applied to the wrong probe.
+     */
+    val activeSoilCalibration: com.rgbcontroller.core.sensors.SoilCalibration?
+        get() = deviceId?.let { id ->
+            soilCalibration?.takeIf { it.appliesTo(id) }?.toCalibration()
+        }
+
+    /** True when a calibration exists but does not belong to the current device. */
+    val soilCalibrationIncompatible: Boolean
+        get() = soilCalibration != null && activeSoilCalibration == null
 
     companion object {
         const val MAX_ALERT_EVENTS = 50
