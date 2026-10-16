@@ -70,7 +70,34 @@ logs ni en exportaciones.
 Dos teléfonos, replay, MITM, reinicios, pérdida de celular, cancelación y
 factory reset requieren validación física en banco (SEG.3).
 
-## Pruebas
-
 `tests/owner_enrollment_test.cpp` (host, `g++ -std=c++17 -Wall -Wextra -Werror
 -pedantic`) ejecutado por el job `firmware-core-tests`.
+
+## Códec de tramas (`OwnerEnrollmentFrames.h`)
+
+`firmware/esp32_rgb/core/OwnerEnrollmentFrames.h` define el framing ASCII del
+canal de enrolamiento, separado de la criptografía y de la máquina de estados.
+Cada frame es una línea de tokens separados por un espacio; el parser es
+estricto y fail-closed (verbo desconocido, aridad incorrecta, tokens vacíos,
+espacios sobrantes, tokens demasiado largos y contadores desbordados se
+rechazan).
+
+```
+client -> board   PAIR <code> <ownerId> <pubKeyHex>
+client -> board   BEGIN <clientNonce>
+board  -> client  CHALLENGE <deviceNonce>
+client -> board   AUTH <clientNonce> <counter> <proofHex>
+board  -> client  OK
+board  -> client  ERR <reason>
+client -> board   REVOKE
+client -> board   RECOVER <code>
+client -> board   RESET <code>
+```
+
+`OwnerEnrollmentFrames::parse` acepta y clasifica todas ellas (incluidas las
+del tablero, para round-trip); los encoders (`encodeChallenge`, `encodeOk`,
+`encodeErr`) escriben respuestas acotadas y nunca desbordan el buffer.
+
+Pruebas: `tests/owner_enrollment_frames_test.cpp` (host) vía el job
+`firmware-core-tests`.
+

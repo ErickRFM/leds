@@ -63,6 +63,10 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/owner_enrollment_test.cpp -o /tmp/owner_enrollment_test
           /tmp/owner_enrollment_test
+      - name: BLE owner enrollment frame codec host tests
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/owner_enrollment_frames_test.cpp -o /tmp/owner_enrollment_frames_test
+          /tmp/owner_enrollment_frames_test
       - name: Experiment runtime host tests
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic -I tests/stubs tests/experiment_runtime_test.cpp -o /tmp/experiment_runtime_test
