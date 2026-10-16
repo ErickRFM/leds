@@ -209,6 +209,72 @@ class PortableProjectViewModelTest {
         assertEquals("compi", envelope.app)
         assertEquals("project", envelope.kind)
     }
+
+    @Test
+    fun remapOnImportAppliesSafePins() = runBlocking {
+        val source = Harness()
+        source.viewModel.onConnectionChanged()
+        source.viewModel.setLocalDesired(
+            LocalDesiredConfig(listOf(LocalDesiredComponent("dht22", "sensor", listOf(10))))
+        )
+        source.viewModel.exportTo("content://file/remap.json")
+        val text = source.savedText!!
+
+        val target = Harness()
+        target.viewModel.onConnectionChanged()
+        target.readText = text
+        target.viewModel.readImport("content://file/remap.json")
+        assertEquals(
+            com.rgbcontroller.core.export.CompatibilityLevel.REQUIRES_REMAP,
+            target.viewModel.compatibilityReport()?.level
+        )
+        assertTrue(target.viewModel.applyImport(ComponentDashboardViewModel.ImportMode.REPLACE))
+        val pins = target.repo.state.value.desiredConfig.components.single().pins
+        assertTrue(pins.none { it in setOf(6, 7, 8, 9, 10, 11) })
+    }
+
+    @Test
+    fun incompatibleImportIsRefusedWithoutChanges() = runBlocking {
+        val h = Harness()
+        h.seed()
+        val before = h.repo.state.value.desiredConfig
+        h.readText = ProjectExportBuilder.build(
+            projectId = "p",
+            name = "n",
+            boardProfile = "esp32-legacy-v1",
+            capabilities = emptyList(),
+            components = listOf(LocalDesiredComponent("weird", "quantum", listOf(32))),
+            alerts = emptyList(),
+            automations = emptyList(),
+            calibrations = emptyList(),
+            nowMs = 1L
+        ).serialize()
+        h.viewModel.readImport("content://file/project.json")
+        assertFalse(h.viewModel.applyImport(ComponentDashboardViewModel.ImportMode.REPLACE))
+        assertEquals(before, h.repo.state.value.desiredConfig)
+        assertNotNull(h.repo.state.value.importError)
+    }
+
+    @Test
+    fun importedReservedPinIsRemappedToSafePin() {
+        val envelope = ProjectExportBuilder.build(
+            projectId = "p",
+            name = "n",
+            boardProfile = "esp32-legacy-v1",
+            capabilities = emptyList(),
+            components = listOf(LocalDesiredComponent("dht22", "sensor", listOf(10))),
+            alerts = emptyList(),
+            automations = emptyList(),
+            calibrations = emptyList(),
+            nowMs = 1L
+        )
+        val report = com.rgbcontroller.core.export.BoardCompatibilityEngine.evaluate(
+            envelope,
+            com.rgbcontroller.core.export.BoardProfiles.ESP32_LEGACY_V1
+        )
+        assertEquals(com.rgbcontroller.core.export.CompatibilityLevel.REQUIRES_REMAP, report.level)
+        assertTrue(report.remapped.single().toPins.none { it in setOf(6, 7, 8, 9, 10, 11) })
+    }
 }
 
 /** Storage double that fails a single alert-rule save, to exercise rollback. */
