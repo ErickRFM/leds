@@ -6,13 +6,14 @@
 
 using esp32core::kSessionKeyBytes;
 using esp32core::kSessionMacBytes;
-using esp32core::kSessionNonceBytes;
 using esp32core::SessionKeyPair;
 using esp32core::SessionKeySchedule;
 using esp32core_test::TestOnlySessionCrypto;
 
-static void fillNonce(uint8_t nonce[kSessionNonceBytes], uint8_t seed) {
-  for (size_t i = 0; i < kSessionNonceBytes; ++i) {
+constexpr size_t kNonceBytes = esp32core::SessionKeySchedule::kNonceBytes;
+
+static void fillNonce(uint8_t nonce[kNonceBytes], uint8_t seed) {
+  for (size_t i = 0; i < kNonceBytes; ++i) {
     nonce[i] = static_cast<uint8_t>(seed + i);
   }
 }
@@ -25,8 +26,8 @@ int main() {
   assert(crypto.generateKeyPair(device));
   assert(crypto.generateKeyPair(owner));
 
-  uint8_t deviceNonce[kSessionNonceBytes];
-  uint8_t clientNonce[kSessionNonceBytes];
+  uint8_t deviceNonce[kNonceBytes];
+  uint8_t clientNonce[kNonceBytes];
   fillNonce(deviceNonce, 0x10);
   fillNonce(clientNonce, 0x40);
 
@@ -53,7 +54,7 @@ int main() {
   assert(SessionKeySchedule::constantTimeEquals(deviceProof, againProof, kSessionMacBytes));
 
   // A different client nonce changes both outputs.
-  uint8_t otherNonce[kSessionNonceBytes];
+  uint8_t otherNonce[kNonceBytes];
   fillNonce(otherNonce, 0x80);
   uint8_t altKey[kSessionKeyBytes];
   uint8_t altProof[kSessionMacBytes];
@@ -104,3 +105,4 @@ int main() {
 
   return 0;
 }
+

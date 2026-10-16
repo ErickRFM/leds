@@ -1,31 +1,41 @@
-# Implementation Plan - Compi V15 Master Integration, Post-Merge Audit & Release
+# Implementation Plan - Compi V16.0 / SEG1 Sync, Audit & APK Build
 
-This implementation plan details the final engineering, security hardening, C++ host test additions, and release verification for **Compi V15**.
+This implementation plan outlines the verification of repository synchronization, integration audit for recent PRs #107–#111 (SEG1 Owner Enrollment Protocol and F09 Cross-Board Compatibility Engine), execution of Android unit tests and lint checks, debug APK assembly, and distribution packaging.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> - **Explicit BLE Channel Authorization (Ciclo 1 / Fase 03 & 04):** Update `esp32_rgb.ino` and `CompiCommandArbiter.h` so BLE GATT write commands evaluate channel authorization state (`BLE_UNAUTHENTICATED` vs `BLE_AUTHENTICATED`) dynamically rather than hardcoding static permissions.
-> - **CI Test Execution (Ciclo 1 / Fase 11):** Add `compi_arbiter_test.cpp` explicitly to `.github/workflows/android-ci.yml` under `firmware-core-tests`.
+> - **HEAD Commit Baseline:** `61c34d3` (`feat(seg1b): session crypto adapter + key schedule + host tests (#111)`).
+> - **Scope of Synchronized Changes:**
+>   - `SEG1` BLE Owner Enrollment Protocol & Session Crypto (`OwnerEnrollment.kt`, `OwnerEnrollmentTest.kt`)
+>   - `F09` Cross-Board Compatibility Engine & Portable Format (`BoardCompatibility.kt`, `ProjectPortableFormat.kt`)
+>   - `F08` Hardware Lab Editors & Component Dashboards (`HardwareLabScreen.kt`, `ComponentDashboardViewModel.kt`)
+> - **Build Strategy:** Execute Gradle unit tests (`testDebugUnitTest`), Android lint (`lintDebug`), and debug APK assembly (`assembleDebug`) using Java 17 / Android SDK 34 via `android/build-debug.ps1` / `gradlew.bat`.
+> - **Distribution Artifact:** Copy compiled `app-debug.apk` to `dist/compi-seg1-debug.apk` and record its SHA-256 checksum and size.
 
 ## Proposed Changes
 
-### Core Firmware & Arbitration
-#### [MODIFY] [CompiCommandArbiter.h](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/firmware/esp32_rgb/core/CompiCommandArbiter.h)
-- Refine `CompiCommandArbiter.h` to evaluate `CommandSource::BLE_UNAUTHENTICATED` vs `BLE_AUTHENTICATED` and reject unauthenticated GATT writes.
-#### [MODIFY] [esp32_rgb.ino](file:///C:/Users/erik5/OneDrive/Escritorio/ESP32/leds/firmware/esp32_rgb/esp32_rgb.ino)
-- Pass dynamic channel authentication status to `commandArbiter.evaluate(...)`.
+### 1. Repository & Integration Audit
+- Verify `main` branch HEAD `61c34d3` is in sync with `origin/main`.
+- Confirm newly added SEG1 Owner Enrollment tests (`OwnerEnrollmentTest.kt`), Cross-Board Compatibility tests (`BoardCompatibilityTest.kt`), and Component Dashboard tests (`ComponentDashboardViewModelTest.kt`) are present.
 
-### CI/CD Pipeline
-#### [MODIFY] [android-ci.yml](file:///.github/workflows/android-ci.yml)
-- Add `compi_arbiter_test` host test step to `firmware-core-tests` in `.github/workflows/android-ci.yml`.
+### 2. Android Build & Unit Testing
+- Execute local Gradle unit tests (`testDebugUnitTest`).
+- Execute Android lint static analysis (`lintDebug`).
+- Assemble debug APK (`assembleDebug`).
+
+### 3. Distribution Package & Verification
+- Verify generated APK (`android/app/build/outputs/apk/debug/app-debug.apk`).
+- Create `dist/` directory if missing and copy APK to `dist/compi-seg1-debug.apk`.
+- Compute SHA-256 checksum, file size, and build metadata.
 
 ## Verification Plan
 
-### Automated Tests & Local Build
-- Run Android Gradle build and unit tests:
-  `Remove-Item Env:\ANDROID_PREFS_ROOT -ErrorAction SilentlyContinue; powershell -ExecutionPolicy Bypass -File .\android\build-debug.ps1`
-- Verify 75/75 Android unit tests pass and calculate SHA-256 hash of `app-debug.apk`.
+### Automated Tests
+- Run `./gradlew.bat --no-daemon testDebugUnitTest` / `android/build-debug.ps1`.
+- Run `./gradlew.bat --no-daemon lintDebug`.
+- Confirm 100% pass rate across all Android unit tests.
 
-### GitHub CI Verification
-- Commit, push feature branch, merge into `main`, and verify all 4 GitHub Actions jobs (`android`, `firmware`, `firmware-core-tests`, `windows-board-profile`) report `SUCCESS`.
+### Artifact Verification
+- Verify existence and size of `dist/compi-seg1-debug.apk`.
+- Compute SHA-256 hash using `Get-FileHash -Algorithm SHA256`.

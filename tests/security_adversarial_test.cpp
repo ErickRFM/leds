@@ -25,7 +25,6 @@ using esp32core::EnrollmentState;
 using esp32core::EnrollmentVerb;
 using esp32core::kSessionKeyBytes;
 using esp32core::kSessionMacBytes;
-using esp32core::kSessionNonceBytes;
 using esp32core::OwnerEnrollment;
 using esp32core::OwnerEnrollmentFrames;
 using esp32core::PrivilegeClass;
@@ -33,6 +32,8 @@ using esp32core::SessionChallengeResult;
 using esp32core::SessionKeyPair;
 using esp32core::SessionKeySchedule;
 using esp32core_test::TestOnlySessionCrypto;
+
+static constexpr size_t kNonceBytes = SessionKeySchedule::kNonceBytes;
 
 static const char* kCode = "deadbeef";
 
@@ -63,10 +64,10 @@ static bool fromHex(const char* in, uint8_t* out, size_t n) {
 }
 
 // 16-byte nonce hex (32 chars) zero-padded into the 32-byte schedule nonce.
-static void padNonce(const char* hex, uint8_t out[kSessionNonceBytes]) {
+static void padNonce(const char* hex, uint8_t out[kNonceBytes]) {
   uint8_t raw[16];
   assert(fromHex(hex, raw, sizeof(raw)));
-  for (size_t i = 0; i < kSessionNonceBytes; ++i) out[i] = 0;
+  for (size_t i = 0; i < kNonceBytes; ++i) out[i] = 0;
   for (size_t i = 0; i < sizeof(raw); ++i) out[i] = raw[i];
 }
 
@@ -78,7 +79,7 @@ struct DeviceHarness {
   uint8_t ownerPublic[32] = {};
   bool hasOwnerPublic = false;
   char pendingDeviceNonceHex[33] = {};
-  uint8_t pendingDeviceNonceBin[kSessionNonceBytes] = {};
+  uint8_t pendingDeviceNonceBin[kNonceBytes] = {};
   uint32_t now = 1000;
 
   DeviceHarness() { assert(crypto.generateKeyPair(deviceKeys)); }
@@ -112,7 +113,7 @@ struct DeviceHarness {
         return response;
       }
       case EnrollmentVerb::AUTH: {
-        uint8_t clientNonceBin[kSessionNonceBytes];
+        uint8_t clientNonceBin[kNonceBytes];
         padNonce(frame.clientNonce, clientNonceBin);
         bool proofValid = false;
         if (hasOwnerPublic) {
@@ -173,8 +174,8 @@ static std::string challengeNonce(const std::string& response) {
 static std::string clientAuthLine(TestOnlySessionCrypto& crypto, const SessionKeyPair& ownerKeys,
                                   const SessionKeyPair& deviceKeys, const char* clientNonceHex,
                                   const char* deviceNonceHex, uint32_t counter) {
-  uint8_t deviceNonceBin[kSessionNonceBytes];
-  uint8_t clientNonceBin[kSessionNonceBytes];
+  uint8_t deviceNonceBin[kNonceBytes];
+  uint8_t clientNonceBin[kNonceBytes];
   padNonce(deviceNonceHex, deviceNonceBin);
   padNonce(clientNonceHex, clientNonceBin);
   uint8_t sessionKey[kSessionKeyBytes];
@@ -354,3 +355,4 @@ int main() {
 
   return 0;
 }
+

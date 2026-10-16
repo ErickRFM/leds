@@ -147,6 +147,28 @@ class OwnerEnrollment final {
   }
 
   /**
+   * Restore a persisted owner at boot. Fail-closed: always lands in ENROLLED
+   * (or REVOKED), never AUTHENTICATED, so a fresh session proof is required
+   * after every restart. Validates the stored owner id/public key.
+   */
+  EnrollmentResult restoreOwner(const char* ownerId, const char* ownerPubKeyHex,
+                                uint32_t lastCounter, bool revoked) {
+    if (!validOwnerId(ownerId) || !validPubKeyHex(ownerPubKeyHex)) {
+      reason_ = "invalid_arguments";
+      return EnrollmentResult::INVALID_ARGUMENT;
+    }
+    std::memcpy(ownerId_, ownerId, std::strlen(ownerId) + 1);
+    std::memcpy(ownerPubKey_, ownerPubKeyHex, std::strlen(ownerPubKeyHex) + 1);
+    clearOneTimeCode();
+    deviceNonce_[0] = '\0';
+    lastCounter_ = lastCounter;
+    hasSession_ = false;
+    state_ = revoked ? EnrollmentState::REVOKED : EnrollmentState::ENROLLED;
+    reason_ = revoked ? "restored_revoked" : "restored";
+    return EnrollmentResult::OK;
+  }
+
+  /**
    * Device issues a challenge nonce for a new session. Requires an enrolled
    * owner; a revoked owner must first pass recovery.
    */

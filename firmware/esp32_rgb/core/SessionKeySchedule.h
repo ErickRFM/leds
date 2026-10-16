@@ -20,16 +20,19 @@ namespace esp32core {
  * The schedule is intentionally simple and auditable: HMAC-SHA256 used as a KDF
  * over the ECDH secret. No key material is written anywhere except the outputs.
  */
-class SessionKeySchedule final {
+ class SessionKeySchedule final {
  public:
-  static constexpr size_t kNonceBytes = 32;
+  // The KDF binds the full 16-byte enrollment nonces (32 hex chars, matching
+  // OwnerEnrollment::kNonceHexMax). This is deliberately independent of the
+  // 12-byte AES-GCM nonce size so the two protocols can evolve separately.
+  static constexpr size_t kNonceBytes = 16;
   static constexpr size_t kCounterBytes = 4;
 
   static bool derive(SessionCrypto& crypto,
                      const uint8_t devicePrivateKey[kSessionPrivateKeyBytes],
                      const uint8_t ownerPublicKey[kSessionPublicKeyBytes],
-                     const uint8_t deviceNonce[kSessionNonceBytes],
-                     const uint8_t clientNonce[kSessionNonceBytes],
+                     const uint8_t deviceNonce[kNonceBytes],
+                     const uint8_t clientNonce[kNonceBytes],
                      uint32_t counter, uint8_t sessionKeyOut[kSessionKeyBytes],
                      uint8_t proofOut[kSessionMacBytes]) {
     if (!sessionKeyOut || !proofOut) return false;
@@ -39,14 +42,13 @@ class SessionKeySchedule final {
       return false;
     }
 
-    uint8_t buffer[kLabelMax + 2 * kSessionNonceBytes + sizeof(uint32_t)];
-
+    uint8_t buffer[kLabelMax + 2 * kNonceBytes + sizeof(uint32_t)];
     buffer[0] = static_cast<uint8_t>('C');
     std::memcpy(buffer + 1, kSessionLabel, kSessionLabelLength);
-    std::memcpy(buffer + 1 + kSessionLabelLength, deviceNonce, kSessionNonceBytes);
-    std::memcpy(buffer + 1 + kSessionLabelLength + kSessionNonceBytes, clientNonce,
-                kSessionNonceBytes);
-    const size_t sessionLength = 1 + kSessionLabelLength + 2 * kSessionNonceBytes;
+    std::memcpy(buffer + 1 + kSessionLabelLength, deviceNonce, kNonceBytes);
+    std::memcpy(buffer + 1 + kSessionLabelLength + kNonceBytes, clientNonce,
+                kNonceBytes);
+    const size_t sessionLength = 1 + kSessionLabelLength + 2 * kNonceBytes;
     if (!crypto.hmacSha256(secret, kSessionSharedSecretBytes, buffer, sessionLength,
                            sessionKeyOut)) {
       secureZero(secret, sizeof(secret));
@@ -55,17 +57,16 @@ class SessionKeySchedule final {
 
     buffer[0] = static_cast<uint8_t>('P');
     std::memcpy(buffer + 1, kProofLabel, kProofLabelLength);
-    std::memcpy(buffer + 1 + kProofLabelLength, deviceNonce, kSessionNonceBytes);
-    std::memcpy(buffer + 1 + kProofLabelLength + kSessionNonceBytes, clientNonce,
-                kSessionNonceBytes);
+    std::memcpy(buffer + 1 + kProofLabelLength, deviceNonce, kNonceBytes);
+    std::memcpy(buffer + 1 + kProofLabelLength + kNonceBytes, clientNonce, kNonceBytes);
     uint8_t* const counterSlot =
-        buffer + 1 + kProofLabelLength + 2 * kSessionNonceBytes;
+        buffer + 1 + kProofLabelLength + 2 * kNonceBytes;
     counterSlot[0] = static_cast<uint8_t>((counter >> 24) & 0xFF);
     counterSlot[1] = static_cast<uint8_t>((counter >> 16) & 0xFF);
     counterSlot[2] = static_cast<uint8_t>((counter >> 8) & 0xFF);
     counterSlot[3] = static_cast<uint8_t>(counter & 0xFF);
     const size_t proofLength =
-        1 + kProofLabelLength + 2 * kSessionNonceBytes + sizeof(uint32_t);
+        1 + kProofLabelLength + 2 * kNonceBytes + sizeof(uint32_t);
     const bool proofOk = crypto.hmacSha256(sessionKeyOut, kSessionKeyBytes, buffer,
                                            proofLength, proofOut);
     secureZero(buffer, sizeof(buffer));

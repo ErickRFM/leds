@@ -21,6 +21,8 @@
 #include "core/BleSecurityPolicy.h"
 #include "core/OwnerEnrollment.h"
 #include "core/OwnerEnrollmentFrames.h"
+#include "core/OwnerEnrollmentSession.h"
+#include "core/NvsOwnerEnrollmentStore.h"
 #include "core/MbedTlsSessionCrypto.h"
 #include "core/CommandAuthorization.h"
 #include "core/ComponentContract.h"
@@ -88,10 +90,27 @@ uint32_t lastGpioBleUpdateMs = 0;
 volatile bool connected = false;
 // Single source of truth for BLE link security and owner authorization.
 esp32core::BleSecurityPolicy bleSecurity;
+// SEG.1b-2b: the owner-enrollment session is the authority for privileged BLE
+// commands. It composes framing, the enrollment state machine, real mbedTLS
+// crypto and NVS persistence. No new UUIDs: it rides the existing WRITE
+// characteristic. The link state (bleSecurity) only feeds logging/bonding.
+esp32core::MbedTlsSessionCrypto ownerCrypto;
+esp32core::NvsOwnerEnrollmentStore ownerStore;
+esp32core::OwnerEnrollmentSession ownerSession(ownerCrypto, ownerStore);
 // BLE task callbacks transition the policy; the main loop reads the derived
 // state. Kept volatile so the loop observes callback updates without a lock.
 volatile esp32core::BleAuthState bleAuthState = esp32core::BleAuthState::DISCONNECTED;
-void syncBleAuthState() { bleAuthState = bleSecurity.state(); }
+// Ownership is authoritative: only a live owner session grants AUTHORIZED. The
+// encrypted/bonded link state alone never does.
+void syncBleAuthState() {
+  if (!connected) {
+    bleAuthState = esp32core::BleAuthState::DISCONNECTED;
+  } else {
+    bleAuthState = ownerSession.authenticated()
+        ? esp32core::BleAuthState::AUTHORIZED
+        : esp32core::BleAuthState::CONNECTED_UNAUTHENTICATED;
+  }
+}
 bool connectedPreviously = false;
 uint32_t physicalProvisionHoldStarted = 0;
 uint32_t effectStarted = 0;
@@ -170,6 +189,34 @@ bool rgbPersistenceAttempted = false;
 // RGB engine/LED state in that callback; the Arduino loop owns all commands.
 portMUX_TYPE bleInboxMux = portMUX_INITIALIZER_UNLOCKED;
 esp32core::RgbCommandInbox bleInbox;
+// Owner-enrollment frames are longer than RGB commands (a PAIR/AUTH line can
+// exceed 100 chars), so they get their own small fixed inbox rather than
+// growing the RGB command buffer. Same pattern: enqueue in the BLE callback,
+// drain in the main loop under a portMUX.
+constexpr size_t kEnrollLineMax = 128;
+struct EnrollmentInbox {
+  void push(const char* line) {
+    if (!line || count == kCapacity) return;
+    const size_t length = strlen(line);
+    if (length == 0 || length > kEnrollLineMax) return;
+    std::memcpy(lines[tail], line, length);
+    lines[tail][length] = '\0';
+    tail = (tail + 1) % kCapacity;
+    ++count;
+  }
+  bool pop(char (&out)[kEnrollLineMax + 1]) {
+    if (count == 0) return false;
+    std::memcpy(out, lines[head], kEnrollLineMax + 1);
+    head = (head + 1) % kCapacity;
+    --count;
+    return true;
+  }
+  char lines[4][kEnrollLineMax + 1] = {};
+  size_t head = 0, tail = 0, count = 0;
+};
+portMUX_TYPE bleEnrollMux = portMUX_INITIALIZER_UNLOCKED;
+EnrollmentInbox enrollInbox;
+uint16_t bleEnrollRejected = 0;
 uint16_t bleRejected = 0;
 uint32_t rgbLastChangedMs = 0;
 uint32_t rgbLastPersistAttemptMs = 0;
@@ -261,6 +308,8 @@ class ServerCallbacks : public BLEServerCallbacks {
     connected = false;
     // Disconnect revokes authorization unconditionally.
     bleSecurity.onDisconnected();
+    // The owner session drops too; ownership itself survives for recovery.
+    ownerSession.onDisconnect();
     syncBleAuthState();
     Serial.println("BLE disconnected; restarting advertising");
     if (server) {
@@ -355,12 +404,36 @@ bool applyRgbRuntimeCommand(const String& cmd) {
 
 void stopScriptOnManualBle();
 
+void stopScriptOnManualBle();
+
+// True when the line's first token is a client owner-enrollment verb. Full
+// validation happens on the main loop via OwnerEnrollmentFrames; here we only
+// route the write to the (larger) enrollment inbox.
+bool looksLikeEnrollment(const char* line) {
+  static const char* kVerbs[] = {"PAIR", "BEGIN", "AUTH", "REVOKE", "RECOVER", "RESET"};
+  if (!line) return false;
+  for (const char* verb : kVerbs) {
+    const size_t length = std::strlen(verb);
+    if (std::strncmp(line, verb, length) == 0 &&
+        (line[length] == ' ' || command[kEnrollTerminator])) {
+      return true;
+    }
+  }
+  return false;
+}
+
 class CommandCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* characteristic) override {
     const String command = characteristic->getValue();
+    if (looksLikeEnrollment(command.c_str())) {
+      portENTER_CRITICAL(&bleEnrollMux);
+      const bool accepted = enrollInbox.push(command.c_str());
+      if (!accepted && bleEnrollRejected < 65535) ++bleEnrollRejected;
+      portEXIT_CRITICAL(&bleEnrollMux);
+      return;
+    }
     esp32core::RgbCommand parsed{};
-    const bool valid = esp32core::parseRgbCommand(command.c_str(), parsed) ||
-                       esp32core::BleSecurityPolicy::looksLikeAuth(command.c_str());
+    const bool valid = esp32core::parseRgbCommand(command.c_str(), parsed);
     portENTER_CRITICAL(&bleInboxMux);
     const bool accepted = valid && bleInbox.push(command.c_str());
     if (!accepted && bleRejected < 65535) ++bleRejected;

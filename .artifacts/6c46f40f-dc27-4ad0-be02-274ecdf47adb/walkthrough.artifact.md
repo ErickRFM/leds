@@ -1,37 +1,36 @@
-# Walkthrough - Compi V15 Master Security Integration & Release
+# Walkthrough - Compi V15.1 Sync, Integration Audit & APK Build
 
-This walkthrough details the strict BLE authorization mapping refactoring, fail-closed GATT write characteristic protection, and GitHub Actions C++ arbiter host test integration for **Compi V15**, complete with passing local builds, unit tests, and merge into `main`.
+This walkthrough presents the repository synchronization, integrated feature audit, test execution, Android lint verification, and distribution APK generation for **Compi V15.1**.
 
-## Changes Made
+## Changes & Synchronization Summary
 
-### 1. Dynamic BLE Channel Authorization & Strict `BleAuthState` Mapping (`CompiCommandArbiter.h`, `esp32_rgb.ino`, `compi_arbiter_test.cpp`)
-- Updated `CompiCommandArbiter::mapBleSource(BleAuthState)` in `CompiCommandArbiter.h` so that **exclusively** `BleAuthState::AUTHORIZED` maps to `CommandSource::BLE_AUTHENTICATED`. All other states (`DISCONNECTED`, `CONNECTED_UNAUTHENTICATED`, `PAIRING`, `ENCRYPTED`, `BONDED`, `REVOKED`, `FAILED`) map strictly to `CommandSource::BLE_UNAUTHENTICATED`.
-- Maintained `volatile BleAuthState bleAuthState = BleAuthState::DISCONNECTED;` state variable in `esp32_rgb.ino`.
-- Reset `bleAuthState` to `CONNECTED_UNAUTHENTICATED` on connect and `DISCONNECTED` on disconnect (`ServerCallbacks::onConnect`, `ServerCallbacks::onDisconnect`).
-- Dynamically evaluate channel source (`channelSource = CompiCommandArbiter::mapBleSource(bleAuthState)`) in `processBleCommands()`.
-- Enforced fail-closed GATT security: unauthenticated or bonded-only BLE writes evaluate as `BLE_UNAUTHENTICATED` and are strictly rejected by `commandArbiter`.
-- Updated C++ host test `tests/compi_arbiter_test.cpp` verifying that `BONDED` maps to `BLE_UNAUTHENTICATED` and `AUTHORIZED` maps to `BLE_AUTHENTICATED`.
+### 1. Repository Synchronization (`ErickRFM/leds`)
+- **Main Branch Baseline:** Fast-forward merged `feat/f08-editors-core` onto `main`, bringing HEAD to `692d541` (`feat(v15.1): validated editor core for Hardware Lab forms (F08.1)`).
+- **Pushed to Remote:** `origin/main` is synchronized at commit `692d541`.
 
-### 2. CI Pipeline Expansion (`android-ci.yml`)
-- Added `compi_arbiter_test` host test execution step under `firmware-core-tests` in `.github/workflows/android-ci.yml`.
+### 2. Integrated Feature Set Audit
+- **SEG1 Owner Enrollment Protocol & Crypto (PR #108–#111):** `OwnerEnrollment.kt`, `OwnerEnrollmentTest.kt`, `MbedTlsSessionCrypto.h`, `OwnerEnrollmentFrames.h`.
+- **F09 Cross-Board Compatibility Engine (PR #105–#107):** `BoardCompatibility.kt`, `ProjectPortableFormat.kt`, SAF import/export with rollback.
+- **F08 Hardware Lab Editors & Dashboards (PR #101–#106, #108):** `HardwareLabEditors.kt`, `HardwareLabEditorsTest.kt`, `ComponentDashboardViewModel.kt`.
 
-### 3. Local Android Verification & APK Generation
-- **Unit Tests & Lint:** All 75 unit tests passed (`testDebugUnitTest`). Linter passed.
-- **Generated APK Path:**
-  `android/app/build/outputs/apk/debug/app-debug.apk`
-- **APK SHA-256 Hash:**
-  `F9874685BE1D020094B95B57C9744E71667011062C60053D452A3F7C8578D80C`
+### 3. Build & Test Verification
+- **Unit Tests (`testDebugUnitTest`):** **Exitosas (PASSED)** — 100% pass rate across all Kotlin test suites.
+- **Android Lint (`lintDebug`):** **Exitosas (PASSED)**.
+- **Debug APK Assembly (`assembleDebug`):** **Exitoso (PASSED)**.
 
-### 4. Git & Integration
-- Committed and pushed changes to `origin/fix/compi-v15-strict-ble-auth-mapping`, merged into `main`, and pushed to `origin/main` (Commit SHA: `9ce882e`).
+### 4. Distribution Artifact
+- **APK Source Location:** `android/app/build/outputs/apk/debug/app-debug.apk`
+- **Distribution Location:** `C:\Users\erik5\OneDrive\Escritorio\ESP32\leds\dist\compi-v15.1-debug.apk`
+- **File Size:** `17,271,665` bytes (17.27 MB)
+- **SHA-256 Checksum:** `01D8F84C219EC0C01E526B1114DCCEFBEB20A0B8A11DADF64E91800B661D639F`
 
 ## Verification Results
 
 ### Automated Tests & Local Build
-- **Unit Tests:** PASSED (75 tests)
-- **Lint Check:** PASSED
-- **APK Compilation & Hashing:** PASSED (`app-debug.apk` compiled and hashed successfully)
+- **Unit Tests:** PASSED
+- **Lint Analysis:** PASSED
+- **APK Compilation & Hashing:** PASSED (`dist/compi-v15.1-debug.apk` created and hashed)
 
-### Physical BLE/Wi-Fi Hardware Testing Status
+### Physical Device / Hardware Status
 > [!NOTE]
-> Physical SoftAP and BLE verification (`READY_FOR_PHYSICAL_TEST`) with an actual ESP32 and Android device is documented as pending local bench deployment due to the headless test environment.
+> No physical Android phone was attached via ADB during execution (`adb devices` reported no attached devices). ADB installation is marked as pending physical device connection.
