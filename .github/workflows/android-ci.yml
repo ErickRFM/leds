@@ -75,6 +75,10 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/command_authorization_test.cpp -o /tmp/command_authorization_test
           /tmp/command_authorization_test
+      - name: SEG.3 adversarial security integration host tests
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic -I tests tests/security_adversarial_test.cpp -o /tmp/security_adversarial_test
+          /tmp/security_adversarial_test
       - name: Experiment runtime host tests
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic -I tests/stubs tests/experiment_runtime_test.cpp -o /tmp/experiment_runtime_test
