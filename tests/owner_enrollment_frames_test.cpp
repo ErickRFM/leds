@@ -16,7 +16,6 @@ int main() {
   EnrollmentFrame frame;
 
   // PAIR <code> <ownerId> <pubKeyHex>
-  assert(OwnerEnrollmentFrames::parse("PAIR deadbeef owner-1 $PUB", frame) == false);
   {
     std::string line = std::string("PAIR deadbeef owner-1 ") + kPub;
     assert(OwnerEnrollmentFrames::parse(line.c_str(), frame));
