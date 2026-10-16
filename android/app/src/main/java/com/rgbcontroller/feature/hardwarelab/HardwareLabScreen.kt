@@ -38,6 +38,8 @@ import com.rgbcontroller.core.components.status.LocalDesiredConfig
 import com.rgbcontroller.core.components.widgets.HumidityTemperatureWidget
 import com.rgbcontroller.core.components.widgets.OledDisplayWidget
 import com.rgbcontroller.core.components.widgets.SoilMoistureWidget
+import com.rgbcontroller.core.export.CompatibilityLevel
+import com.rgbcontroller.core.export.CompatibilityReport
 import com.rgbcontroller.core.export.ProjectExportEnvelope
 import com.rgbcontroller.core.wifi.CompiLabSession
 import com.rgbcontroller.core.wifi.LabConnectionState
@@ -419,6 +421,7 @@ fun HardwareLabScreen(
         ImportPreviewDialog(
             envelope = preview,
             conflicts = conflicts,
+            compatibility = viewModel.compatibilityReport(),
             onImportAsCopy = {
                 scope.launch { viewModel.applyImport(ComponentDashboardViewModel.ImportMode.COPY) }
             },
@@ -434,10 +437,12 @@ fun HardwareLabScreen(
 private fun ImportPreviewDialog(
     envelope: ProjectExportEnvelope,
     conflicts: List<String>,
+    compatibility: CompatibilityReport?,
     onImportAsCopy: () -> Unit,
     onReplace: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val incompatible = compatibility?.level == CompatibilityLevel.INCOMPATIBLE
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.testTag("project_import_preview"),
@@ -455,6 +460,20 @@ private fun ImportPreviewDialog(
                     Text("Calibraciones: ${envelope.calibrations.size}",
                         style = MaterialTheme.typography.bodySmall)
                 }
+                compatibility?.let { report ->
+                    Text(
+                        "Compatibilidad: ${compatibilityLabel(report.level)}" +
+                            if (report.remapped.isNotEmpty()) {
+                                " (${report.remapped.size} componente(s) reasignado(s))"
+                            } else {
+                                ""
+                            },
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.testTag("project_import_compatibility"),
+                        color = if (incompatible) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 if (conflicts.isNotEmpty()) {
                     Text("Aviso: ${conflicts.size} id(s) ya existen; se importarán como copia.",
                         style = MaterialTheme.typography.bodySmall,
@@ -467,6 +486,7 @@ private fun ImportPreviewDialog(
         },
         confirmButton = {
             TextButton(onClick = onImportAsCopy,
+                enabled = !incompatible,
                 modifier = Modifier.testTag("project_import_copy")) {
                 Text("Importar como copia")
             }
@@ -476,10 +496,19 @@ private fun ImportPreviewDialog(
                 TextButton(onClick = onDismiss,
                     modifier = Modifier.testTag("project_import_cancel")) { Text("Cancelar") }
                 TextButton(onClick = onReplace,
+                    enabled = !incompatible,
                     modifier = Modifier.testTag("project_import_replace")) { Text("Reemplazar") }
             }
         }
     )
+}
+
+private fun compatibilityLabel(level: CompatibilityLevel): String = when (level) {
+    CompatibilityLevel.COMPATIBLE -> "compatible"
+    CompatibilityLevel.REQUIRES_REMAP -> "requiere reasignación de pines"
+    CompatibilityLevel.PARTIALLY_COMPATIBLE -> "parcialmente compatible"
+    CompatibilityLevel.INCOMPATIBLE -> "incompatible"
+    CompatibilityLevel.UNKNOWN -> "placa desconocida"
 }
 
 

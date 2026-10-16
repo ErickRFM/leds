@@ -14,6 +14,11 @@ import com.rgbcontroller.core.components.status.LocalDesiredComponent
 import com.rgbcontroller.core.components.status.LocalDesiredConfig
 import com.rgbcontroller.core.data.DataStoreComponentStatusStorage
 import com.rgbcontroller.core.export.ExportParseResult
+import com.rgbcontroller.core.export.BoardCompatibilityEngine
+import com.rgbcontroller.core.export.BoardProfile
+import com.rgbcontroller.core.export.BoardProfiles
+import com.rgbcontroller.core.export.CompatibilityLevel
+import com.rgbcontroller.core.export.CompatibilityReport
 import com.rgbcontroller.core.export.ProjectExportBuilder
 import com.rgbcontroller.core.export.ProjectExportEnvelope
 import com.rgbcontroller.core.export.ProjectExportParser
@@ -173,23 +178,44 @@ class ComponentDashboardViewModel(
 
     fun cancelImport() = repository.clearImport()
 
+    /** The board the app assumes for compatibility checks. */
+    fun currentBoardProfile(): BoardProfile = BoardProfiles.find(DEFAULT_BOARD_PROFILE)
+
+    /** Compatibility of the staged import against the current board, if any. */
+    fun compatibilityReport(): CompatibilityReport? =
+        repository.state.value.importPreview?.let {
+            BoardCompatibilityEngine.evaluate(it, currentBoardProfile())
+        }
+
     /**
      * Apply the staged preview. On REPLACE the current config is replaced; on
-     * COPY imported entries are appended (ids de-duplicated). Any failure rolls
-     * the configuration back to its previous state.
+     * COPY imported entries are appended (ids de-duplicated). Pin conflicts are
+     * remapped to safe pins (never reserved); an incompatible project is
+     * refused. Any failure rolls the configuration back.
      */
     suspend fun applyImport(mode: ImportMode): Boolean {
         val preview = repository.state.value.importPreview ?: return false
+        val report = BoardCompatibilityEngine.evaluate(preview, currentBoardProfile())
+        if (report.level == CompatibilityLevel.INCOMPATIBLE) {
+            repository.setImportError(
+                "El proyecto no es compatible con la placa ${preview.boardProfile}."
+            )
+            return false
+        }
+        val remappedById = report.remapped.associate { it.componentId to it.toPins }
+        val components = preview.components.map { component ->
+            remappedById[component.id]?.let { component.copy(pins = it) } ?: component
+        }
         repository.setDevice(currentDeviceId())
         val before = repository.configSnapshot()
         return try {
-            val existing = repository.state.value
             when (mode) {
                 ImportMode.REPLACE -> {
-                    repository.setDesired(LocalDesiredConfig(components = preview.components))
+                    repository.setDesired(LocalDesiredConfig(components = components))
                     repository.setAlertRules(preview.alerts)
                     repository.setAutomationRules(preview.automations)
-                    val calibration = preview.calibrations.firstOrNull { it.deviceId == existing.deviceId }
+                    val calibration = preview.calibrations
+                        .firstOrNull { it.deviceId == repository.state.value.deviceId }
                     if (calibration != null) {
                         repository.setSoilCalibration(calibration.dryRaw, calibration.wetRaw)
                     } else {
@@ -197,9 +223,10 @@ class ComponentDashboardViewModel(
                     }
                 }
                 ImportMode.COPY -> {
+                    val existing = repository.state.value
                     repository.setDesired(
                         LocalDesiredConfig(
-                            components = mergeComponents(existing.desiredConfig.components, preview.components)
+                            components = mergeComponents(existing.desiredConfig.components, components)
                         )
                     )
                     repository.setAlertRules(mergeAlerts(existing.alertRules, preview.alerts))
