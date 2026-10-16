@@ -101,3 +101,33 @@ del tablero, para round-trip); los encoders (`encodeChallenge`, `encodeOk`,
 Pruebas: `tests/owner_enrollment_frames_test.cpp` (host) vía el job
 `firmware-core-tests`.
 
+## Criptografía (`SessionCrypto` + `SessionKeySchedule`)
+
+La criptografía queda detrás de una interfaz pura para poder probarla en host y
+para que el núcleo portátil nunca incluya mbedTLS.
+
+- `firmware/esp32_rgb/core/SessionCrypto.h`: interfaz `SessionCrypto` con
+  X25519 (`generateKeyPair`, `sharedSecret`), HMAC-SHA256 (`hmacSha256`) y
+  AES-256-GCM (`aeadSeal`/`aeadOpen`). Constantes: clave pública/privada/
+  secreto/ clave de sesión = 32 B, nonce 12 B, tag 16 B, MAC 32 B.
+- `firmware/esp32_rgb/core/SessionKeySchedule.h`: deriva la clave de sesión y
+  el **proof** desde el secreto ECDH con HMAC-SHA256 usado como KDF. La clave de
+  sesión ata ambos nonces; el proof además fija el contador en big-endian, de
+  modo que un proof repetido o reordenado nunca valida. Incluye comparación en
+  tiempo constante y limpieza de buffers temporales.
+- `firmware/esp32_rgb/core/MbedTlsSessionCrypto.h`: implementación concreta con
+  mbedTLS (Curve25519 + AES-256-GCM + HMAC-SHA256), compilada **solo** para el
+  objetivo ESP32 (`ARDUINO`/`ESP_PLATFORM`) y validada con el compilador cruzado
+  contra mbedTLS 3.6.1.
+
+Pruebas host: `tests/session_key_schedule_test.cpp` (doble determinista no
+criptográfico `tests/support/TestSessionCrypto.h`) verifica que tablero y
+cliente derivan la misma clave/proof, el binding de nonce y contador
+(anti-replay), la propagación de fallos (fail-closed) y la comparación en tiempo
+constante.
+
+Pendiente físico: cableado GATT (sin UUIDs nuevos, se extiende el canal de
+comandos existente), almacenamiento del keypair en NVS y ventana por botón
+BOOT. `PENDING_HARDWARE_VALIDATION`.
+
+
