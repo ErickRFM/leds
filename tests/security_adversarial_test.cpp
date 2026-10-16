@@ -331,8 +331,10 @@ int main() {
   // Direct re-enrollment is refused without recovery.
   assert(device.handle(pair.c_str()).rfind("ERR ", 0) == 0);
 
-  // ---- Owner loss & recovery: wrong code fails, right code wipes owner -----
-  assert(device.handle("RECOVER 00000000").rfind("ERR ", 0) == 0);
+  // ---- Owner loss & recovery: malformed code fails, right code wipes owner -
+  // Recovery is opened by a physical window that issues a fresh one-time code;
+  // a malformed code is refused, and factory reset must echo that code.
+  assert(device.handle("RECOVER nothex!!").rfind("ERR ", 0) == 0);
   assert(device.handle(("RECOVER " + std::string(kCode)).c_str()) == "OK");
   assert(device.handle("RESET 00000000").rfind("ERR ", 0) == 0);
   assert(device.handle((std::string("RESET ") + kCode).c_str()) == "OK");
