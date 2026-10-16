@@ -44,6 +44,11 @@ class ComponentDashboardViewModel(
         if (connected) refresh()
     }
 
+    suspend fun setSoilCalibration(dryRaw: Int, wetRaw: Int): Boolean {
+        repository.setDevice(currentDeviceId())
+        return repository.setSoilCalibration(dryRaw, wetRaw)
+    }
+
     suspend fun setAlertRules(rules: List<AlertRule>) = repository.setAlertRules(rules)
 
     suspend fun setAutomationRules(rules: List<AutomationRule>) =
@@ -87,8 +92,7 @@ class ComponentDashboardViewModel(
 
     suspend fun setLocalDesired(config: LocalDesiredConfig) = repository.setDesired(config)
 
-    suspend fun setSoilCalibration(dryRaw: Int, wetRaw: Int): Boolean =
-        repository.setSoilCalibration(dryRaw, wetRaw)
+
 
     suspend fun clearSoilCalibration() = repository.clearSoilCalibration()
 
