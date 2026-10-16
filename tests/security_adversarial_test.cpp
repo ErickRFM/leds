@@ -35,7 +35,6 @@ using esp32core::SessionKeySchedule;
 using esp32core_test::TestOnlySessionCrypto;
 
 static const char* kCode = "deadbeef";
-static const char* kClientNonceHex = "ffeeddccbbaa99887766554433221100";
 
 static void toHex(const uint8_t* in, size_t n, char* out) {
   static const char* digits = "0123456789abcdef";
