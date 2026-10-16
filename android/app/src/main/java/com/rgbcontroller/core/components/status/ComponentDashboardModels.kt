@@ -13,6 +13,7 @@ import com.rgbcontroller.core.components.model.ComponentMeasurement
 import com.rgbcontroller.core.components.model.ComponentRuntimeStatus
 import com.rgbcontroller.core.components.registry.ComponentCatalog
 import com.rgbcontroller.core.components.telemetry.TelemetryHistory
+import com.rgbcontroller.core.export.ProjectExportEnvelope
 import com.rgbcontroller.core.components.telemetry.TelemetrySample
 
 /**
@@ -84,7 +85,10 @@ data class ComponentDashboardState(
     val automationEvents: List<AutomationEvent> = emptyList(),
     val soilCalibration: StoredSoilCalibration? = null,
     val connected: Boolean = false,
-    val authorityError: String? = null
+    val authorityError: String? = null,
+    /** Pending import preview (F09): parsed but not yet applied. */
+    val importPreview: ProjectExportEnvelope? = null,
+    val importError: String? = null
 ) {
     val freshness: ComponentStatusFreshness
         get() = when {

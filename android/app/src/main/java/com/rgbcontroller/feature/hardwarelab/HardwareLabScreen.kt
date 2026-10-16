@@ -1,5 +1,7 @@
 package com.rgbcontroller.feature.hardwarelab
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -36,6 +38,7 @@ import com.rgbcontroller.core.components.status.LocalDesiredConfig
 import com.rgbcontroller.core.components.widgets.HumidityTemperatureWidget
 import com.rgbcontroller.core.components.widgets.OledDisplayWidget
 import com.rgbcontroller.core.components.widgets.SoilMoistureWidget
+import com.rgbcontroller.core.export.ProjectExportEnvelope
 import com.rgbcontroller.core.wifi.CompiLabSession
 import com.rgbcontroller.core.wifi.LabConnectionState
 import kotlinx.coroutines.launch
@@ -69,6 +72,17 @@ fun HardwareLabScreen(
     var showSoilWizard by remember { mutableStateOf(false) }
     var showConfigEditor by remember { mutableStateOf(false) }
     var syncMessage by remember { mutableStateOf<String?>(null) }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri?.let { scope.launch { viewModel.exportTo(it.toString()) } }
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { scope.launch { viewModel.readImport(it.toString()) } }
+    }
 
     val sessionConnection = session?.connectionState
     val authorized = sessionConnection == LabConnectionState.AUTHORIZED
@@ -271,6 +285,59 @@ fun HardwareLabScreen(
                     DisabledTemplateCard(descriptor = descriptor)
                 }
             }
+
+            item {
+                Text("Proyecto (importar / exportar)",
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            item {
+                Text("El archivo solo contiene componentes, alertas, automatizaciones y calibración. " +
+                    "Nunca incluye claves ni tokens.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (state.importError != null) {
+                item {
+                    Card(
+                        Modifier.fillMaxWidth().testTag("project_import_error"),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer)
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("No se pudo importar el proyecto",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer)
+                            Text(state.importError!!,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer)
+                            TextButton(
+                                onClick = { viewModel.cancelImport() },
+                                modifier = Modifier.testTag("project_import_error_dismiss")
+                            ) { Text("Descartar") }
+                        }
+                    }
+                }
+            }
+            item {
+                Card(Modifier.fillMaxWidth().testTag("project_portable")) {
+                    Row(Modifier.fillMaxWidth().padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = {
+                                exportLauncher.launch("${ComponentDashboardViewModel.DEFAULT_PROJECT_NAME}.json")
+                            },
+                            modifier = Modifier.weight(1f).testTag("project_export")
+                        ) { Text("Exportar") }
+                        OutlinedButton(
+                            onClick = {
+                                importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+                            },
+                            modifier = Modifier.weight(1f).testTag("project_import")
+                        ) { Text("Importar") }
+                    }
+                }
+            }
         }
     }
 
@@ -345,7 +412,76 @@ fun HardwareLabScreen(
             onDismiss = { showConfigEditor = false }
         )
     }
+
+    state.importPreview?.let { preview ->
+        val existingIds = state.desiredConfig.components.map { it.id }.toSet()
+        val conflicts = preview.components.map { it.id }.filter { it in existingIds }
+        ImportPreviewDialog(
+            envelope = preview,
+            conflicts = conflicts,
+            onImportAsCopy = {
+                scope.launch { viewModel.applyImport(ComponentDashboardViewModel.ImportMode.COPY) }
+            },
+            onReplace = {
+                scope.launch { viewModel.applyImport(ComponentDashboardViewModel.ImportMode.REPLACE) }
+            },
+            onDismiss = { viewModel.cancelImport() }
+        )
+    }
 }
+
+@Composable
+private fun ImportPreviewDialog(
+    envelope: ProjectExportEnvelope,
+    conflicts: List<String>,
+    onImportAsCopy: () -> Unit,
+    onReplace: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.testTag("project_import_preview"),
+        title = { Text("Vista previa del proyecto") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Nombre: ${envelope.name}", style = MaterialTheme.typography.bodyMedium)
+                Text("Perfil de placa: ${envelope.boardProfile}",
+                    style = MaterialTheme.typography.bodySmall)
+                Text("Componentes: ${envelope.components.size}",
+                    style = MaterialTheme.typography.bodySmall)
+                Text("Alertas: ${envelope.alerts.size} · Automatizaciones: ${envelope.automations.size}",
+                    style = MaterialTheme.typography.bodySmall)
+                if (envelope.calibrations.isNotEmpty()) {
+                    Text("Calibraciones: ${envelope.calibrations.size}",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                if (conflicts.isNotEmpty()) {
+                    Text("Aviso: ${conflicts.size} id(s) ya existen; se importarán como copia.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error)
+                }
+                Text("No se auto-ejecuta ningún script del archivo.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onImportAsCopy,
+                modifier = Modifier.testTag("project_import_copy")) {
+                Text("Importar como copia")
+            }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onDismiss,
+                    modifier = Modifier.testTag("project_import_cancel")) { Text("Cancelar") }
+                TextButton(onClick = onReplace,
+                    modifier = Modifier.testTag("project_import_replace")) { Text("Reemplazar") }
+            }
+        }
+    )
+}
+
 
 @Composable
 private fun AuthorityCard(connected: Boolean, authorized: Boolean, error: String?) {

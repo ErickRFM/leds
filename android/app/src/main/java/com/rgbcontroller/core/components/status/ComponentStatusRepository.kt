@@ -15,6 +15,7 @@ import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
 import com.rgbcontroller.core.components.telemetry.TelemetryHistory
 import com.rgbcontroller.core.components.telemetry.TelemetryHistoryLimits
 import com.rgbcontroller.core.components.telemetry.TelemetryProvenance
+import com.rgbcontroller.core.export.ProjectExportEnvelope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -113,6 +114,52 @@ class ComponentStatusRepository(
     suspend fun setAutomationRules(rules: List<AutomationRule>) {
         _state.value = _state.value.copy(automationRules = rules)
         storage.saveAutomationRules(rules)
+    }
+
+    /**
+     * Immutable snapshot of the importable configuration (F09). Used to roll
+     * back atomically if an import fails halfway.
+     */
+    data class ConfigSnapshot(
+        val desired: LocalDesiredConfig,
+        val alerts: List<AlertRule>,
+        val automations: List<AutomationRule>,
+        val calibration: StoredSoilCalibration?
+    )
+
+    fun configSnapshot(): ConfigSnapshot = ConfigSnapshot(
+        desired = _state.value.desiredConfig,
+        alerts = _state.value.alertRules,
+        automations = _state.value.automationRules,
+        calibration = _state.value.soilCalibration
+    )
+
+    /** Restore a previously captured snapshot to memory and persistence. */
+    suspend fun restore(snapshot: ConfigSnapshot) {
+        _state.value = _state.value.copy(
+            desiredConfig = snapshot.desired,
+            alertRules = snapshot.alerts,
+            automationRules = snapshot.automations,
+            soilCalibration = snapshot.calibration
+        )
+        storage.saveDesired(snapshot.desired)
+        storage.saveAlertRules(snapshot.alerts)
+        storage.saveAutomationRules(snapshot.automations)
+        storage.saveSoilCalibration(snapshot.calibration)
+    }
+
+    /** Stage a parsed project for preview; never applied until confirmed. */
+    fun setImportPreview(preview: ProjectExportEnvelope?) {
+        _state.value = _state.value.copy(importPreview = preview, importError = null)
+    }
+
+    fun setImportError(message: String?) {
+        _state.value = _state.value.copy(importError = message, importPreview = null)
+    }
+
+    /** Clear any staged import preview/error. */
+    fun clearImport() {
+        _state.value = _state.value.copy(importPreview = null, importError = null)
     }
 
     fun setDevice(next: String?) {
