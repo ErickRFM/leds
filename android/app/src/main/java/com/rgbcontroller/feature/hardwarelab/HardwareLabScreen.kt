@@ -22,6 +22,7 @@ import com.rgbcontroller.core.components.automation.AutomationEventStatus
 import com.rgbcontroller.core.components.model.ComponentRuntimeStatus
 import com.rgbcontroller.core.components.model.ComponentState
 import com.rgbcontroller.core.components.model.ComponentStatusCodec
+import com.rgbcontroller.core.components.editors.LabConfigValidation
 import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
 import com.rgbcontroller.core.components.telemetry.TelemetryChart
 import com.rgbcontroller.core.components.widgets.TelemetryChartCard
@@ -65,6 +66,8 @@ fun HardwareLabScreen(
     var showCatalog by remember { mutableStateOf(false) }
     var showAlertEditor by remember { mutableStateOf(false) }
     var showAutomationEditor by remember { mutableStateOf(false) }
+    var showSoilWizard by remember { mutableStateOf(false) }
+    var showConfigEditor by remember { mutableStateOf(false) }
     var syncMessage by remember { mutableStateOf<String?>(null) }
 
     val sessionConnection = session?.connectionState
@@ -77,6 +80,11 @@ fun HardwareLabScreen(
         else "Sin conexión autorizada: se muestra el último estado confirmado."
     }
 
+    val liveRawAdc = (state.authoritativeTelemetry ?: state.persistedTelemetry)
+        ?.let { ComponentTelemetryCodec.find(it, "adc_raw") }
+        ?.takeIf { it.valid && it.status == "fresh" }
+        ?.value?.toInt()
+    val configIssues = LabConfigValidation.validateDesired(state.desiredConfig.components)
     val confirmed = state.firmwareStatus?.components
     val lastKnown = state.lastKnownStatus?.components
     val freshness = state.freshness
@@ -158,12 +166,14 @@ fun HardwareLabScreen(
                 Dht22TelemetryCard(state = state)
             }
             item {
-                SoilTelemetryCard(state = state)
+                SoilCalibrationCard(
+                    state = state,
+                    onCalibrate = { showSoilWizard = true },
+                    onClear = { scope.launch { viewModel.clearSoilCalibration() } }
+                )
             }
             item {
-                SoilCalibrationCard(state = state, onClear = {
-                    scope.launch { viewModel.clearSoilCalibration() }
-                })
+                SoilTelemetryCard(state = state)
             }
             item {
                 Text("Alertas",
@@ -213,9 +223,15 @@ fun HardwareLabScreen(
                     horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Configuración local (pendiente)",
                         style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    TextButton(onClick = { showCatalog = true },
-                        modifier = Modifier.testTag("component_add")) {
-                        Icon(Icons.Default.Add, contentDescription = null); Text("Agregar")
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = { showConfigEditor = true },
+                            modifier = Modifier.testTag("component_config_edit")) {
+                            Text("Editar")
+                        }
+                        TextButton(onClick = { showCatalog = true },
+                            modifier = Modifier.testTag("component_add")) {
+                            Icon(Icons.Default.Add, contentDescription = null); Text("Agregar")
+                        }
                     }
                 }
             }
@@ -223,6 +239,9 @@ fun HardwareLabScreen(
                 Text("Esta configuración es un deseo local; no implica que el ESP32 la haya aceptado.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (configIssues.isNotEmpty()) {
+                item { ConfigValidationIssues(components = state.desiredConfig.components) }
             }
             if (state.desiredConfig.components.isEmpty()) {
                 item {
@@ -302,6 +321,28 @@ fun HardwareLabScreen(
             rules = state.automationRules,
             onSave = { scope.launch { viewModel.setAutomationRules(it) }; showAutomationEditor = false },
             onDismiss = { showAutomationEditor = false }
+        )
+    }
+
+    if (showSoilWizard) {
+        SoilCalibrationCaptureDialog(
+            deviceId = state.deviceId,
+            storedDry = state.soilCalibration?.dryRaw,
+            storedWet = state.soilCalibration?.wetRaw,
+            liveRaw = liveRawAdc,
+            onSave = { dry, wet ->
+                scope.launch { viewModel.setSoilCalibration(dry, wet) }
+                showSoilWizard = false
+            },
+            onDismiss = { showSoilWizard = false }
+        )
+    }
+
+    if (showConfigEditor) {
+        ComponentConfigEditorDialog(
+            components = state.desiredConfig.components,
+            onSave = { scope.launch { viewModel.setLocalDesired(LocalDesiredConfig(it)) } },
+            onDismiss = { showConfigEditor = false }
         )
     }
 }
@@ -443,13 +484,25 @@ private fun SoilTelemetryCard(state: ComponentDashboardState) {
 }
 
 @Composable
-private fun SoilCalibrationCard(state: ComponentDashboardState, onClear: () -> Unit) {
+private fun SoilCalibrationCard(
+    state: ComponentDashboardState,
+    onCalibrate: () -> Unit,
+    onClear: () -> Unit
+) {
     val stored = state.soilCalibration
     val active = state.activeSoilCalibration
     Card(Modifier.fillMaxWidth().testTag("component_soil_calibration")) {
         Column(Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Calibración de suelo", fontWeight = FontWeight.SemiBold)
+            Row(verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()) {
+                Text("Calibración de suelo", fontWeight = FontWeight.SemiBold)
+                TextButton(onClick = onCalibrate,
+                    modifier = Modifier.testTag("component_soil_calibration_start")) {
+                    Text("Calibrar")
+                }
+            }
             when {
                 active != null -> {
                     Text(

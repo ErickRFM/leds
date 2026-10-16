@@ -197,6 +197,15 @@ class ComponentDashboardViewModelTest {
         assertEquals(listOf(rule), h.storage.alertRules)
     }
 
+    @Test fun calibrationSavedFromWizardBindsToCurrentDevice() = runBlocking {
+        val h = Harness()
+        val saved = h.viewModel.setSoilCalibration(dryRaw = 40, wetRaw = 1500)
+        assertTrue(saved)
+        assertEquals(1, h.storage.saveSoilCalibrationCount)
+        assertEquals("device-a", h.storage.soilCalibration?.deviceId)
+        assertNotNull(h.viewModel.uiState.value.soilCalibration)
+    }
+
     @Test fun editorSavedAutomationRulesArePersistedAndExposed() = runBlocking {
         val h = Harness()
         val rule = com.rgbcontroller.core.components.automation.AutomationRule(
