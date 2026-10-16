@@ -10,7 +10,7 @@ import com.rgbcontroller.core.components.status.LocalDesiredConfig
 import com.rgbcontroller.core.components.telemetry.TelemetrySample
 
 /** In-memory storage double used by dashboard tests. No Android required. */
-class FakeComponentStatusStorage : ComponentStatusStorage {
+open class FakeComponentStatusStorage : ComponentStatusStorage {
     var lastKnown: LastKnownStatus? = null
     var desired: LocalDesiredConfig = LocalDesiredConfig.EMPTY
     var lastKnownTelemetry: LastKnownTelemetry? = null
