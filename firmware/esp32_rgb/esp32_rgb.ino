@@ -22,6 +22,7 @@
 #include "core/OwnerEnrollment.h"
 #include "core/OwnerEnrollmentFrames.h"
 #include "core/MbedTlsSessionCrypto.h"
+#include "core/CommandAuthorization.h"
 #include "core/ComponentContract.h"
 #include "core/ComponentCatalog.h"
 #include "core/ComponentStatus.h"
