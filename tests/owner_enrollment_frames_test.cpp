@@ -28,8 +28,9 @@ int main() {
   // Arity and field-length are strict.
   assert(!OwnerEnrollmentFrames::parse("PAIR deadbeef owner-1", frame));
   assert(!OwnerEnrollmentFrames::parse("PAIR deadbeef owner-1 pub extra", frame));
-  assert(!OwnerEnrollmentFrames::parse("PAIR toolongcode owner-1", frame));  // > 8 code? no
-  assert(!OwnerEnrollmentFrames::parse("PAIR deadbeef owner-1 abcd", frame));
+  assert(!OwnerEnrollmentFrames::parse("PAIR toolongcode owner-1", frame));  // wrong arity
+  const std::string pairLongPub = std::string("PAIR deadbeef owner-1 ") + kPub + "ff";
+  assert(!OwnerEnrollmentFrames::parse(pairLongPub.c_str(), frame));  // pubkey > 64
   // Empty tokens / trailing spaces are rejected.
   assert(!OwnerEnrollmentFrames::parse("PAIR  deadbeef x", frame));
   assert(!OwnerEnrollmentFrames::parse("OK ", frame));
