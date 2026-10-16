@@ -4,8 +4,10 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.rgbcontroller.core.ble.BleManager
+import com.rgbcontroller.core.components.alerts.AlertRule
 import com.rgbcontroller.core.components.automation.AutomationAction
 import com.rgbcontroller.core.components.automation.AutomationActionSink
+import com.rgbcontroller.core.components.automation.AutomationRule
 import com.rgbcontroller.core.components.status.ComponentDashboardState
 import com.rgbcontroller.core.components.status.ComponentStatusRepository
 import com.rgbcontroller.core.components.status.LocalDesiredConfig
@@ -41,6 +43,11 @@ class ComponentDashboardViewModel(
         repository.setConnected(connected)
         if (connected) refresh()
     }
+
+    suspend fun setAlertRules(rules: List<AlertRule>) = repository.setAlertRules(rules)
+
+    suspend fun setAutomationRules(rules: List<AutomationRule>) =
+        repository.setAutomationRules(rules)
 
     suspend fun refresh() {
         repository.setDevice(currentDeviceId())

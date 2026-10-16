@@ -63,6 +63,8 @@ fun HardwareLabScreen(
     )
     val state by viewModel.uiState.collectAsState()
     var showCatalog by remember { mutableStateOf(false) }
+    var showAlertEditor by remember { mutableStateOf(false) }
+    var showAutomationEditor by remember { mutableStateOf(false) }
     var syncMessage by remember { mutableStateOf<String?>(null) }
 
     val sessionConnection = session?.connectionState
@@ -168,7 +170,7 @@ fun HardwareLabScreen(
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
             item {
-                AlertsCard(state = state)
+                AlertsCard(state = state, onEdit = { showAlertEditor = true })
             }
             item {
                 Text("Gráficas (ventana de 30 min)",
@@ -182,7 +184,7 @@ fun HardwareLabScreen(
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
             item {
-                AutomationCard(state = state)
+                AutomationCard(state = state, onEdit = { showAutomationEditor = true })
             }
             item {
                 Text("Pantalla OLED (display)",
@@ -284,6 +286,22 @@ fun HardwareLabScreen(
                 }
             },
             confirmButton = { TextButton(onClick = { showCatalog = false }) { Text("Cerrar") } }
+        )
+    }
+
+    if (showAlertEditor) {
+        AlertRulesEditorDialog(
+            rules = state.alertRules,
+            onSave = { scope.launch { viewModel.setAlertRules(it) }; showAlertEditor = false },
+            onDismiss = { showAlertEditor = false }
+        )
+    }
+
+    if (showAutomationEditor) {
+        AutomationRulesEditorDialog(
+            rules = state.automationRules,
+            onSave = { scope.launch { viewModel.setAutomationRules(it) }; showAutomationEditor = false },
+            onDismiss = { showAutomationEditor = false }
         )
     }
 }
@@ -484,12 +502,23 @@ private fun OledStatusCard(state: ComponentDashboardState) {
 }
 
 @Composable
-private fun AlertsCard(state: ComponentDashboardState) {
+private fun AlertsCard(state: ComponentDashboardState, onEdit: () -> Unit) {
     val active = state.alertRules.filter { state.alertStates[it.id]?.active == true }
     val recent = state.alertEvents.take(5)
     Card(Modifier.fillMaxWidth().testTag("component_alerts")) {
         Column(Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()) {
+                Text("${state.alertRules.size} umbrales configurados",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = onEdit,
+                    modifier = Modifier.testTag("component_alerts_edit")) {
+                    Text("Editar umbrales")
+                }
+            }
             if (active.isEmpty()) {
                 Text("Sin alertas activas. Los umbrales son locales y no implican aceptación del firmware.",
                     style = MaterialTheme.typography.bodySmall,
@@ -530,11 +559,22 @@ private fun AlertsCard(state: ComponentDashboardState) {
 }
 
 @Composable
-private fun AutomationCard(state: ComponentDashboardState) {
+private fun AutomationCard(state: ComponentDashboardState, onEdit: () -> Unit) {
     val rules = state.automationRules
     val recent = state.automationEvents.take(5)
     Card(Modifier.fillMaxWidth().testTag("component_automations")) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()) {
+                Text("${rules.size} automatizaciones configuradas",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = onEdit,
+                    modifier = Modifier.testTag("component_automations_edit")) {
+                    Text("Editar automatizaciones")
+                }
+            }
             if (rules.isEmpty()) {
                 Text("Sin automatizaciones configuradas.",
                     style = MaterialTheme.typography.bodySmall,

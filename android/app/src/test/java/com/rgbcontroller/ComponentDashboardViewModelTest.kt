@@ -183,4 +183,32 @@ class ComponentDashboardViewModelTest {
         assertNull(state.persisted)
         assertEquals(ComponentStatusFreshness.NONE, state.freshness)
     }
+
+    @Test fun editorSavedAlertRulesArePersistedAndExposed() = runBlocking {
+        val h = Harness()
+        val rule = com.rgbcontroller.core.components.alerts.AlertRule(
+            "custom", "dht22", "temperature",
+            com.rgbcontroller.core.components.alerts.AlertComparison.ABOVE, 40f,
+            severity = com.rgbcontroller.core.components.alerts.AlertSeverity.CRITICAL
+        )
+        h.viewModel.setAlertRules(listOf(rule))
+        assertEquals(listOf(rule), h.viewModel.uiState.value.alertRules)
+        assertEquals(1, h.storage.saveAlertRulesCount)
+        assertEquals(listOf(rule), h.storage.alertRules)
+    }
+
+    @Test fun editorSavedAutomationRulesArePersistedAndExposed() = runBlocking {
+        val h = Harness()
+        val rule = com.rgbcontroller.core.components.automation.AutomationRule(
+            "custom", "dht22", "temperature",
+            com.rgbcontroller.core.components.alerts.AlertComparison.ABOVE, 45f,
+            action = com.rgbcontroller.core.components.automation.AutomationAction
+                .Notify("calor", com.rgbcontroller.core.components.alerts.AlertSeverity.WARNING),
+            enabled = true
+        )
+        h.viewModel.setAutomationRules(listOf(rule))
+        assertEquals(listOf(rule), h.viewModel.uiState.value.automationRules)
+        assertEquals(1, h.storage.saveAutomationRulesCount)
+        assertEquals(listOf(rule), h.storage.automationRules)
+    }
 }
