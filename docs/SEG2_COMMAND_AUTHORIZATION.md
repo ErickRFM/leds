@@ -21,7 +21,7 @@ autorizada.
 | `BLE_AUTHENTICATED` (sesión verificada) | sí | sí (`owner_session`) |
 | `BLE_AUTHENTICATED` (sin sesión) | sí | **no** (`no_owner_session`) |
 | `WIFI_SOFTAP_LOCAL` | sí | sí (`local_owner`) |
-| `AUTOMATION_INTERNAL` | sí | solo `HARDWARE_WRITE`/`SCRIPT_AUTOMATION` (`automation_scope`); el resto no |
+| `AUTOMATION_INTERNAL` | sí | solo `HARDWARE_WRITE`/`SCRIPT_AUTOMATION` (`automation_scope`); el resto se deniega (`automation_out_of_scope`) |
 
 Principios:
 

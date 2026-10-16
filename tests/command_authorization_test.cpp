@@ -81,7 +81,7 @@ int main() {
   assert(!allows(CommandSource::AUTOMATION_INTERNAL, true, PrivilegeClass::ADMIN));
   assert(std::string(CommandAuthorization::decide(CommandSource::AUTOMATION_INTERNAL, true,
                                                   PrivilegeClass::NETWORK_CHANGE).reason) ==
-         "automation_scope");
+         "automation_out_of_scope");
 
   // Integration with the real SEG.1 owner session: authority only follows the
   // verified session, never a claimed link.
