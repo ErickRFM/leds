@@ -613,8 +613,8 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
   };
 #if COMPI_BUILD_DHT22
   if (std::strcmp(catalogId, "dht22") == 0) {
-    if (from2 != 0 || to2 != 0 || PinManager::reservedForRgb(to1) ||
-        !PinManager::outputCapable(to1) || !available(to1, dht22Module.id())) return false;
+    if (from2 != 0 || to2 != 0 || esp32core::PinManager::reservedForRgb(to1) ||
+        !esp32core::PinManager::outputCapable(to1) || !available(to1, dht22Module.id())) return false;
     if (!dht22Module.ready()) {
       if (from1 != 0) return false;
       const uint8_t original = dht22Module.pin();
@@ -639,8 +639,8 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
 #endif
 #if COMPI_BUILD_SOIL
   if (std::strcmp(catalogId, "soil_moisture") == 0) {
-    if (from2 != 0 || to2 != 0 || PinManager::reservedForRgb(to1) ||
-        !PinManager::analogInputCapable(to1) || !available(to1, soilModule.id())) return false;
+    if (from2 != 0 || to2 != 0 || esp32core::PinManager::reservedForRgb(to1) ||
+        !esp32core::PinManager::analogInputCapable(to1) || !available(to1, soilModule.id())) return false;
     if (!soilModule.ready()) {
       if (from1 != 0) return false;
       const uint8_t original = soilModule.pin();
@@ -661,9 +661,9 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
 #endif
 #if COMPI_BUILD_OLED && COMPI_OLED_LIBRARY
   if (std::strcmp(catalogId, "ssd1306_oled") == 0) {
-    if (to1 == to2 || PinManager::reservedForRgb(to1) ||
-        PinManager::reservedForRgb(to2) ||
-        !PinManager::outputCapable(to1) || !PinManager::outputCapable(to2) ||
+    if (to1 == to2 || esp32core::PinManager::reservedForRgb(to1) ||
+        esp32core::PinManager::reservedForRgb(to2) ||
+        !esp32core::PinManager::outputCapable(to1) || !esp32core::PinManager::outputCapable(to2) ||
         !available(to1, oledModule.id()) || !available(to2, oledModule.id())) return false;
     if (!oledModule.ready()) {
       if (from1 != 0 || from2 != 0) return false;
