@@ -84,7 +84,10 @@ fun ModuleWorkspaceScreen(
 
     val confirmed = (state.authoritative ?: state.persisted).orEmpty()
     val names = confirmed.map { ComponentCatalog.catalogIdForFirmwareId(it.id) }
-    val configured = (state.desiredConfig.components.map { it.id } + names).distinct()
+    // A BLE Ready state confirms access to the existing RGB protocol, not
+    // general sensor/GPIO firmware leases. Expose only the RGB module in BLE mode.
+    val configured = (state.desiredConfig.components.map { it.id } + names +
+        (if (bleReady) listOf("led_rgb") else emptyList())).distinct()
     val runtime = { id: String -> confirmed.firstOrNull {
         ComponentCatalog.catalogIdForFirmwareId(it.id) == id
     } }
@@ -271,6 +274,7 @@ fun ModuleWorkspaceScreen(
                                         physical != null && state.freshness == ComponentStatusFreshness.LIVE ->
                                             "Firmware: ${physical.state} · ${if (physical.active) "activo" else "no activo"}"
                                         physical != null -> "Última confirmación del firmware · no en vivo"
+                                        bleReady && id == "led_rgb" -> "Control BLE RGB disponible · GPIO sin confirmar"
                                         else -> "Borrador local · sin confirmar"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
