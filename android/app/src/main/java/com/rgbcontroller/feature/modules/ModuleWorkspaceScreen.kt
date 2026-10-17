@@ -109,7 +109,10 @@ fun ModuleWorkspaceScreen(
             }
             if (id == "led_rgb") {
                 // Reuse the *real* V16 BLE/Wi-Fi control path; no fake RGB widget.
-                LedModuleScreen(bleManager, preferencesRepository, session, onOpenDevices = onConnect)
+                Box(Modifier.weight(1f)) {
+                    LedModuleScreen(bleManager, preferencesRepository, session,
+                        onOpenDevices = onConnect)
+                }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize().testTag("module_detail_list"),
