@@ -85,6 +85,9 @@ fun ConnectionCenterScreen(
                     WifiNetworkCandidate(it.SSID.orEmpty(), it.level)
                 }
                 wifiNetworks = WifiNetworkDiscovery.present(found)
+                if (!started && wifiNetworks.isNotEmpty()) {
+                    wifiScanError = "Android limitó el escaneo: las redes mostradas son resultados guardados, no una detección nueva del ESP32."
+                }
                 if (wifiNetworks.isEmpty()) {
                     wifiScanError = "No se encontraron redes. Activa Wi-Fi y ubicación del teléfono; " +
                         "si el ESP32 no aparece, revisa su monitor serie."
