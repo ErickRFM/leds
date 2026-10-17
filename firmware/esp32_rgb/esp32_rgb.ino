@@ -613,9 +613,19 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
   };
 #if COMPI_BUILD_DHT22
   if (std::strcmp(catalogId, "dht22") == 0) {
-    if (!dht22Module.ready() || dht22Module.pin() != from1 || from2 != 0 ||
-        to2 != 0 || PinManager::reservedForRgb(to1) ||
+    if (from2 != 0 || to2 != 0 || PinManager::reservedForRgb(to1) ||
         !PinManager::outputCapable(to1) || !available(to1, dht22Module.id())) return false;
+    if (!dht22Module.ready()) {
+      if (from1 != 0) return false;
+      const uint8_t original = dht22Module.pin();
+      if (!dht22Module.configurePin(to1)) return false;
+      liveDhtPin = to1;
+      if (dht22Module.begin(pinManager)) return true;
+      dht22Module.configurePin(original);
+      liveDhtPin = original;
+      return false;
+    }
+    if (dht22Module.pin() != from1) return false;
     if (from1 == to1) return true;
     dht22Module.stop(pinManager);
     if (!dht22Module.configurePin(to1)) return false; // preflight ensures this
@@ -629,9 +639,17 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
 #endif
 #if COMPI_BUILD_SOIL
   if (std::strcmp(catalogId, "soil_moisture") == 0) {
-    if (!soilModule.ready() || soilModule.pin() != from1 || from2 != 0 ||
-        to2 != 0 || PinManager::reservedForRgb(to1) ||
+    if (from2 != 0 || to2 != 0 || PinManager::reservedForRgb(to1) ||
         !PinManager::analogInputCapable(to1) || !available(to1, soilModule.id())) return false;
+    if (!soilModule.ready()) {
+      if (from1 != 0) return false;
+      const uint8_t original = soilModule.pin();
+      if (!soilModule.configurePin(to1)) return false;
+      if (soilModule.begin(pinManager)) return true;
+      soilModule.configurePin(original);
+      return false;
+    }
+    if (soilModule.pin() != from1) return false;
     if (from1 == to1) return true;
     soilModule.stop(pinManager);
     if (!soilModule.configurePin(to1)) return false;
@@ -643,11 +661,19 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
 #endif
 #if COMPI_BUILD_OLED && COMPI_OLED_LIBRARY
   if (std::strcmp(catalogId, "ssd1306_oled") == 0) {
-    if (!oledModule.ready() || oledModule.sda() != from1 ||
-        oledModule.scl() != from2 || to1 == to2 ||
-        PinManager::reservedForRgb(to1) || PinManager::reservedForRgb(to2) ||
+    if (to1 == to2 || PinManager::reservedForRgb(to1) ||
+        PinManager::reservedForRgb(to2) ||
         !PinManager::outputCapable(to1) || !PinManager::outputCapable(to2) ||
         !available(to1, oledModule.id()) || !available(to2, oledModule.id())) return false;
+    if (!oledModule.ready()) {
+      if (from1 != 0 || from2 != 0) return false;
+      const uint8_t originalSda = oledModule.sda(), originalScl = oledModule.scl();
+      if (!oledModule.configurePins(to1, to2)) return false;
+      if (oledModule.begin(pinManager)) return true;
+      oledModule.configurePins(originalSda, originalScl);
+      return false;
+    }
+    if (oledModule.sda() != from1 || oledModule.scl() != from2) return false;
     if (from1 == to1 && from2 == to2) return true;
     oledModule.stop(pinManager);
     if (!oledModule.configurePins(to1, to2)) return false;
