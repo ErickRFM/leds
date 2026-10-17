@@ -397,14 +397,14 @@ fun ModuleWorkspaceScreen(
                                 }
                                 val stateLabel = when {
                                     isEnvironmental && currentlyVerified && groupConfirmed ->
-                                        "Sensores confirmados · en vivo"
+                                        "Módulos iniciados · revisa lecturas"
                                     isEnvironmental && currentlyVerified ->
                                         "Estado parcial · revisa cada sensor"
                                     isEnvironmental -> "Grupo local · sin lecturas simuladas"
                                     physical != null && currentlyVerified && physical.active ->
-                                        "Firmware confirmado · activo"
+                                        "Firmware · GPIO ocupado (no prueba sensor)"
                                     physical != null && currentlyVerified ->
-                                        "Firmware confirmado · inactivo"
+                                        "Firmware · módulo no iniciado"
                                     physical != null -> "Último confirmado · no en vivo"
                                     bleReady && id == "led_rgb" ->
                                         "Control BLE listo · GPIO sin confirmar"
@@ -543,7 +543,7 @@ private fun ModuleRuntimeCard(id: String, runtime: ComponentRuntimeStatus?, live
             Text(
                 when {
                     runtime == null -> "Sin confirmación del firmware para ${id}."
-                    live -> "Estado confirmado: ${runtime.state}"
+                    live -> "Módulo reportado: ${runtime.state} · verifica lecturas del sensor"
                     else -> "Último estado confirmado (sin conexión en vivo): ${runtime.state}"
                 },
                 style = MaterialTheme.typography.bodyMedium
