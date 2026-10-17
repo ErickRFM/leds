@@ -41,7 +41,9 @@ pin_manager = (root / "firmware/esp32_rgb/core/PinManager.h").read_text(encoding
 registry = (root / "firmware/esp32_rgb/core/ModuleRegistry.h").read_text(encoding="utf-8")
 led_module = (root / "firmware/esp32_rgb/modules/LedRgbModule.h").read_text(encoding="utf-8")
 assert "moduleRegistry.add(rgbModule)" in firmware, "RGB not registered"
-assert "moduleRegistry.startAll(pinManager)" in firmware, "Modules not initialized"
+assert "moduleRegistry.startRequiredAndOptional(pinManager, 1)" in firmware, (
+    "RGB must be required while optional sensors cannot block SoftAP startup"
+)
 assert "moduleRegistry.tickAll(millis())" in firmware, "Module ticks not wired"
 assert "manager.acquire(pins_[i], id(), PinFunction::PwmOutput)" in led_module, "RGB does not reserve pins"
 assert "manager.release(pin, id())" in led_module, "RGB does not release pins"
