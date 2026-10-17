@@ -182,7 +182,8 @@ fun MainAppNavHost(
                         onCode = { navController.navigateTopLevel(Screen.Code) },
                         onDevices = { navController.navigate(Screen.Devices.route) },
                         onHardware = { navController.navigateTopLevel(Screen.Hub) },
-                        onSettings = { navController.navigate(Screen.Settings.route) }
+                        onSettings = { navController.navigate(Screen.Settings.route) },
+                        session = session
                     )
                 }
                 // Retain a migration route for back stacks saved by Compi V8.
