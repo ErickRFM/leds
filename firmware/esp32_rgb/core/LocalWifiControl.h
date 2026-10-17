@@ -38,7 +38,8 @@ class LocalWifiControl final {
   // Authorized, runtime-only rewire. Arguments include expected old pins to
   // prevent overwriting a concurrent edit; callback must rollback on failure.
   using ComponentApply = bool (*)(const char* id, uint8_t from1, uint8_t from2,
-                                   uint8_t to1, uint8_t to2, void* context);
+                                   uint8_t to1, uint8_t to2, uint8_t from3,
+                                   uint8_t to3, void* context);
 
   LocalWifiControl(PinManager& pins, RgbState state, RgbCommand manualCommand,
                    RgbCommand runtimeCommand, DeviceId deviceId)
@@ -201,7 +202,7 @@ class LocalWifiControl final {
       }
       const String componentId = server_.arg("id");
       if (componentId != "dht22" && componentId != "soil_moisture" &&
-          componentId != "ssd1306_oled") {
+          componentId != "ssd1306_oled" && componentId != "led_rgb") {
         jsonError(400, "unsupported_component"); return;
       }
       int from1 = -1, from2 = -1, to1 = -1, to2 = -1;
@@ -211,11 +212,20 @@ class LocalWifiControl final {
           !parseInt("to2", 0, 39, to2)) {
         jsonError(400, "invalid_gpio_assignment"); return;
       }
+      const bool rgb = componentId == "led_rgb";
+      int from3 = 0, to3 = 0;
+      if ((rgb && (!parseInt("from3", 0, 39, from3) ||
+                   !parseInt("to3", 0, 39, to3))) ||
+          (!rgb && (!server_.arg("from3").isEmpty() ||
+                    !server_.arg("to3").isEmpty()))) {
+        jsonError(400, "invalid_gpio_assignment"); return;
+      }
       const String requestId = server_.arg("requestId");
       const ComponentApplyReplayGuard::Request request = {
           requestId.c_str(), componentId.c_str(),
           static_cast<uint8_t>(from1), static_cast<uint8_t>(from2),
-          static_cast<uint8_t>(to1), static_cast<uint8_t>(to2)};
+          static_cast<uint8_t>(to1), static_cast<uint8_t>(to2),
+          static_cast<uint8_t>(from3), static_cast<uint8_t>(to3)};
       const auto replayVerdict = replayGuard_.inspect(request);
       if (replayVerdict == ComponentApplyReplayGuard::Verdict::Invalid) {
         jsonError(400, "invalid_gpio_request_id"); return;
@@ -232,15 +242,20 @@ class LocalWifiControl final {
         return;
       }
       const bool oled = componentId == "ssd1306_oled";
-      if ((!oled && (from2 != 0 || to2 != 0)) ||
-          (oled && (from1 == from2 || to1 == to2)) ||
-          PinManager::reservedForRgb(static_cast<uint8_t>(to1)) ||
-          (oled && PinManager::reservedForRgb(static_cast<uint8_t>(to2)))) {
+      if ((rgb && (to1 == to2 || to1 == to3 || to2 == to3 ||
+                   !PinManager::outputCapable(to1) ||
+                   !PinManager::outputCapable(to2) ||
+                   !PinManager::outputCapable(to3))) ||
+          (!rgb && ((!oled && (from2 != 0 || to2 != 0)) ||
+           (oled && (from1 == from2 || to1 == to2)) ||
+           PinManager::reservedForRgb(static_cast<uint8_t>(to1)) ||
+           (oled && PinManager::reservedForRgb(static_cast<uint8_t>(to2)))))) {
         jsonError(400, "invalid_gpio_assignment"); return;
       }
       if (!apply_(componentId.c_str(), static_cast<uint8_t>(from1),
                   static_cast<uint8_t>(from2), static_cast<uint8_t>(to1),
-                  static_cast<uint8_t>(to2), applyContext_)) {
+                  static_cast<uint8_t>(to2), static_cast<uint8_t>(from3),
+                  static_cast<uint8_t>(to3), applyContext_)) {
         jsonError(409, "component_apply_rejected_or_rolled_back"); return;
       }
       // Cache success only; a rejected request can be retried with the same ID.
