@@ -1,6 +1,13 @@
 package com.rgbcontroller.feature.devices
 
+import android.Manifest
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.wifi.WifiManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import android.content.pm.ApplicationInfo
 import android.provider.Settings
 import androidx.compose.foundation.layout.*
@@ -31,6 +38,7 @@ import com.rgbcontroller.core.wifi.LabTransport
 import com.rgbcontroller.core.wifi.LocalLabClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 private enum class ConnectTab { BLUETOOTH, WIFI, USB }
 
@@ -55,6 +63,49 @@ fun ConnectionCenterScreen(
     }
     var busy by remember { mutableStateOf(false) }
     var connectionError by remember { mutableStateOf<String?>(null) }
+    var wifiNetworks by remember { mutableStateOf<List<WifiNetworkCandidate>>(emptyList()) }
+    var wifiScanBusy by remember { mutableStateOf(false) }
+    var wifiScanError by remember { mutableStateOf<String?>(null) }
+    val wifiManager = remember(context) {
+        context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+    }
+    val scanWifi = {
+        scope.launch {
+            wifiScanBusy = true
+            wifiScanError = null
+            try {
+                check(wifiManager != null) { "Este teléfono no dispone de un servicio Wi-Fi." }
+                // Android may throttle startScan(). Always label these results
+                // as the phone's last available scan, not live ESP32 discovery.
+                @Suppress("DEPRECATION")
+                val started = wifiManager.startScan()
+                if (started) delay(2200L)
+                @Suppress("DEPRECATION")
+                val found = wifiManager.scanResults.orEmpty().map {
+                    WifiNetworkCandidate(it.SSID.orEmpty(), it.level)
+                }
+                wifiNetworks = WifiNetworkDiscovery.present(found)
+                if (wifiNetworks.isEmpty()) {
+                    wifiScanError = "No se encontraron redes. Activa Wi-Fi y ubicación del teléfono; " +
+                        "si el ESP32 no aparece, revisa su monitor serie."
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: SecurityException) {
+                wifiScanError = "Android impidió el escaneo. Revisa el permiso de ubicación y Wi-Fi."
+            } catch (failure: Exception) {
+                wifiScanError = failure.message ?: "No se pudieron consultar las redes Wi-Fi."
+            } finally {
+                wifiScanBusy = false
+            }
+        }
+    }
+    val permissionRequest = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) scanWifi()
+        else wifiScanError = "Se necesita permiso de ubicación únicamente para buscar redes Wi-Fi."
+    }
 
     Column(Modifier.fillMaxSize()) {
         Text("Conectar dispositivo", style = MaterialTheme.typography.headlineMedium,
@@ -111,6 +162,63 @@ fun ConnectionCenterScreen(
                         OutlinedButton(onClick = {
                             context.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
                         }) { Text("Abrir ajustes Wi-Fi") }
+                    }
+                }
+                Card(Modifier.fillMaxWidth().testTag("wifi_network_results")) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Redes detectadas por Android",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.weight(1f))
+                            TextButton(
+                                onClick = {
+                                    if (ContextCompat.checkSelfPermission(context,
+                                            Manifest.permission.ACCESS_FINE_LOCATION
+                                        ) == PackageManager.PERMISSION_GRANTED
+                                    ) scanWifi()
+                                    else permissionRequest.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                },
+                                enabled = !wifiScanBusy,
+                                modifier = Modifier.testTag("wifi_scan_real")
+                            ) { Text(if (wifiScanBusy) "Buscando…" else "Buscar") }
+                        }
+                        if (wifiScanBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                        wifiNetworks.forEach { network ->
+                            Surface(
+                                onClick = {
+                                    context.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (network.ssid == WifiNetworkDiscovery.COMPI_SOFT_AP)
+                                    MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Row(Modifier.fillMaxWidth().padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Wifi, contentDescription = null,
+                                        modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(network.ssid, style = MaterialTheme.typography.bodyMedium)
+                                        Text("${network.rssi} dBm · abrir ajustes para conectar",
+                                            style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            }
+                        }
+                        wifiScanError?.let {
+                            Text(it, color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.testTag("wifi_scan_error"))
+                        }
+                        Text(
+                            "Redes del último escaneo del teléfono, no dispositivos verificados. " +
+                                "Conéctate a ESP32-Control-Lab y confirma el firmware abajo.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
                 if (debug) {
