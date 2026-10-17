@@ -10,6 +10,7 @@ import com.rgbcontroller.core.model.RgbDeviceCommand
 import com.rgbcontroller.core.model.RgbDeviceState
 import com.rgbcontroller.core.model.RgbReadback
 import com.rgbcontroller.core.hardware.Esp32BoardPinout
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -123,24 +124,50 @@ class LocalLabClient(private val context: Context) {
         // One nonce per user transaction. The firmware caches successful
         // receipts to avoid applying duplicate POST requests twice.
         val requestId = UUID.randomUUID().toString().replace("-", "").take(16)
-        val response = request("POST", "/v2/components/apply", key, mapOf(
+        val response = try {
+            request("POST", "/v2/components/apply", key, mapOf(
             "id" to id,
             "from1" to expected[0].toString(),
             "from2" to expected[1].toString(),
             "to1" to next[0].toString(),
             "to2" to next[1].toString(),
             "requestId" to requestId
-        ))
-        check(response.optString("status") == "APPLIED" &&
-            response.optBoolean("runtimeOnly") &&
-            response.optString("requestId") == requestId) {
-            "El ESP32 no confirmó la transacción GPIO (firma de solicitud inválida)."
+            ))
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (refused: LabHttpException) {
+            // A definitive 4xx rejection never applies GPIO; 5xx/unknown may
+            // occur after a pin change and must NOT be displayed as rejected.
+            if (refused is LabHttpException.ServerError ||
+                refused is LabHttpException.ProtocolError) {
+                throw ComponentApplyUnconfirmedException(
+                    "El ESP32 no confirmó el resultado HTTP. Consulta GPIO antes de reintentar.",
+                    refused)
+            }
+            throw refused
+        } catch (failure: Exception) {
+            throw ComponentApplyUnconfirmedException(
+                "Se perdió la respuesta al aplicar GPIO. El cambio pudo realizarse.", failure)
         }
-        val after = componentStatus(key)
+        if (response.optString("status") != "APPLIED" ||
+            !response.optBoolean("runtimeOnly") ||
+            response.optString("requestId") != requestId) {
+            throw ComponentApplyUnconfirmedException(
+                "El recibo no coincide con la solicitud. Consulta los GPIO del ESP32.")
+        }
+        val after = try {
+            componentStatus(key)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            throw ComponentApplyUnconfirmedException(
+                "Aplicación aceptada, pero no se pudo consultar el estado de los GPIO.", failure)
+        }
         val verified = after.optJSONArray("components")?.let(::moduleFor)
             ?.takeIf { it.optBoolean("active") }?.let(::pinsFor)
-        check(verified == target) {
-            "El firmware respondió, pero el estado GPIO leído no coincide."
+        if (verified != target) {
+            throw ComponentApplyUnconfirmedException(
+                "El recibo fue aceptado, pero los GPIO leídos no coinciden.")
         }
         return after
     }
@@ -251,3 +278,7 @@ class LocalLabClient(private val context: Context) {
         }
     }
 }
+
+/** A GPIO POST may have executed despite a missing receipt/readback. Never label it rejected. */
+class ComponentApplyUnconfirmedException(message: String, cause: Throwable? = null) :
+    IllegalStateException(message, cause)
