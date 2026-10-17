@@ -51,7 +51,7 @@ lab = (root / "firmware/esp32_rgb/core/LocalWifiControl.h").read_text(encoding="
 runtime = (root / "firmware/esp32_rgb/core/ExperimentRuntime.h").read_text(encoding="utf-8")
 android_lab = (root / "android/app/src/main/java/com/rgbcontroller/core/wifi/LocalLabClient.kt").read_text(encoding="utf-8")
 assert 'server_.client().localIP() != WiFi.softAPIP()' in lab, "STA HTTP must be forbidden"
-assert 'server_.header("X-Device-Key") != accessKey_' in lab, "Lab key required"
+assert '!keyMatches(server_.header("X-Device-Key"), accessKey_)' in lab, "Lab key required"\nassert 'mismatch |= static_cast<uint8_t>(presented[i] ^ expected[i]);' in lab, "Lab key must compare all bytes"
 assert 'manager' not in runtime or 'experiment_' in lab
 assert 'pins_.acquire(pin, kManual, PinFunction::DigitalOutput)' in lab, "Pin ownership required"
 assert 'digitalWrite(pin, LOW)' in lab, "Safe GPIO reset missing"
