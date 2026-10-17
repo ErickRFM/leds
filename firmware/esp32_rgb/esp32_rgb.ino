@@ -195,14 +195,16 @@ esp32core::RgbCommandInbox bleInbox;
 // drain in the main loop under a portMUX.
 constexpr size_t kEnrollLineMax = 128;
 struct EnrollmentInbox {
-  void push(const char* line) {
-    if (!line || count == kCapacity) return;
+  static constexpr size_t kCapacity = 4;
+  bool push(const char* line) {
+    if (!line || count == kCapacity) return false;
     const size_t length = strlen(line);
-    if (length == 0 || length > kEnrollLineMax) return;
+    if (length == 0 || length > kEnrollLineMax) return false;
     std::memcpy(lines[tail], line, length);
     lines[tail][length] = '\0';
     tail = (tail + 1) % kCapacity;
     ++count;
+    return true;
   }
   bool pop(char (&out)[kEnrollLineMax + 1]) {
     if (count == 0) return false;
@@ -211,7 +213,7 @@ struct EnrollmentInbox {
     --count;
     return true;
   }
-  char lines[4][kEnrollLineMax + 1] = {};
+  char lines[kCapacity][kEnrollLineMax + 1] = {};
   size_t head = 0, tail = 0, count = 0;
 };
 portMUX_TYPE bleEnrollMux = portMUX_INITIALIZER_UNLOCKED;
@@ -285,12 +287,12 @@ void reject() {
   }
 }
 
-// Transient owner-authorization reply over the existing STATE characteristic.
-// Never a new UUID; restored to the live RGB snapshot immediately after.
-void publishAuthResult(bool ok) {
-  Serial.println(ok ? "AUTH,OK" : "AUTH,ERR");
+// Transient control reply (owner enrollment / errors) over the existing STATE
+// characteristic. Never a new UUID; restored to the live RGB snapshot after.
+void publishControlReply(const char* frame) {
+  Serial.println(frame);
   if (connected && stateCharacteristic != nullptr) {
-    stateCharacteristic->setValue(ok ? "AUTH,OK" : "AUTH,ERR");
+    stateCharacteristic->setValue(frame);
     stateCharacteristic->notify();
     stateCharacteristic->setValue(stateString().c_str());
   }
@@ -404,18 +406,16 @@ bool applyRgbRuntimeCommand(const String& cmd) {
 
 void stopScriptOnManualBle();
 
-void stopScriptOnManualBle();
-
 // True when the line's first token is a client owner-enrollment verb. Full
 // validation happens on the main loop via OwnerEnrollmentFrames; here we only
 // route the write to the (larger) enrollment inbox.
 bool looksLikeEnrollment(const char* line) {
-  static const char* kVerbs[] = {"PAIR", "BEGIN", "AUTH", "REVOKE", "RECOVER", "RESET"};
+  static const char* verbs[] = {"PAIR", "BEGIN", "AUTH", "REVOKE", "RECOVER", "RESET"};
   if (!line) return false;
-  for (const char* verb : kVerbs) {
+  for (const char* verb : verbs) {
     const size_t length = std::strlen(verb);
     if (std::strncmp(line, verb, length) == 0 &&
-        (line[length] == ' ' || command[kEnrollTerminator])) {
+        (line[length] == ' ' || line[length] == '\0')) {
       return true;
     }
   }
@@ -590,7 +590,33 @@ esp32core::LocalWifiControl wifiLab(pinManager, stateString, applyRgbCommand,
 
 void stopScriptOnManualBle() { wifiLab.stopScriptFromBle(); }
 
+void processEnrollmentFrames() {
+  uint16_t rejected = 0;
+  portENTER_CRITICAL(&bleEnrollMux);
+  rejected = bleEnrollRejected;
+  bleEnrollRejected = 0;
+  portEXIT_CRITICAL(&bleEnrollMux);
+  if (rejected) publishControlReply("ERR malformed");
+  for (uint8_t i = 0; i < 4; ++i) {
+    char buffer[kEnrollLineMax + 1] = {};
+    portENTER_CRITICAL(&bleEnrollMux);
+    const bool found = enrollInbox.pop(buffer);
+    portEXIT_CRITICAL(&bleEnrollMux);
+    if (!found) break;
+    // The owner session owns all state transitions; the loop is the sole
+    // caller, so no locking is needed around it.
+    char reply[96] = {};
+    if (!ownerSession.handleFrame(buffer, reply, sizeof(reply))) {
+      publishControlReply("ERR reply_too_long");
+      continue;
+    }
+    syncBleAuthState();
+    publishControlReply(reply);
+  }
+}
+
 void processBleCommands() {
+  processEnrollmentFrames();
   uint16_t rejected = 0;
   portENTER_CRITICAL(&bleInboxMux);
   rejected = bleRejected;
@@ -603,15 +629,6 @@ void processBleCommands() {
     const bool found = bleInbox.pop(buffer);
     portEXIT_CRITICAL(&bleInboxMux);
     if (!found) break;
-    // Owner authorization is evaluated on the main loop (single owner) and is
-    // only accepted from an encrypted link with the exact provisioned key.
-    if (esp32core::BleSecurityPolicy::looksLikeAuth(buffer)) {
-      const bool authorized = bleSecurity.authorize(
-          esp32core::BleSecurityPolicy::authKey(buffer), wifiLab.accessKey().c_str());
-      syncBleAuthState();
-      publishAuthResult(authorized);
-      continue;
-    }
     esp32core::RgbCommand parsed{};
     if (!esp32core::parseRgbCommand(buffer, parsed)) {
       reject();
@@ -633,14 +650,71 @@ void processBleCommands() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Physical owner window (SEG.1b-2b).
+//
+// A long BOOT-button hold opens a time-boxed enrollment window (or, when an
+// owner already exists, a recovery window). The window issues a fresh one-time
+// code that is printed ONLY to the local USB serial console: the code is a
+// transient bootstrap secret and is NEVER sent over BLE, shown in exports or
+// logged elsewhere. Physical validation is PENDING_HARDWARE_VALIDATION.
+// ---------------------------------------------------------------------------
+constexpr uint32_t kPhysicalWindowMs = 120000;  // matches OwnerEnrollment
+constexpr uint8_t kBootButtonPin = 0;
+constexpr uint32_t kBootHoldMs = 3000;
+uint32_t bootPressedMs = 0;
+bool bootWindowOpened = false;
+
+void openPhysicalWindow(uint32_t now) {
+  char code[esp32core::OwnerEnrollment::kOneTimeCodeLength + 1] = {};
+  if (!ownerSession.generateOneTimeCode(code)) {
+    Serial.println("WARN: RNG unavailable; physical window not opened");
+    return;
+  }
+  const bool recovery = ownerSession.hasOwner();
+  const bool ok = recovery
+      ? ownerSession.openRecoveryWindow(now, kPhysicalWindowMs, code)
+      : ownerSession.openPairingWindow(now, kPhysicalWindowMs, code);
+  if (!ok) {
+    Serial.println("Physical window request refused");
+    return;
+  }
+  Serial.print(recovery ? "PHYSICAL RECOVERY WINDOW open. One-time code (local USB only): "
+                        : "PHYSICAL PAIRING WINDOW open. One-time code (local USB only): ");
+  Serial.println(code);
+}
+
+void servePhysicalWindow(uint32_t now) {
+  const bool pressed = digitalRead(kBootButtonPin) == LOW;
+  if (!pressed) {
+    bootPressedMs = 0;
+    bootWindowOpened = false;
+    return;
+  }
+  if (bootPressedMs == 0) bootPressedMs = now;
+  if (!bootWindowOpened && static_cast<uint32_t>(now - bootPressedMs) >= kBootHoldMs) {
+    bootWindowOpened = true;
+    openPhysicalWindow(now);
+  }
+}
+
 void setup() {
   Serial.begin(115200);
-  Serial.println("\n--- COMPI ESP32 LAB V15 ---");
+  Serial.println("\n--- COMPI ESP32 LAB V16 ---");
 
   if (!deviceIdentity.begin()) {
     Serial.println("ERROR: V4 identity NVS unavailable; control services disabled");
     while (true) delay(1000);
   }
+
+  // Fail-closed: without usable owner storage the privileged transport must
+  // stay disabled rather than falling back to a weaker mode.
+  if (!ownerSession.begin()) {
+    Serial.println("ERROR: owner store unavailable; control services disabled");
+    while (true) delay(1000);
+  }
+
+  pinMode(kBootButtonPin, INPUT_PULLUP);
 
   pinManager.registerSystemPin(LED_R, "led.rgb");
   pinManager.registerSystemPin(LED_G, "led.rgb");
@@ -729,6 +803,8 @@ void setup() {
 void loop() {
   uint32_t now = millis();
   processBleCommands();
+  ownerSession.tick(now);
+  servePhysicalWindow(now);
   wifiLab.tick(now);
   moduleRegistry.tickAll(millis());
   persistRgbIfDue(now);
