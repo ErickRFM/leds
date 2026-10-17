@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
@@ -42,6 +43,7 @@ fun DevicesScreen(
     val publicId by bleManager.publicDeviceId.collectAsState()
     val lastMac by preferencesRepository.lastDeviceMac.collectAsState(initial = null)
     var searched by rememberSaveable { mutableStateOf(false) }
+    var showIdentityNote by rememberSaveable { mutableStateOf(false) }
     val busy = connection is BleConnectionState.Connecting ||
         connection is BleConnectionState.Discovering
     val searching = connection == BleConnectionState.Scanning
@@ -114,7 +116,14 @@ fun DevicesScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        // A public ID is an identifier, not an authentication guarantee.
+                        TextButton(onClick = { showIdentityNote = !showIdentityNote }) {
+                            Text(if (showIdentityNote) "Ocultar aviso" else "Acerca de la identidad")
+                        }
+                        if (showIdentityNote) {
+                            Text("Este ID no concede acceso ni confirma propiedad.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     } else if (lastMac != null) {
                         Text("Último ESP32: …${lastMac!!.takeLast(5)}",
                             style = MaterialTheme.typography.labelMedium,
