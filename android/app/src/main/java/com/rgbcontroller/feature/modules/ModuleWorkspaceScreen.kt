@@ -157,7 +157,8 @@ fun ModuleWorkspaceScreen(
                             ModuleWiringDiagram(
                                 profile = PinAssignmentPolicy.profile(id)!!,
                                 pins = shownPins,
-                                firmwareConfirmed = physicalPins == shownPins && currentlyVerified
+                                firmwareConfirmed = physicalPins == shownPins && currentlyVerified &&
+                                    runtime(id)?.active == true
                             )
                         }
                     }
@@ -418,12 +419,16 @@ private fun ModuleRuntimeCard(id: String, runtime: ComponentRuntimeStatus?, live
             Text(
                 when {
                     runtime == null -> "Sin confirmación del firmware para ${id}."
+                    !runtime.active && runtime.state == "catalog" ->
+                        "Driver disponible. Sin activar, no se ha detectado el sensor."
                     live -> "Estado confirmado: ${runtime.state}"
                     else -> "Último estado confirmado (sin conexión en vivo): ${runtime.state}"
                 },
                 style = MaterialTheme.typography.bodyMedium
             )
-            Text("GPIO reales: ${runtime?.pins?.joinToString() ?: "no disponibles"}",
+            Text(
+                if (runtime?.active == true) "GPIO asignados: ${runtime.pins.joinToString()}"
+                else "GPIO sin asignación activa en el firmware",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
