@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.components.alerts.AlertComparison
+import com.rgbcontroller.core.components.calibration.SoilLiveCapturePolicy
 import com.rgbcontroller.core.components.alerts.AlertSeverity
 import com.rgbcontroller.core.components.automation.AutomationEventStatus
 import com.rgbcontroller.core.components.model.ComponentRuntimeStatus
@@ -110,10 +111,7 @@ fun HardwareLabScreen(
         else "Sin conexión autorizada: se muestra el último estado confirmado."
     }
 
-    val liveRawAdc = (state.authoritativeTelemetry ?: state.persistedTelemetry)
-        ?.let { ComponentTelemetryCodec.find(it, "adc_raw") }
-        ?.takeIf { it.valid && it.status == "fresh" }
-        ?.value?.toInt()
+    val liveRawAdc = SoilLiveCapturePolicy.currentRawAdc(state, authorized)
     val configIssues = LabConfigValidation.validateDesired(state.desiredConfig.components)
     val confirmed = state.firmwareStatus?.components
     val lastKnown = state.lastKnownStatus?.components
