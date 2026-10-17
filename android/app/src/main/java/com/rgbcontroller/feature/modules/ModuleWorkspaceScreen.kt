@@ -216,8 +216,7 @@ fun ModuleWorkspaceScreen(
                     }
                     }
                     item {
-                        Text("Guardar crea un borrador local. Aplicar requiere firmware compatible " +
-                            "y confirmación del estado GPIO por el ESP32.",
+                        Text("Borrador local · aplica los cambios desde el editor GPIO.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -235,9 +234,6 @@ fun ModuleWorkspaceScreen(
                     Column(Modifier.weight(1f)) {
                         Text("Módulos", style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold)
-                        Text("Tus componentes, conexiones y lecturas en un lugar.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Surface(color = MaterialTheme.colorScheme.primaryContainer,
                         shape = RoundedCornerShape(12.dp)) {
@@ -269,9 +265,9 @@ fun ModuleWorkspaceScreen(
                                 modifier = Modifier.weight(1f))
                         }
                         Text(
-                            if (wifiAuthorized) "Las lecturas requieren respuesta del firmware."
-                            else if (bleReady) "BLE RGB conectado. Los GPIO y sensores requieren una sesión Wi-Fi autorizada."
-                            else "Conecta tu ESP32 o prepara un módulo sin conexión.",
+                            if (wifiAuthorized) "GPIO y sensores: firmware."
+                            else if (bleReady) "RGB por BLE · sensores por Wi-Fi autorizado."
+                            else "Sin conexión · puedes preparar módulos.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

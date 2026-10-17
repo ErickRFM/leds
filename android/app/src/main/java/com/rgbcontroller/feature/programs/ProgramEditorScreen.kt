@@ -314,8 +314,6 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                 isError = operation.phase == com.rgbcontroller.core.wifi.LabOperationPhase.FAILED
             )
         }
-        Text("Edita código, importa archivos y ejecuta scripts compatibles.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
@@ -324,7 +322,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
         ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Editor local", style = MaterialTheme.typography.titleMedium)
-                Text("Los archivos se abren en el teléfono; nada se instala automáticamente en la placa.",
+                Text("Archivos locales · no se instalan en el ESP32.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -379,8 +377,8 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
             }
             Text(
                 if (laboratoryMode == "GPIO")
-                    "GPIO19 NO controla el LED RGB de 27/25/26. Conecta otro LED y resistencia al GPIO19 para probar este motor."
-                else "Este motor usa tu LED RGB en 27/25/26 y el Wi-Fi local ESP32-Control-Lab.",
+                    "GPIO19: salida de pruebas independiente del RGB (27/25/26). Usa una resistencia."
+                else "RGB 27/25/26 · Wi-Fi ESP32-Control-Lab.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
