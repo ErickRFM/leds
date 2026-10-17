@@ -345,7 +345,7 @@ fun ModuleWorkspaceScreen(
         }
         ModulePinWizard(
             componentId = id,
-            canApply = wifiAuthorized && currentlyVerified && current?.active == true &&
+            canApply = wifiAuthorized && currentlyVerified && current != null &&
                 id in setOf("dht22", "soil_moisture", "ssd1306_oled"),
             applying = applying,
             applyMessage = applyMessage,
@@ -549,7 +549,7 @@ private fun ModulePinWizard(
                         onClick = { onApply(pins) },
                         enabled = issues.isEmpty() && !applying,
                         modifier = Modifier.testTag("module_pin_apply")
-                    ) { Text(if (applying) "Aplicando…" else "Aplicar al ESP32") }
+                    ) { Text(if (applying) "Aplicando…" else "Activar / aplicar en ESP32") }
                 }
             }
         },
