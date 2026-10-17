@@ -5,11 +5,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -73,6 +75,8 @@ fun HardwareLabScreen(
     var showAutomationEditor by remember { mutableStateOf(false) }
     var showSoilWizard by remember { mutableStateOf(false) }
     var showConfigEditor by remember { mutableStateOf(false) }
+    var showAdvanced by rememberSaveable { mutableStateOf(false) }
+    val listState = rememberLazyListState()
     var syncMessage by remember { mutableStateOf<String?>(null) }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -110,7 +114,7 @@ fun HardwareLabScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Dashboard de componentes") },
+                title = { Text("Componentes") },
                 actions = {
                     IconButton(
                         onClick = {
@@ -126,12 +130,25 @@ fun HardwareLabScreen(
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding)
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(horizontal = 16.dp).testTag("component_dashboard_list"),
+            state = listState,
+            contentPadding = PaddingValues(top = 10.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
                 AuthorityCard(connected = state.connected, authorized = authorized,
                     error = state.authorityError)
+            }
+            item {
+                Row(Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Panel de componentes", style = MaterialTheme.typography.titleMedium)
+                    TextButton(
+                        onClick = { showAdvanced = !showAdvanced },
+                        modifier = Modifier.testTag("component_advanced_toggle")
+                    ) { Text(if (showAdvanced) "Ocultar detalles" else "Ver detalles") }
+                }
             }
             item {
                 Text("Estado confirmado por el firmware",
@@ -198,12 +215,12 @@ fun HardwareLabScreen(
             item {
                 AlertsCard(state = state, onEdit = { showAlertEditor = true })
             }
-            item {
-                Text("Gráficas (ventana de 30 min)",
-                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
-            item {
-                TelemetryChartsSection(state = state)
+            if (showAdvanced) {
+                item {
+                    Text("Gráficas (ventana de 30 min)",
+                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+                item { TelemetryChartsSection(state = state) }
             }
             item {
                 Text("Automatizaciones",
@@ -219,12 +236,12 @@ fun HardwareLabScreen(
             item {
                 OledStatusCard(state = state)
             }
-            item {
-                Text("Historial de telemetría (local)",
-                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
-            item {
-                TelemetryHistoryCard(state = state)
+            if (showAdvanced) {
+                item {
+                    Text("Historial de telemetría (local)",
+                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+                item { TelemetryHistoryCard(state = state) }
             }
 
             syncMessage?.let { message ->
@@ -273,7 +290,7 @@ fun HardwareLabScreen(
                 }
             }
 
-            if (missingTemplates.isNotEmpty()) {
+            if (showAdvanced && missingTemplates.isNotEmpty()) {
                 item {
                     Text("Plantillas no detectadas por el firmware",
                         style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -288,6 +305,7 @@ fun HardwareLabScreen(
                 }
             }
 
+            if (showAdvanced) {
             item {
                 Text("Proyecto (importar / exportar)",
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -340,6 +358,7 @@ fun HardwareLabScreen(
                     }
                 }
             }
+            } // End of advanced project tools.
         }
     }
 
@@ -357,7 +376,10 @@ fun HardwareLabScreen(
                                     next += LocalDesiredComponent(
                                         id = desc.id,
                                         type = desc.type.name.lowercase(Locale.getDefault()),
-                                        pins = desc.requiredPins.sorted()
+                                        pins = when (desc.id) {
+                                            "soil_moisture" -> listOf(34) // One ADC1 input.
+                                            else -> desc.requiredPins.sorted()
+                                        }
                                     )
                                 }
                                 scope.launch { viewModel.setLocalDesired(LocalDesiredConfig(next)) }
