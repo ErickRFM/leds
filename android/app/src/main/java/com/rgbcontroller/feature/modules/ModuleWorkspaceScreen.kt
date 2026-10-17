@@ -30,6 +30,7 @@ import com.rgbcontroller.core.components.model.ComponentMeasurement
 import com.rgbcontroller.core.components.model.ComponentRuntimeStatus
 import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
 import com.rgbcontroller.core.components.registry.ComponentCatalog
+import com.rgbcontroller.core.components.registry.ModuleWorkspaceGrouping
 import com.rgbcontroller.core.components.registry.PinAssignmentPolicy
 import com.rgbcontroller.core.components.status.ComponentDashboardState
 import com.rgbcontroller.core.components.status.ComponentStatusFreshness
@@ -104,8 +105,10 @@ fun ModuleWorkspaceScreen(
     val names = confirmed.map { ComponentCatalog.catalogIdForFirmwareId(it.id) }
     // A BLE Ready state confirms access to the existing RGB protocol, not
     // general sensor/GPIO firmware leases. Expose only the RGB module in BLE mode.
-    val configured = (state.desiredConfig.components.map { it.id } + names +
-        (if (bleReady) listOf("led_rgb") else emptyList())).distinct()
+    val configured = ModuleWorkspaceGrouping.group(
+        (state.desiredConfig.components.map { it.id } + names +
+            (if (bleReady) listOf("led_rgb") else emptyList())).distinct()
+    )
     val runtime = { id: String -> confirmed.firstOrNull {
         ComponentCatalog.catalogIdForFirmwareId(it.id) == id
     } }
@@ -120,11 +123,12 @@ fun ModuleWorkspaceScreen(
                 IconButton(onClick = { openedId = null }, modifier = Modifier.testTag("module_back")) {
                     Icon(Icons.Default.ArrowBack, contentDescription = "Volver a módulos")
                 }
-                Text(ComponentCatalog.get(id)?.name ?: id,
+                Text(if (id == ModuleWorkspaceGrouping.ENVIRONMENT) "Sensor ambiental"
+                     else ComponentCatalog.get(id)?.name ?: id,
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.weight(1f))
                 TextButton(
-                    onClick = { editingId = id },
+                    onClick = { editingId = if (id == ModuleWorkspaceGrouping.ENVIRONMENT) "dht22" else id },
                     modifier = Modifier.testTag("module_edit_pins")
                 ) { Icon(Icons.Default.Tune, null); Text("GPIO") }
             }
@@ -140,6 +144,37 @@ fun ModuleWorkspaceScreen(
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 28.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    if (id == ModuleWorkspaceGrouping.ENVIRONMENT) {
+                        item {
+                            Text("DHT22 + sensor de suelo ADC1",
+                                style = MaterialTheme.typography.titleMedium)
+                        }
+                        for (child in listOf("dht22", "soil_moisture")) {
+                            item(key = "env_status_$child") {
+                                ModuleRuntimeCard(child, runtime(child), currentlyVerified)
+                            }
+                            val draftPins = state.desiredConfig.components
+                                .firstOrNull { it.id == child }?.pins
+                            val actualPins = runtime(child)?.pins
+                            val shown = actualPins ?: draftPins
+                            if (shown != null && PinAssignmentPolicy.profile(child) != null) {
+                                item(key = "env_wiring_$child") {
+                                    ModuleWiringDiagram(
+                                        PinAssignmentPolicy.profile(child)!!,
+                                        shown, firmwareConfirmed = actualPins == shown && currentlyVerified
+                                    )
+                                }
+                            }
+                            item(key = "env_readings_$child") { ModuleReadings(child, state) }
+                            item(key = "env_edit_$child") {
+                                OutlinedButton(onClick = { editingId = child },
+                                    modifier = Modifier.fillMaxWidth()
+                                        .testTag("environment_config_$child")) {
+                                    Text("Reasignar GPIO de ${ComponentCatalog.get(child)?.name ?: child}")
+                                }
+                            }
+                        }
+                    } else {
                     item {
                         ModuleRuntimeCard(id, runtime(id), currentlyVerified)
                     }
@@ -165,9 +200,10 @@ fun ModuleWorkspaceScreen(
                             Text("Reasignar conexiones")
                         }
                     }
+                    }
                     item {
-                        Text("Las conexiones editadas son locales hasta que el firmware permita " +
-                            "aplicarlas y confirme el nuevo estado.",
+                        Text("Guardar crea un borrador local. Aplicar requiere firmware compatible " +
+                            "y confirmación del estado GPIO por el ESP32.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -288,7 +324,8 @@ fun ModuleWorkspaceScreen(
                         }
                     }
                 }
-                items(configured, key = { "module_$it" }) { id ->
+                items(configured, key = { "module_${it.id}" }) { group ->
+                    val id = group.id
                     val descriptor = ComponentCatalog.get(id)
                     val physical = runtime(id)
                     val local = state.desiredConfig.components.firstOrNull { it.id == id }
@@ -300,10 +337,16 @@ fun ModuleWorkspaceScreen(
                         Row(Modifier.fillMaxWidth().padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(descriptor?.name ?: id, fontWeight = FontWeight.SemiBold,
+                                Text(if (id == ModuleWorkspaceGrouping.ENVIRONMENT)
+                                        "Sensor ambiental" else descriptor?.name ?: id,
+                                    fontWeight = FontWeight.SemiBold,
                                     style = MaterialTheme.typography.titleMedium)
                                 Text(
                                     when {
+                                        id == ModuleWorkspaceGrouping.ENVIRONMENT ->
+                                            if (group.components.all { runtime(it)?.active == true } &&
+                                                currentlyVerified) "DHT22 + suelo · confirmados"
+                                            else "DHT22 + suelo · estado parcial o último conocido"
                                         physical != null && currentlyVerified ->
                                             "Firmware: ${physical.state} · ${if (physical.active) "activo" else "no activo"}"
                                         physical != null -> "Última confirmación del firmware · no en vivo"
@@ -314,11 +357,15 @@ fun ModuleWorkspaceScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    "GPIO ${(physical?.pins ?: local?.pins).orEmpty().joinToString().ifBlank { "sin asignar" }}",
+                                    if (id == ModuleWorkspaceGrouping.ENVIRONMENT)
+                                        "DHT22 y ADC1 · dos conexiones independientes"
+                                    else "GPIO ${(physical?.pins ?: local?.pins).orEmpty().joinToString().ifBlank { "sin asignar" }}",
                                     style = MaterialTheme.typography.labelMedium
                                 )
                             }
-                            IconButton(onClick = { editingId = id },
+                            IconButton(onClick = {
+                                editingId = if (id == ModuleWorkspaceGrouping.ENVIRONMENT) "dht22" else id
+                            },
                                 modifier = Modifier.testTag("module_config_$id")) {
                                 Icon(Icons.Default.Tune, contentDescription = "Editar GPIO de $id")
                             }
