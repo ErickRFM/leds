@@ -47,7 +47,7 @@ fun ConnectionCenterScreen(
     val scope = rememberCoroutineScope()
     var tab by rememberSaveable { mutableStateOf(ConnectTab.BLUETOOTH) }
     var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var connectionError by remember { mutableStateOf<String?>(null) }
 
     Column(Modifier.fillMaxSize()) {
         Text("Conectar dispositivo", style = MaterialTheme.typography.headlineMedium,
@@ -82,7 +82,7 @@ fun ConnectionCenterScreen(
                 DevicesScreen(bleManager, preferencesRepository, onInspectSecurity = onHardware)
             }
             ConnectTab.WIFI -> Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -112,20 +112,20 @@ fun ConnectionCenterScreen(
                             session.selectTransport(LabTransport.WIFI_LAB)
                             val (epoch, key) = session.beginVerification()
                             busy = true
-                            error = null
+                            connectionError = null
                             scope.launch {
                                 try {
                                     val status = session.serialized { client.status(key) }
                                     val rgb = RgbDeviceState.parse(status.optString("rgb"))
                                         ?: error("Estado RGB no reconocido por el firmware.")
                                     if (!session.verified(epoch, key, rgb)) {
-                                        error = "La sesión cambió durante la conexión. Vuelve a intentar."
+                                        connectionError = "La sesión cambió durante la conexión. Vuelve a intentar."
                                     }
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
                                 } catch (failure: Exception) {
                                     session.failed(epoch, failure)
-                                    error = failure.message ?: "Error de comunicación con el ESP32."
+                                    connectionError = failure.message ?: "Error de comunicación con el ESP32."
                                 } finally {
                                     busy = false
                                 }
@@ -149,7 +149,7 @@ fun ConnectionCenterScreen(
                     else -> session.message
                 }, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                error?.let {
+                connectionError?.let {
                     Text(it, color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall)
                 }
@@ -158,7 +158,7 @@ fun ConnectionCenterScreen(
                 }
             }
             ConnectTab.USB -> Column(
-                Modifier.fillMaxWidth().padding(20.dp),
+                Modifier.fillMaxWidth().weight(1f).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text("USB · diagnóstico", style = MaterialTheme.typography.titleLarge)
