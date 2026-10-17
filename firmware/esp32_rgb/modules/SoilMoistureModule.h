@@ -99,6 +99,13 @@ class SoilMoistureModule final : public IModule {
   bool ready() const { return ready_; }
   bool calibrated() const { return calibrated_; }
   uint8_t pin() const { return pin_; }
+  // Accepted only while stopped, and only on ADC1 while Wi-Fi is active.
+  bool setPin(uint8_t next) {
+    if (ready_ || !PinManager::analogInputCapable(next) ||
+        PinManager::reservedForRgb(next)) return false;
+    pin_ = next;
+    return true;
+  }
   uint16_t raw() const { return raw_; }
   uint16_t dryRaw() const { return dryRaw_; }
   uint16_t wetRaw() const { return wetRaw_; }
@@ -131,7 +138,7 @@ class SoilMoistureModule final : public IModule {
     return percent;
   }
 
-  const uint8_t pin_;
+  uint8_t pin_;
   const AdcReadFn read_;
   void* const context_;
   const uint32_t sampleIntervalMs_;
