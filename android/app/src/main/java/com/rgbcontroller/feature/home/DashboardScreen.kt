@@ -33,7 +33,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
 import com.rgbcontroller.core.ble.BleManager
-import com.rgbcontroller.core.ui.CompiModuleCard
 import com.rgbcontroller.core.ui.CompiInlineMessage
 import com.rgbcontroller.core.wifi.CompiLabSession
 import com.rgbcontroller.core.wifi.LabConnectionState
@@ -191,22 +190,16 @@ fun DashboardScreen(
         Text("Accesos rápidos", style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            QuickAction("Módulos", Icons.Default.ColorLens, onLed, Modifier.weight(1f))
+            QuickAction("Módulos", Icons.Default.ColorLens, onLed,
+                Modifier.weight(1f).testTag("open_led"))
             QuickAction("Conectar", Icons.Default.Devices, onDevices, Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            QuickAction("Studio", Icons.Default.Code, onCode, Modifier.weight(1f))
-            QuickAction("Hardware", Icons.Default.Memory, onHardware, Modifier.weight(1f))
+            QuickAction("Studio", Icons.Default.Code, onCode,
+                Modifier.weight(1f).testTag("open_code"))
+            QuickAction("Hardware", Icons.Default.Memory, onHardware,
+                Modifier.weight(1f).testTag("open_hardware"))
         }
-
-        Text("Herramientas", style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold)
-        CompiModuleCard("Mis módulos", "Biblioteca, componentes y conexiones GPIO",
-            Icons.Default.ColorLens, onClick = onLed, modifier = Modifier.testTag("open_led"))
-        CompiModuleCard("Compi Studio", "Editar código, importar y ejecutar scripts compatibles",
-            Icons.Default.Code, onClick = onCode, modifier = Modifier.testTag("open_code"))
-        CompiModuleCard("Hardware Lab", "GPIO, sensores, Wi-Fi y diagnóstico",
-            Icons.Default.Memory, onClick = onHardware, modifier = Modifier.testTag("open_hardware"))
 
         Text("Actividad reciente", style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold)
@@ -367,16 +360,24 @@ private fun QuickAction(title: String, icon: androidx.compose.ui.graphics.vector
     Card(
         onClick = onClick,
         modifier = modifier.heightIn(min = 76.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Column(Modifier.fillMaxWidth().heightIn(min = 76.dp).padding(6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.height(6.dp))
-            Text(title, style = MaterialTheme.typography.labelSmall,
+        Row(Modifier.fillMaxWidth().heightIn(min = 76.dp).padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            Surface(color = MaterialTheme.colorScheme.primaryContainer,
+                shape = RoundedCornerShape(13.dp)) {
+                Icon(icon, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.padding(9.dp).size(22.dp))
+            }
+            Text(title, modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold, maxLines = 2)
+            Icon(Icons.Default.ChevronRight, contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp))
         }
     }
 }
