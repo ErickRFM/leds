@@ -34,6 +34,10 @@ class LocalWifiControl final {
   // status (resolved pins + lifecycle). The firmware is the final GPIO
   // authority; clients never infer pin ownership from their own config.
   using ComponentStatus = bool (*)(char* output, size_t capacity, void* context);
+  // Authorized, runtime-only rewire. Arguments include expected old pins to
+  // prevent overwriting a concurrent edit; callback must rollback on failure.
+  using ComponentApply = bool (*)(const char* id, uint8_t from1, uint8_t from2,
+                                   uint8_t to1, uint8_t to2, void* context);
 
   LocalWifiControl(PinManager& pins, RgbState state, RgbCommand manualCommand,
                    RgbCommand runtimeCommand, DeviceId deviceId)
@@ -48,6 +52,11 @@ class LocalWifiControl final {
   void setComponentStatus(ComponentStatus source, void* context) {
     status_ = source;
     statusContext_ = context;
+  }
+
+  void setComponentApply(ComponentApply apply, void* context) {
+    apply_ = apply;
+    applyContext_ = context;
   }
 
   // Owner key printed over the physical serial console. Shared by the SoftAP
@@ -170,6 +179,42 @@ class LocalWifiControl final {
         return;
       }
       server_.send(200, "application/json", body);
+    });
+
+    server_.on("/v2/components/apply", HTTP_POST, [this]() {
+      if (!authorized()) return;
+      if (apply_ == nullptr || script_.active() || experiment_.active() ||
+          automation_.active() || hasManual()) {
+        jsonError(409, "component_apply_unavailable_or_busy"); return;
+      }
+      const String componentId = server_.arg("id");
+      if (componentId != "dht22" && componentId != "soil_moisture" &&
+          componentId != "ssd1306_oled") {
+        jsonError(400, "unsupported_component"); return;
+      }
+      int from1 = -1, from2 = -1, to1 = -1, to2 = -1;
+      if (!parseInt("from1", 0, 39, from1) ||
+          !parseInt("to1", 0, 39, to1) ||
+          !parseInt("from2", 0, 39, from2) ||
+          !parseInt("to2", 0, 39, to2)) {
+        jsonError(400, "invalid_gpio_assignment"); return;
+      }
+      const bool oled = componentId == "ssd1306_oled";
+      if ((!oled && (from2 != 0 || to2 != 0)) ||
+          (oled && (from1 == from2 || to1 == to2)) ||
+          PinManager::reservedForRgb(static_cast<uint8_t>(to1)) ||
+          (oled && PinManager::reservedForRgb(static_cast<uint8_t>(to2)))) {
+        jsonError(400, "invalid_gpio_assignment"); return;
+      }
+      if (!apply_(componentId.c_str(), static_cast<uint8_t>(from1),
+                  static_cast<uint8_t>(from2), static_cast<uint8_t>(to1),
+                  static_cast<uint8_t>(to2), applyContext_)) {
+        jsonError(409, "component_apply_rejected_or_rolled_back"); return;
+      }
+      // The Android client must GET /v2/components/status and check every pin
+      // before claiming success. This ACK is NOT a physical wire test.
+      server_.send(200, "application/json",
+          "{\"status\":\"APPLIED\",\"runtimeOnly\":true}");
     });
 
     server_.on("/v2/firmware", HTTP_GET, [this]() {
@@ -543,6 +588,8 @@ class LocalWifiControl final {
   void* telemetryContext_ = nullptr;
   ComponentStatus status_ = nullptr;
   void* statusContext_ = nullptr;
+  ComponentApply apply_ = nullptr;
+  void* applyContext_ = nullptr;
   Preferences prefs_;
   WebServer server_{80};
   ExperimentRuntime experiment_;
