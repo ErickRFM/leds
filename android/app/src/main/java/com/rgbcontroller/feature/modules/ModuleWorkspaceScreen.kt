@@ -415,8 +415,9 @@ fun ModuleWorkspaceScreen(
                             }
                             labClient.applyComponentPinsConfirmed(key, id, pins)
                         }
-                        check(wifiAuthorized && session.revision == revision) {
-                            "Sesión cambiada: vuelve a verificar los GPIO del firmware."
+                        if (!wifiAuthorized || session.revision != revision) {
+                            throw ComponentApplyUnconfirmedException(
+                                "La sesión cambió tras el recibo; verifica los GPIO del dispositivo actual.")
                         }
                         applyMessage = "Pines confirmados por el firmware. Solo vigentes hasta reiniciar el ESP32."
                         try { vm.refresh() }
