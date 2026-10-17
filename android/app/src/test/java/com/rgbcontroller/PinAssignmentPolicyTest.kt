@@ -32,6 +32,8 @@ class PinAssignmentPolicyTest {
         assertFalse(PinAssignmentPolicy.validate("actuator_relay", listOf(34)).isEmpty())
         assertFalse(PinAssignmentPolicy.validate("dht22", listOf(34)).isEmpty())
         assertFalse(PinAssignmentPolicy.validate("dht22", listOf(6)).isEmpty()) // flash pin
+        assertFalse(PinAssignmentPolicy.validate("dht22", listOf(25)).isEmpty()) // RGB reserved
+        assertTrue(PinAssignmentPolicy.validate("dht22", listOf(16)).isEmpty()) // firmware output
         assertFalse(PinAssignmentPolicy.validate("dht22", listOf(0)).isEmpty()) // strap
     }
 
