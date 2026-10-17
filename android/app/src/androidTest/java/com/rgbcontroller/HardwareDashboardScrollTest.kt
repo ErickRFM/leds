@@ -29,19 +29,30 @@ class HardwareDashboardScrollTest {
         }
         composeRule.waitForIdle()
 
+        // Configuration is intentionally in its own lightweight area.
+        composeRule.onNodeWithTag("hardware_tabs")
+            .performScrollToNode(hasTestTag("hardware_tab_pins"))
+        composeRule.onNodeWithTag("hardware_tab_pins").performClick()
         composeRule.onNodeWithTag("component_dashboard_list")
             .performScrollToNode(hasTestTag("component_config_edit"))
         composeRule.onNodeWithTag("component_config_edit").assertExists()
 
-        // Re-open every formerly below-the-fold card and scroll to the very end.
+        composeRule.onNodeWithTag("hardware_tabs")
+            .performScrollToNode(hasTestTag("hardware_tab_sensors"))
+        composeRule.onNodeWithTag("hardware_tab_sensors").performClick()
         composeRule.onNodeWithTag("component_dashboard_list")
             .performScrollToNode(hasTestTag("component_advanced_toggle"))
         composeRule.onNodeWithTag("component_advanced_toggle").performClick()
         composeRule.onNodeWithTag("component_dashboard_list")
-            .performScrollToNode(hasTestTag("project_portable"))
-        composeRule.onNodeWithTag("project_portable").assertExists()
-        composeRule.onNodeWithTag("component_dashboard_list")
             .performScrollToNode(hasTestTag("component_telemetry_history"))
         composeRule.onNodeWithTag("component_telemetry_history").assertExists()
+
+        // Finally visit project tools at the bottom of the final area.
+        composeRule.onNodeWithTag("hardware_tabs")
+            .performScrollToNode(hasTestTag("hardware_tab_project"))
+        composeRule.onNodeWithTag("hardware_tab_project").performClick()
+        composeRule.onNodeWithTag("component_dashboard_list")
+            .performScrollToNode(hasTestTag("project_portable"))
+        composeRule.onNodeWithTag("project_portable").assertExists()
     }
 }
