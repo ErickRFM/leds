@@ -204,6 +204,13 @@ jobs:
         run: |
           . ./config/esp32-board.env
           arduino-cli compile --fqbn "$ARDUINO_FQBN" --output-dir build/firmware firmware/esp32_rgb
+      - name: Compile DHT22 + soil ADC1 hot-wiring firmware variant
+        run: |
+          . ./config/esp32-board.env
+          arduino-cli compile --fqbn "$ARDUINO_FQBN" \
+            --build-property "compiler.cpp.extra_flags=-DCOMPI_ENABLE_DHT22=1 -DCOMPI_ENABLE_SOIL=1" \
+            --output-dir build/v17-sensors-probe firmware/esp32_rgb
+          python3 scripts/check-firmware-budget.py build/v17-sensors-probe
       - name: V4 WiFiProv Security2 compile-only feasibility probe
         run: |
           . ./config/esp32-board.env
