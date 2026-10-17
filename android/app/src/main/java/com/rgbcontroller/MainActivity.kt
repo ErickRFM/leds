@@ -38,6 +38,7 @@ import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.ui.RgbTheme
 import com.rgbcontroller.feature.programs.ProgramEditorScreen
 import com.rgbcontroller.feature.devices.DevicesScreen
+import com.rgbcontroller.feature.devices.ConnectionCenterScreen
 import com.rgbcontroller.feature.home.DashboardScreen
 import com.rgbcontroller.feature.hub.LabHubScreen
 import com.rgbcontroller.feature.hardwarelab.HardwareLabScreen
@@ -77,6 +78,7 @@ private sealed class Screen(
     data object Code : Screen("code", "Studio", Icons.Default.Code)
     data object Settings : Screen("settings", "Ajustes", Icons.Default.Settings)
     data object Devices : Screen("devices", "Equipos", Icons.Default.Bluetooth)
+    data object Connect : Screen("connect", "Conectar", Icons.Default.Bluetooth)
     data object Hub : Screen("hub", "Hardware", Icons.Default.Memory)
 }
 
@@ -124,13 +126,18 @@ fun MainAppNavHost(
         val items = listOf(Screen.Home, Screen.Modules, Screen.Code, Screen.Hub)
         val entry by navController.currentBackStackEntryAsState()
         val route = entry?.destination?.route
-        val nested = route == Screen.Devices.route || route == Screen.Settings.route
+        val nested = route == Screen.Devices.route || route == Screen.Settings.route ||
+            route == Screen.Connect.route
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 if (nested) {
                     TopAppBar(
-                        title = { Text(if (route == Screen.Devices.route) "Dispositivos" else "Ajustes") },
+                        title = { Text(when (route) {
+                            Screen.Devices.route -> "Dispositivos"
+                            Screen.Connect.route -> "Conexiones"
+                            else -> "Ajustes"
+                        }) },
                         navigationIcon = {
                             IconButton(
                                 modifier = Modifier.testTag("nav_back"),
@@ -180,7 +187,7 @@ fun MainAppNavHost(
                         bleManager = bleManager,
                         onLed = { navController.navigateTopLevel(Screen.Modules) },
                         onCode = { navController.navigateTopLevel(Screen.Code) },
-                        onDevices = { navController.navigate(Screen.Devices.route) },
+                        onDevices = { navController.navigate(Screen.Connect.route) },
                         onHardware = { navController.navigateTopLevel(Screen.Hub) },
                         onSettings = { navController.navigate(Screen.Settings.route) },
                         session = session
@@ -194,7 +201,7 @@ fun MainAppNavHost(
                 composable(Screen.Modules.route) {
                     ModuleWorkspaceScreen(
                         bleManager, preferencesRepository, session,
-                        onConnect = { navController.navigate(Screen.Devices.route) },
+                        onConnect = { navController.navigate(Screen.Connect.route) },
                         onHardware = { navController.navigateTopLevel(Screen.Hub) }
                     )
                 }
@@ -209,6 +216,12 @@ fun MainAppNavHost(
                     SettingsScreen(bleManager, preferencesRepository,
                         onOpenHub = { navController.navigate(Screen.Hub.route) },
                         onOpenPrograms = { navController.navigateTopLevel(Screen.Code) })
+                }
+                composable(Screen.Connect.route) {
+                    ConnectionCenterScreen(
+                        bleManager, preferencesRepository, session,
+                        onHardware = { navController.navigateTopLevel(Screen.Hub) }
+                    )
                 }
                 composable(Screen.Devices.route) {
                     DevicesScreen(bleManager, preferencesRepository,
