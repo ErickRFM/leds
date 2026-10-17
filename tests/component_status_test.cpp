@@ -60,7 +60,9 @@ void testInactiveEntryNeverClaimsActive() {
   const std::string json(buffer);
   assert(json.find("\"active\":false") != std::string::npos);
   assert(json.find("\"state\":\"error\"") != std::string::npos);
-  assert(json.find("\"pins\":[34]") != std::string::npos);
+  // No lease means no owned GPIO, even if a default pin was configured.
+  assert(json.find("\"pins\":[]") != std::string::npos);
+  assert(json.find("\"pins\":[34]") == std::string::npos);
 }
 
 void testMultipleEntriesAreOrderedAndSeparated() {

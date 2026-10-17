@@ -42,7 +42,10 @@ inline bool encodeComponentStatus(const ComponentStatusEntry* entries, size_t co
         entry.active ? "true" : "false");
     if (written < 0 || static_cast<size_t>(written) >= capacity - used) return false;
     used += static_cast<size_t>(written);
-    const uint8_t pinCount = entry.pinCount > 3 ? 3 : entry.pinCount;
+    // Inactive drivers own no active GPIO leases. Configuration defaults are
+    // intentionally NOT serialized as reserved or physically detected pins.
+    const uint8_t pinCount = entry.active ?
+        (entry.pinCount > 3 ? 3 : entry.pinCount) : 0;
     for (uint8_t p = 0; p < pinCount; ++p) {
       written = std::snprintf(output + used, capacity - used, "%s%d",
                               p == 0 ? "" : ",", entry.pins[p]);
