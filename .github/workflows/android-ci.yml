@@ -207,9 +207,14 @@ jobs:
       - name: Compile DHT22 + soil ADC1 hot-wiring firmware variant
         run: |
           . ./config/esp32-board.env
+          # Compile an isolated opt-in sketch copy; never override the ESP32
+          # platform's compiler.cpp.extra_flags (breaks core linkage).
+          mkdir -p build/v17-sensors-sketch
+          cp -a firmware/esp32_rgb build/v17-sensors-sketch/esp32_rgb
+          sed -i '1i #define COMPI_ENABLE_DHT22 1\n#define COMPI_ENABLE_SOIL 1' \
+            build/v17-sensors-sketch/esp32_rgb/esp32_rgb.ino
           arduino-cli compile --fqbn "$ARDUINO_FQBN" \
-            --build-property "compiler.cpp.extra_flags=-DCOMPI_ENABLE_DHT22=1 -DCOMPI_ENABLE_SOIL=1" \
-            --output-dir build/v17-sensors-probe firmware/esp32_rgb
+            --output-dir build/v17-sensors-probe build/v17-sensors-sketch/esp32_rgb
           python3 scripts/check-firmware-budget.py build/v17-sensors-probe
       - name: Prepare sensor-enabled bench image manifest
         run: |
