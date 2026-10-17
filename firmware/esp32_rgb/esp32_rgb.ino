@@ -79,6 +79,9 @@
 #endif
 
 constexpr uint8_t LED_R = 27, LED_G = 25, LED_B = 26;
+// Runtime-only RGB mapping. Kept in sync with the module after an authorized
+// transaction; fresh boot always returns to the audited pins above.
+uint8_t liveRgbPins[3] = {LED_R, LED_G, LED_B};
 constexpr bool COMMON_ANODE = true;  // Set false for verified common cathode.
 constexpr char DEVICE_NAME[] = "RGB-ESP32";
 constexpr char SERVICE_UUID[] = "4b9d0001-7a5e-4d4c-ae88-c8c70d3ab211";
@@ -265,9 +268,8 @@ void writeLed(uint8_t r, uint8_t g, uint8_t b, uint8_t brightness) {
     static_cast<uint8_t>((static_cast<uint16_t>(g) * brightness) / 255),
     static_cast<uint8_t>((static_cast<uint16_t>(b) * brightness) / 255)
   };
-  uint8_t pins[3] = {LED_R, LED_G, LED_B};
   for (uint8_t i = 0; i < 3; i++) {
-    ledcWrite(pins[i], COMMON_ANODE ? (255 - values[i]) : values[i]);
+    ledcWrite(liveRgbPins[i], COMMON_ANODE ? (255 - values[i]) : values[i]);
   }
 }
 
@@ -605,7 +607,8 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
 // Deliberately no NVS persistence: on reboot the audited compile-time profile
 // is authoritative again until an explicit owner-authorized rewire.
 bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
-                        uint8_t to1, uint8_t to2, void*) {
+                        uint8_t to1, uint8_t to2, uint8_t from3, uint8_t to3,
+                        void*) {
   if (!catalogId) return false;
   const auto available = [](uint8_t pin, const char* owner) {
     const auto* lease = pinManager.lease(pin);
@@ -613,6 +616,30 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
     return (!lease || std::strcmp(lease->owner, owner) == 0) &&
            (!system || std::strcmp(system, owner) == 0);
   };
+  if (std::strcmp(catalogId, "led_rgb") == 0) {
+    if (!rgbModule.ready() || rgbModule.redPin() != from1 ||
+        rgbModule.greenPin() != from2 || rgbModule.bluePin() != from3 ||
+        to1 == to2 || to1 == to3 || to2 == to3 ||
+        !esp32core::PinManager::outputCapable(to1) ||
+        !esp32core::PinManager::outputCapable(to2) ||
+        !esp32core::PinManager::outputCapable(to3) ||
+        !available(to1, rgbModule.id()) || !available(to2, rgbModule.id()) ||
+        !available(to3, rgbModule.id())) return false;
+    if (from1 == to1 && from2 == to2 && from3 == to3) return true;
+    // All RGB writes and command processing run in the Arduino loop, so
+    // no BLE callback can mutate PWM while this transaction reattaches.
+    rgbModule.stop(pinManager);
+    if (rgbModule.configurePins(to1, to2, to3)) {
+      liveRgbPins[0] = to1; liveRgbPins[1] = to2; liveRgbPins[2] = to3;
+      if (rgbModule.begin(pinManager)) return true;
+    }
+    // Never acknowledge a failed pin reassignment. Restore the last verified
+    // runtime mapping; if even rollback fails, report RGB inactive in status.
+    rgbModule.configurePins(from1, from2, from3);
+    liveRgbPins[0] = from1; liveRgbPins[1] = from2; liveRgbPins[2] = from3;
+    rgbModule.begin(pinManager);
+    return false;
+  }
 #if COMPI_BUILD_DHT22
   if (std::strcmp(catalogId, "dht22") == 0) {
     if (from2 != 0 || to2 != 0 || esp32core::PinManager::reservedForRgb(to1) ||
