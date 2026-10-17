@@ -1,6 +1,7 @@
 package com.rgbcontroller.core.export
 
 import com.rgbcontroller.core.components.status.LocalDesiredComponent
+import com.rgbcontroller.core.components.registry.PinAssignmentPolicy
 
 /**
  * How an exported project relates to a target board. Never assumes a project
@@ -26,7 +27,12 @@ data class BoardProfile(
 ) {
     /** Pins that may be assigned, i.e. 0..39 minus the reserved ones. */
     val assignablePins: Set<Int>
-        get() = (0..39).filterNot { it in reservedPins }.toSet()
+        get() = if (id == "esp32-legacy-v1") {
+            // Same allowlist as the classic ESP32 firmware PinManager.
+            (PinAssignmentPolicy.pwmOutputs + PinAssignmentPolicy.adc1Inputs) - reservedPins
+        } else {
+            (0..39).filterNot { it in reservedPins }.toSet()
+        }
 
     companion object {
         /** Marker profile used when no manifest matches the requested id. */
@@ -59,6 +65,12 @@ sealed interface CompatibilityIssue {
     data class PinOutOfRange(
         override val componentId: String,
         val pins: List<Int>
+    ) : CompatibilityIssue
+
+    data class SignalMismatch(
+        override val componentId: String,
+        val expected: Int,
+        val actual: Int
     ) : CompatibilityIssue
 }
 
@@ -112,19 +124,37 @@ object BoardCompatibilityEngine {
                 continue
             }
 
-            val outOfRange = component.pins.filterNot { it in target.assignablePins }
-            val conflict = outOfRange.isEmpty() && component.pins.any { it in usedPins }
-            if (outOfRange.isEmpty() && !conflict) {
+            val profile = if (target.id == "esp32-legacy-v1") {
+                PinAssignmentPolicy.profile(component.id)
+            } else null
+            val countMismatch = profile != null && component.pins.size != profile.signals.size
+            val outOfRange = component.pins.filterIndexed { index, pin ->
+                pin !in target.assignablePins ||
+                    (profile != null && (index >= profile.signals.size ||
+                        pin !in profile.signals[index].allowedPins)) ||
+                    (target.id == "esp32-legacy-v1" && component.id != "led_rgb" &&
+                        pin in PinAssignmentPolicy.rgbReserved)
+            }
+            val duplicatePins = component.pins.size != component.pins.distinct().size
+            val conflict = component.pins.any { it in usedPins }
+            if (outOfRange.isEmpty() && !countMismatch && !duplicatePins && !conflict) {
                 usedPins += component.pins
                 compatibleCount++
                 continue
             }
+            if (countMismatch) {
+                issues += CompatibilityIssue.SignalMismatch(
+                    component.id, profile!!.signals.size, component.pins.size
+                )
+            }
             if (outOfRange.isNotEmpty()) {
                 issues += CompatibilityIssue.PinOutOfRange(component.id, outOfRange)
-            } else {
+            }
+            if (duplicatePins || conflict) {
                 issues += CompatibilityIssue.PinConflict(
                     component.id,
-                    component.pins.filter { it in usedPins }
+                    component.pins.filter { it in usedPins ||
+                        component.pins.count { candidate -> candidate == it } > 1 }
                 )
             }
 
@@ -158,11 +188,33 @@ object BoardCompatibilityEngine {
         target: BoardProfile,
         usedPins: Set<Int>
     ): List<Int>? {
+        // For the classic ESP32 use per-signal capabilities. In particular
+        // never remap a DHT onto an ADC-only pin, or a relay onto RGB pins.
+        val profile = if (target.id == "esp32-legacy-v1") {
+            PinAssignmentPolicy.profile(component.id)
+        } else null
+        if (profile != null) {
+            val allocated = usedPins.toMutableSet()
+            val result = mutableListOf<Int>()
+            for ((index, signal) in profile.signals.withIndex()) {
+                val original = component.pins.getOrNull(index)
+                val choices = listOfNotNull(original, signal.suggestedPin) + signal.allowedPins.sorted()
+                val pin = choices.firstOrNull { it in signal.allowedPins &&
+                    it in target.assignablePins && it !in allocated &&
+                    (component.id == "led_rgb" || it !in PinAssignmentPolicy.rgbReserved)
+                } ?: return null
+                allocated += pin
+                result += pin
+            }
+            return result
+        }
         if (component.pins.isEmpty()) return null
         val preferred = target.preferredPins[component.type].orEmpty()
         val candidates = (preferred + target.assignablePins.sorted())
             .distinct()
-            .filter { it !in usedPins && it in target.assignablePins }
+            .filter { it !in usedPins && it in target.assignablePins &&
+                (target.id != "esp32-legacy-v1" ||
+                    it !in PinAssignmentPolicy.rgbReserved) }
         if (candidates.size < component.pins.size) return null
         return candidates.take(component.pins.size)
     }
@@ -173,12 +225,15 @@ object BoardProfiles {
     val ESP32_LEGACY_V1 = BoardProfile(
         id = "esp32-legacy-v1",
         displayName = "ESP32 (legacy)",
-        supportedTypes = setOf("sensor", "actuator", "display", "unknown"),
-        // Pins wired to the SPI flash on a classic ESP32 module.
-        reservedPins = setOf(6, 7, 8, 9, 10, 11),
+        supportedTypes = setOf("sensor", "actuator", "display", "lighting",
+            "input", "output", "controller", "unknown"),
+        // GPIO outside audited classic ESP32 lab policy and boot/flash pins.
+        // RGB 25/26/27 are reserved by their owning module, not globally.
+        reservedPins = setOf(0, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15),
         preferredPins = mapOf(
-            "sensor" to listOf(32, 33, 34, 35, 25, 26),
-            "actuator" to listOf(27, 14, 12, 13),
+            "sensor" to listOf(32, 33, 34, 35),
+            "actuator" to listOf(18, 19, 21, 22, 23),
+            "lighting" to listOf(27, 25, 26),
             "display" to listOf(21, 22)
         )
     )
