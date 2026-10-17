@@ -45,6 +45,34 @@ class ModuleRegistry final {
     return true;
   }
 
+  /**
+   * Boot with mandatory modules first (the RGB engine), then attempt optional
+   * sensors/displays independently. Missing hardware or an I2C collision may
+   * leave an optional module inactive, but must NOT keep the ESP32 in a fatal
+   * loop before Wi-Fi SoftAP/BLE start. A failed optional begin() must release
+   * partial leases, as required by IModule's lifecycle contract.
+   *
+   * The registry still ticks every entry: inactive modules no-op until a
+   * later authorized /v2/components/apply successfully calls begin().
+   */
+  bool startRequiredAndOptional(PinManager& pins, size_t requiredCount) {
+    if (started_ || size_ == 0 || requiredCount == 0 ||
+        requiredCount > size_) return false;
+    unavailableCount_ = 0;
+    for (size_t i = 0; i < size_; ++i) {
+      if (modules_[i]->begin(pins)) continue;
+      if (i < requiredCount) {
+        while (i > 0) modules_[--i]->stop(pins);
+        return false;
+      }
+      ++unavailableCount_;
+    }
+    started_ = true;
+    return true;
+  }
+
+  size_t unavailableAtBoot() const { return unavailableCount_; }
+
   void tickAll(uint32_t nowMs) {
     if (!started_) return;
     for (size_t i = 0; i < size_; ++i) modules_[i]->tick(nowMs);
@@ -54,6 +82,7 @@ class ModuleRegistry final {
     if (!started_) return;
     for (size_t i = size_; i > 0; --i) modules_[i - 1]->stop(pins);
     started_ = false;
+    unavailableCount_ = 0;
   }
 
   // Alias used by the sketch's declarative registration path. Returns false
@@ -76,5 +105,6 @@ class ModuleRegistry final {
   IModule* modules_[kMaxModules] = {};
   size_t size_ = 0;
   bool started_ = false;
+  size_t unavailableCount_ = 0;
 };
 }  // namespace esp32core
