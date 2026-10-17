@@ -82,7 +82,8 @@ fun HardwareLabScreen(
     var showAutomationEditor by remember { mutableStateOf(false) }
     var showSoilWizard by remember { mutableStateOf(false) }
     var showConfigEditor by remember { mutableStateOf(false) }
-    var showAdvanced by rememberSaveable { mutableStateOf(false) }
+    var showSensorDetails by rememberSaveable { mutableStateOf(false) }
+    var showPinTemplates by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
     var section by rememberSaveable { mutableStateOf(HardwareSection.STATUS) }
     var syncMessage by remember { mutableStateOf<String?>(null) }
@@ -253,11 +254,11 @@ fun HardwareLabScreen(
                     item(key = "hardware_oled_card") { OledStatusCard(state = state) }
                     item(key = "hardware_sensor_more") {
                         TextButton(
-                            onClick = { showAdvanced = !showAdvanced },
+                            onClick = { showSensorDetails = !showSensorDetails },
                             modifier = Modifier.testTag("component_advanced_toggle")
-                        ) { Text(if (showAdvanced) "Ocultar gráficas e historial" else "Ver gráficas e historial") }
+                        ) { Text(if (showSensorDetails) "Ocultar gráficas e historial" else "Ver gráficas e historial") }
                     }
-                    if (showAdvanced) {
+                    if (showSensorDetails) {
                         item(key = "hardware_charts") { TelemetryChartsSection(state = state) }
                         item(key = "hardware_history_header") {
                             Text("Historial de telemetría (local)",
@@ -309,12 +310,12 @@ fun HardwareLabScreen(
                         }
                     }
                     item(key = "hardware_templates_toggle") {
-                        TextButton(onClick = { showAdvanced = !showAdvanced },
+                        TextButton(onClick = { showPinTemplates = !showPinTemplates },
                             modifier = Modifier.testTag("component_advanced_toggle")) {
-                            Text(if (showAdvanced) "Ocultar plantillas" else "Ver plantillas no detectadas")
+                            Text(if (showPinTemplates) "Ocultar plantillas" else "Ver plantillas no detectadas")
                         }
                     }
-                    if (showAdvanced && missingTemplates.isNotEmpty()) {
+                    if (showPinTemplates && missingTemplates.isNotEmpty()) {
                         items(missingTemplates, key = { "template_${it.id}" }) { descriptor ->
                             DisabledTemplateCard(descriptor = descriptor)
                         }
