@@ -560,7 +560,7 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
     entry.pinCount = 1;
     entry.active = dht22Module.ready();
     entry.state = entry.active ? esp32core::ComponentState::Active
-                               : esp32core::ComponentState::Error;
+                               : esp32core::ComponentState::Catalog;
   }
 #endif
 #if COMPI_BUILD_SOIL
@@ -574,7 +574,7 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
     entry.pinCount = 1;
     entry.active = soilModule.ready();
     entry.state = entry.active ? esp32core::ComponentState::Active
-                               : esp32core::ComponentState::Error;
+                               : esp32core::ComponentState::Catalog;
   }
 #endif
 #if COMPI_BUILD_OLED && COMPI_OLED_LIBRARY
@@ -589,7 +589,7 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
     entry.pinCount = 2;
     entry.active = oledModule.ready();
     entry.state = entry.active ? esp32core::ComponentState::Active
-                               : esp32core::ComponentState::Error;
+                               : esp32core::ComponentState::Catalog;
   }
 #endif
 
