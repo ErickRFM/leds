@@ -46,7 +46,8 @@ class BoardCompatibilityTest {
         assertEquals(CompatibilityLevel.REQUIRES_REMAP, report.level)
         assertEquals(1, report.remapped.size)
         val newPins = report.remapped.first().toPins
-        assertTrue(report.issues.first() is CompatibilityIssue.PinOutOfRange)
+        assertTrue(report.issues.any { it is CompatibilityIssue.PinOutOfRange })
+        assertTrue(report.issues.any { it is CompatibilityIssue.SignalMismatch })
         assertTrue(
             "remapped pin must not be reserved",
             newPins.none { it in BoardProfiles.ESP32_LEGACY_V1.reservedPins }
