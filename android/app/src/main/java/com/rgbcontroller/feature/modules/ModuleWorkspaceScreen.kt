@@ -433,8 +433,7 @@ private fun ModulePinWizard(
             title = { Text("Perfil no disponible") },
             text = { Text("Este componente requiere un perfil compatible antes de reasignar GPIO.") },
             confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } })
-        return
-    }
+    } else {
     var pins by remember(componentId, initial) {
         mutableStateOf(initial?.pins?.takeIf { it.size == profile.signals.size } ?: profile.defaults)
     }
@@ -497,4 +496,5 @@ private fun ModulePinWizard(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
     )
+    } // Keep the wizard composition balanced when switching component profiles.
 }

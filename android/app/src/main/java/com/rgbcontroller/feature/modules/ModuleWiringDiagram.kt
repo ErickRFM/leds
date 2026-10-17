@@ -28,7 +28,14 @@ fun ModuleWiringDiagram(
     firmwareConfirmed: Boolean,
     modifier: Modifier = Modifier
 ) {
-    if (pins.size != profile.signals.size) return
+    if (pins.size != profile.signals.size) {
+        Text(
+            "Asigna ${profile.signals.size} conexiones para mostrar el esquema.",
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = modifier.testTag("module_wiring_incomplete")
+        )
+    } else {
     val wireColors = listOf(
         Color(0xFFEC637B), Color(0xFF56DDA6), Color(0xFF6B9FF8),
         Color(0xFFFFCA66), Color(0xFFBC92FF)
@@ -91,4 +98,5 @@ fun ModuleWiringDiagram(
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+    } // Compose both valid and incomplete profiles without returning early.
 }
