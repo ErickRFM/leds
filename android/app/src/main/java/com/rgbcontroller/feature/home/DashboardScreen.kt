@@ -78,7 +78,7 @@ fun DashboardScreen(
     } == true
     val ready = bleReady || wifiReady
     var wifiStats by remember { mutableStateOf<HomeDeviceStats?>(null) }
-    LaunchedEffect(wifiReady) {
+    LaunchedEffect(wifiReady, session?.revision) {
         wifiStats = null
         if (wifiReady && session != null) {
             val revision = session.revision
