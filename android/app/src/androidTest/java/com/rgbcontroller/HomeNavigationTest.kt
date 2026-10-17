@@ -74,9 +74,13 @@ class HomeNavigationTest {
         composeRule.onNodeWithTag("hardware_tab_sensors").performClick()
         composeRule.onNodeWithTag("component_telemetry_dht22").assertExists()
 
+        composeRule.onNodeWithTag("hardware_tabs")
+            .performScrollToNode(androidx.compose.ui.test.hasTestTag("hardware_tab_pins"))
         composeRule.onNodeWithTag("hardware_tab_pins").performClick()
         composeRule.onNodeWithTag("component_config_edit").assertExists()
 
+        composeRule.onNodeWithTag("hardware_tabs")
+            .performScrollToNode(androidx.compose.ui.test.hasTestTag("hardware_tab_automation"))
         composeRule.onNodeWithTag("hardware_tab_automation").performClick()
         composeRule.onNodeWithTag("component_alerts").assertExists()
 
