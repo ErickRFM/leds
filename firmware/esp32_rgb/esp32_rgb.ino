@@ -765,7 +765,7 @@ void setup() {
   securitySetup.setAuthenticationMode(ESP_LE_AUTH_REQ_SC_BOND);
   securitySetup.setInitEncryptionKey(ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK);
   BLEDevice::setSecurityCallbacks(new BleLinkSecurityCallbacks());
-  BLEDevice::setEncryptionLevel(ESP_BLE_SEC_ENCRYPT);
+  securitySetup.setEncryptionLevel(ESP_BLE_SEC_ENCRYPT);
   BLEServer* server = BLEDevice::createServer();
   server->setCallbacks(new ServerCallbacks());
   BLEService* service = server->createService(SERVICE_UUID);
