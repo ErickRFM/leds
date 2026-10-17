@@ -136,6 +136,20 @@ class HomeNavigationTest {
     }
 
     @Test
+    fun compactTransportTabsNavigateWithoutResettingTheRoot() {
+        composeRule.onNodeWithTag("home_device_status").performClick()
+        composeRule.onNodeWithTag("connect_bluetooth").assertExists()
+        composeRule.onNodeWithTag("connect_wifi").performClick()
+        composeRule.onNodeWithTag("connect_wifi_key").assertExists()
+        composeRule.onNodeWithTag("connect_usb").performClick()
+        composeRule.onNodeWithText("USB · diagnóstico").assertExists()
+        composeRule.onNodeWithTag("connect_bluetooth").performClick()
+        composeRule.onNodeWithText("Mis dispositivos").assertExists()
+        composeRule.onNodeWithTag("nav_home").performClick()
+        composeRule.onNodeWithText("Compi").assertExists()
+    }
+
+    @Test
     fun advancedLabToolsRemainReachableFromHardware() {
         composeRule.onNodeWithTag("nav_hub").performClick()
         composeRule.onNodeWithTag("hardware_open_lab_tools").performClick()
