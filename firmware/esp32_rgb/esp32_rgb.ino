@@ -42,6 +42,17 @@
 // compile time AND its driver is available; the firmware never pretends a
 // component exists just because the Android catalog lists it.
 // ---------------------------------------------------------------------------
+// Drivers may be built without taking pins. COMPI_ENABLE_* continues to
+// mean "start at boot" for backward compatibility with opt-in firmware.
+#ifndef COMPI_BUILD_DHT22
+#define COMPI_BUILD_DHT22 1
+#endif
+#ifndef COMPI_BUILD_SOIL
+#define COMPI_BUILD_SOIL 1
+#endif
+#ifndef COMPI_BUILD_OLED
+#define COMPI_BUILD_OLED 1
+#endif
 #ifndef COMPI_ENABLE_DHT22
 #define COMPI_ENABLE_DHT22 0
 #endif
@@ -115,7 +126,7 @@ bool connectedPreviously = false;
 uint32_t physicalProvisionHoldStarted = 0;
 uint32_t effectStarted = 0;
 
-#if COMPI_ENABLE_DHT22
+#if COMPI_BUILD_DHT22
 uint8_t liveDhtPin = COMPI_DHT22_PIN;
 // Bit-banged AM2302/DHT22 read. Returns ok=false on timeout or checksum error;
 // callers must treat that as "no data", never as a valid 0% reading.
@@ -148,11 +159,11 @@ esp32core::Dht22Module::Reading dht22Read(void*) {
 }
 #endif  // COMPI_ENABLE_DHT22
 
-#if COMPI_ENABLE_SOIL
+#if COMPI_BUILD_SOIL
 int soilAdcRead(uint8_t pin, void*) { return analogRead(pin); }
 #endif  // COMPI_ENABLE_SOIL
 
-#if COMPI_ENABLE_OLED
+#if COMPI_BUILD_OLED
 #include <Wire.h>
 #if __has_include(<Adafruit_SSD1306.h>)
 #include <Adafruit_SSD1306.h>
@@ -484,13 +495,13 @@ esp32core::LedRgbModule rgbModule(
     renderStatic, renderEffect,
     []() { return rgb.mode != Mode::NONE; });
 
-#if COMPI_ENABLE_DHT22
+#if COMPI_BUILD_DHT22
 esp32core::Dht22Module dht22Module(COMPI_DHT22_PIN, dht22Read, nullptr, 2000);
 #endif
-#if COMPI_ENABLE_SOIL
+#if COMPI_BUILD_SOIL
 esp32core::SoilMoistureModule soilModule(COMPI_SOIL_PIN, soilAdcRead, nullptr, 1000);
 #endif
-#if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
+#if COMPI_BUILD_OLED && COMPI_OLED_LIBRARY
 esp32core::OledSsd1306Module oledModule(COMPI_OLED_ADDRESS, COMPI_OLED_SDA,
     COMPI_OLED_SCL, oledInit, oledPresent, nullptr, 250);
 #endif
@@ -501,13 +512,13 @@ esp32core::OledSsd1306Module oledModule(COMPI_OLED_ADDRESS, COMPI_OLED_SDA,
 bool collectComponentTelemetry(char* output, size_t capacity, void*) {
   esp32core::Measurement entries[8];
   size_t count = 0;
-#if COMPI_ENABLE_DHT22
+#if COMPI_BUILD_DHT22
   if (dht22Module.ready()) {
     entries[count++] = dht22Module.humidityReading();
     entries[count++] = dht22Module.temperatureReading();
   }
 #endif
-#if COMPI_ENABLE_SOIL
+#if COMPI_BUILD_SOIL
   if (soilModule.ready()) {
     entries[count++] = soilModule.rawReading();
     entries[count++] = soilModule.moistureReading();
@@ -538,7 +549,7 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
                                : esp32core::ComponentState::Error;
   }
 
-#if COMPI_ENABLE_DHT22
+#if COMPI_BUILD_DHT22
   {
     esp32core::ComponentStatusEntry& entry = entries[count++];
     entry = {};
@@ -549,10 +560,10 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
     entry.pinCount = 1;
     entry.active = dht22Module.ready();
     entry.state = entry.active ? esp32core::ComponentState::Active
-                               : esp32core::ComponentState::Error;
+                               : esp32core::ComponentState::Catalog;
   }
 #endif
-#if COMPI_ENABLE_SOIL
+#if COMPI_BUILD_SOIL
   {
     esp32core::ComponentStatusEntry& entry = entries[count++];
     entry = {};
@@ -563,10 +574,10 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
     entry.pinCount = 1;
     entry.active = soilModule.ready();
     entry.state = entry.active ? esp32core::ComponentState::Active
-                               : esp32core::ComponentState::Error;
+                               : esp32core::ComponentState::Catalog;
   }
 #endif
-#if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
+#if COMPI_BUILD_OLED && COMPI_OLED_LIBRARY
   {
     esp32core::ComponentStatusEntry& entry = entries[count++];
     entry = {};
@@ -578,7 +589,7 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
     entry.pinCount = 2;
     entry.active = oledModule.ready();
     entry.state = entry.active ? esp32core::ComponentState::Active
-                               : esp32core::ComponentState::Error;
+                               : esp32core::ComponentState::Catalog;
   }
 #endif
 
@@ -600,11 +611,21 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
     return (!lease || std::strcmp(lease->owner, owner) == 0) &&
            (!system || std::strcmp(system, owner) == 0);
   };
-#if COMPI_ENABLE_DHT22
+#if COMPI_BUILD_DHT22
   if (std::strcmp(catalogId, "dht22") == 0) {
-    if (!dht22Module.ready() || dht22Module.pin() != from1 || from2 != 0 ||
-        to2 != 0 || PinManager::reservedForRgb(to1) ||
-        !PinManager::outputCapable(to1) || !available(to1, dht22Module.id())) return false;
+    if (from2 != 0 || to2 != 0 || esp32core::PinManager::reservedForRgb(to1) ||
+        !esp32core::PinManager::outputCapable(to1) || !available(to1, dht22Module.id())) return false;
+    if (!dht22Module.ready()) {
+      if (from1 != 0) return false;
+      const uint8_t original = dht22Module.pin();
+      if (!dht22Module.configurePin(to1)) return false;
+      liveDhtPin = to1;
+      if (dht22Module.begin(pinManager)) return true;
+      dht22Module.configurePin(original);
+      liveDhtPin = original;
+      return false;
+    }
+    if (dht22Module.pin() != from1) return false;
     if (from1 == to1) return true;
     dht22Module.stop(pinManager);
     if (!dht22Module.configurePin(to1)) return false; // preflight ensures this
@@ -616,11 +637,19 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
     return false;
   }
 #endif
-#if COMPI_ENABLE_SOIL
+#if COMPI_BUILD_SOIL
   if (std::strcmp(catalogId, "soil_moisture") == 0) {
-    if (!soilModule.ready() || soilModule.pin() != from1 || from2 != 0 ||
-        to2 != 0 || PinManager::reservedForRgb(to1) ||
-        !PinManager::analogInputCapable(to1) || !available(to1, soilModule.id())) return false;
+    if (from2 != 0 || to2 != 0 || esp32core::PinManager::reservedForRgb(to1) ||
+        !esp32core::PinManager::analogInputCapable(to1) || !available(to1, soilModule.id())) return false;
+    if (!soilModule.ready()) {
+      if (from1 != 0) return false;
+      const uint8_t original = soilModule.pin();
+      if (!soilModule.configurePin(to1)) return false;
+      if (soilModule.begin(pinManager)) return true;
+      soilModule.configurePin(original);
+      return false;
+    }
+    if (soilModule.pin() != from1) return false;
     if (from1 == to1) return true;
     soilModule.stop(pinManager);
     if (!soilModule.configurePin(to1)) return false;
@@ -630,13 +659,21 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
     return false;
   }
 #endif
-#if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
+#if COMPI_BUILD_OLED && COMPI_OLED_LIBRARY
   if (std::strcmp(catalogId, "ssd1306_oled") == 0) {
-    if (!oledModule.ready() || oledModule.sda() != from1 ||
-        oledModule.scl() != from2 || to1 == to2 ||
-        PinManager::reservedForRgb(to1) || PinManager::reservedForRgb(to2) ||
-        !PinManager::outputCapable(to1) || !PinManager::outputCapable(to2) ||
+    if (to1 == to2 || esp32core::PinManager::reservedForRgb(to1) ||
+        esp32core::PinManager::reservedForRgb(to2) ||
+        !esp32core::PinManager::outputCapable(to1) || !esp32core::PinManager::outputCapable(to2) ||
         !available(to1, oledModule.id()) || !available(to2, oledModule.id())) return false;
+    if (!oledModule.ready()) {
+      if (from1 != 0 || from2 != 0) return false;
+      const uint8_t originalSda = oledModule.sda(), originalScl = oledModule.scl();
+      if (!oledModule.configurePins(to1, to2)) return false;
+      if (oledModule.begin(pinManager)) return true;
+      oledModule.configurePins(originalSda, originalScl);
+      return false;
+    }
+    if (oledModule.sda() != from1 || oledModule.scl() != from2) return false;
     if (from1 == to1 && from2 == to2) return true;
     oledModule.stop(pinManager);
     if (!oledModule.configurePins(to1, to2)) return false;
@@ -875,6 +912,20 @@ void loop() {
   servePhysicalWindow(now);
   wifiLab.tick(now);
   moduleRegistry.tickAll(millis());
+  // Modules activated at runtime are not in the boot-time registry; tick them
+  // explicitly, only when their leases are active, from this same loop thread.
+#if COMPI_BUILD_DHT22
+  if (dht22Module.ready() && moduleRegistry.find(dht22Module.id()) == nullptr)
+    dht22Module.tick(now);
+#endif
+#if COMPI_BUILD_SOIL
+  if (soilModule.ready() && moduleRegistry.find(soilModule.id()) == nullptr)
+    soilModule.tick(now);
+#endif
+#if COMPI_BUILD_OLED && COMPI_OLED_LIBRARY
+  if (oledModule.ready() && moduleRegistry.find(oledModule.id()) == nullptr)
+    oledModule.tick(now);
+#endif
   persistRgbIfDue(now);
 
   if (now - lastGpioBleUpdateMs >= 1000) {

@@ -102,7 +102,10 @@ fun ModuleWorkspaceScreen(
     val currentlyVerified = state.freshness == ComponentStatusFreshness.LIVE &&
         state.authorityError == null && state.connected
     val confirmed = (state.authoritative ?: state.persisted).orEmpty()
-    val names = confirmed.map { ComponentCatalog.catalogIdForFirmwareId(it.id) }
+    // Catalog-only entries mean the driver was compiled, not that a sensor
+    // is physically present. Never auto-create a user's module from them.
+    val names = confirmed.filter { it.active || it.state != "catalog" }
+        .map { ComponentCatalog.catalogIdForFirmwareId(it.id) }
     // A BLE Ready state confirms access to the existing RGB protocol, not
     // general sensor/GPIO firmware leases. Expose only the RGB module in BLE mode.
     val configured = ModuleWorkspaceGrouping.group(
@@ -189,7 +192,8 @@ fun ModuleWorkspaceScreen(
                             ModuleWiringDiagram(
                                 profile = PinAssignmentPolicy.profile(id)!!,
                                 pins = shownPins,
-                                firmwareConfirmed = physicalPins == shownPins && currentlyVerified
+                                firmwareConfirmed = physicalPins == shownPins && currentlyVerified &&
+                                    runtime(id)?.active == true
                             )
                         }
                     }
@@ -392,7 +396,7 @@ fun ModuleWorkspaceScreen(
         }
         ModulePinWizard(
             componentId = id,
-            canApply = wifiAuthorized && currentlyVerified && current?.active == true &&
+            canApply = wifiAuthorized && currentlyVerified && current != null &&
                 id in setOf("dht22", "soil_moisture", "ssd1306_oled"),
             applying = applying,
             applyMessage = applyMessage,
@@ -462,12 +466,16 @@ private fun ModuleRuntimeCard(id: String, runtime: ComponentRuntimeStatus?, live
             Text(
                 when {
                     runtime == null -> "Sin confirmación del firmware para ${id}."
+                    !runtime.active && runtime.state == "catalog" ->
+                        "Driver disponible. Sin activar, no se ha detectado el sensor."
                     live -> "Estado confirmado: ${runtime.state}"
                     else -> "Último estado confirmado (sin conexión en vivo): ${runtime.state}"
                 },
                 style = MaterialTheme.typography.bodyMedium
             )
-            Text("GPIO reales: ${runtime?.pins?.joinToString() ?: "no disponibles"}",
+            Text(
+                if (runtime?.active == true) "GPIO asignados: ${runtime.pins.joinToString()}"
+                else "GPIO sin asignación activa en el firmware",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -596,7 +604,7 @@ private fun ModulePinWizard(
                         onClick = { onApply(pins) },
                         enabled = issues.isEmpty() && !applying,
                         modifier = Modifier.testTag("module_pin_apply")
-                    ) { Text(if (applying) "Aplicando…" else "Aplicar al ESP32") }
+                    ) { Text(if (applying) "Aplicando…" else "Activar / aplicar en ESP32") }
                 }
             }
         },
