@@ -576,7 +576,7 @@ private fun AuthorityCard(connected: Boolean, authorized: Boolean, error: String
         Column(Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, fontWeight = FontWeight.SemiBold, color = color)
-            Text("Autoridad GPIO: firmware. Los GPIO actuales provienen del ESP32, nunca de la configuración local.",
+            Text("Pines reales: firmware · cambios locales: borrador.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             error?.let {
