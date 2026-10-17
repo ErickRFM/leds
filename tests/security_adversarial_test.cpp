@@ -87,7 +87,7 @@ struct DeviceHarness {
   std::string handle(const char* line) {
     EnrollmentFrame frame;
     if (!OwnerEnrollmentFrames::parse(line, frame)) return "ERR malformed";
-    char response[96];
+    char response[192];
     switch (frame.verb) {
       case EnrollmentVerb::PAIR: {
         const EnrollmentResult result =
