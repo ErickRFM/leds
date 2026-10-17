@@ -38,6 +38,12 @@ import com.rgbcontroller.core.ui.CompiInlineMessage
 import com.rgbcontroller.core.wifi.CompiLabSession
 import com.rgbcontroller.core.wifi.LabConnectionState
 import com.rgbcontroller.core.wifi.LabTransport
+import com.rgbcontroller.core.wifi.LocalLabClient
+import android.os.SystemClock
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Storage
+import kotlinx.coroutines.CancellationException
 
 /**
  * Compi V9 home: the visual reference is the layout contract, but device states
@@ -71,6 +77,31 @@ fun DashboardScreen(
             it.connectionState == LabConnectionState.AUTHORIZED && it.wifiReady
     } == true
     val ready = bleReady || wifiReady
+    var wifiStats by remember { mutableStateOf<HomeDeviceStats?>(null) }
+    LaunchedEffect(wifiReady) {
+        wifiStats = null
+        if (wifiReady && session != null) {
+            val revision = session.revision
+            try {
+                val client = LocalLabClient(context.applicationContext)
+                val result = session.serialized {
+                    check(session.revision == revision && session.wifiReady)
+                    val started = SystemClock.elapsedRealtime()
+                    val diagnostics = client.diagnostics(session.key)
+                    val duration = SystemClock.elapsedRealtime() - started
+                    val firmware = client.firmwareInfo(session.key)
+                    HomeDeviceStats(
+                        wifiDbm = diagnostics.optInt("wifiRssi", 0).takeIf { it != 0 },
+                        latencyMs = duration.coerceAtLeast(0),
+                        firmware = firmware.optString("firmwareVersion").ifBlank { null },
+                        freeHeap = diagnostics.optLong("freeHeap", -1).takeIf { it >= 0 }
+                    )
+                }
+                if (session.revision == revision && session.wifiReady) wifiStats = result
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { wifiStats = null }
+        }
+    }
     val status = when (connection) {
         BleConnectionState.Ready -> "ESP32 listo"
         BleConnectionState.Scanning -> "Buscando ESP32"
@@ -128,6 +159,26 @@ fun DashboardScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
+                if (wifiReady && wifiStats != null) {
+                    val observed = wifiStats!!
+                    Row(Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        HomeDiagnosticBadge("Señal",
+                            observed.wifiDbm?.let { "${it} dBm" } ?: "No disponible",
+                            Icons.Default.Wifi, Modifier.weight(1f))
+                        HomeDiagnosticBadge("Latencia",
+                            "${observed.latencyMs} ms", Icons.Default.Speed, Modifier.weight(1f))
+                    }
+                    Row(Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        HomeDiagnosticBadge("Firmware",
+                            observed.firmware ?: "No disponible",
+                            Icons.Default.DeveloperBoard, Modifier.weight(1f))
+                        HomeDiagnosticBadge("Memoria",
+                            observed.freeHeap?.let { "${it / 1024} KiB" } ?: "No disponible",
+                            Icons.Default.Storage, Modifier.weight(1f))
+                    }
+                }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
                 Text(if (wifiReady) "Wi-Fi: enlace autorizado, pendiente de lecturas de módulos"
                     else "Conexiones Wi-Fi: consulta el estado desde Hardware",
@@ -176,6 +227,36 @@ fun DashboardScreen(
     }
 }
 
+
+
+private data class HomeDeviceStats(
+    val wifiDbm: Int?,
+    val latencyMs: Long,
+    val firmware: String?,
+    val freeHeap: Long?
+)
+
+@Composable
+private fun HomeDiagnosticBadge(
+    label: String, value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier
+) {
+    Surface(modifier, shape = RoundedCornerShape(13.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)) {
+        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(5.dp))
+                Text(label, style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(value, style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold, maxLines = 1)
+        }
+    }
+}
 
 /**
  * Condensed Home module summary from the same firmware/last-known contract as
