@@ -101,18 +101,23 @@ class LocalLabClient(private val context: Context) {
         require(target.size == count && target.all { it in 0..39 })
         val before = componentStatus(key)
         val components = before.optJSONArray("components") ?: error("No hay estado de componentes.")
-        fun pinsFor(array: org.json.JSONArray): List<Int>? {
-            for (i in 0 until array.length()) {
-                val item = array.optJSONObject(i) ?: continue
-                if (item.optString("id") != firmwareId || !item.optBoolean("active")) continue
-                val pins = item.optJSONArray("pins") ?: continue
-                return (0 until pins.length()).map { pins.optInt(it, -1) }
+        fun moduleFor(array: org.json.JSONArray): JSONObject? =
+            (0 until array.length()).firstNotNullOfOrNull { index ->
+                array.optJSONObject(index)?.takeIf { it.optString("id") == firmwareId }
             }
-            return null
+        fun pinsFor(item: JSONObject): List<Int>? {
+            val pins = item.optJSONArray("pins") ?: return null
+            return (0 until pins.length()).map { pins.optInt(it, -1) }
         }
-        val original = pinsFor(components) ?: error("Módulo no activo en el firmware.")
+        val prior = moduleFor(components) ?: error(
+            "El firmware no incluye este driver. Actualiza el ESP32."
+        )
+        val original = pinsFor(prior) ?: error("El firmware no reporta GPIO.")
         check(original.size == count) { "El firmware no reporta las señales esperadas." }
-        val expected = original + List(2 - count) { 0 }
+        // Inactive modules have no lease yet; zeros are a reserved CAS sentinel.
+        val expected = if (prior.optBoolean("active")) {
+            original + List(2 - count) { 0 }
+        } else listOf(0, 0)
         val next = target + List(2 - count) { 0 }
         val response = request("POST", "/v2/components/apply", key, mapOf(
             "id" to id,
@@ -125,7 +130,8 @@ class LocalLabClient(private val context: Context) {
             "El ESP32 no confirmó la aplicación de pines."
         }
         val after = componentStatus(key)
-        val verified = after.optJSONArray("components")?.let(::pinsFor)
+        val verified = after.optJSONArray("components")?.let(::moduleFor)
+            ?.takeIf { it.optBoolean("active") }?.let(::pinsFor)
         check(verified == target) {
             "El firmware respondió, pero el estado GPIO leído no coincide."
         }
