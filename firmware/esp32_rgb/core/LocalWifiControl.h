@@ -14,6 +14,7 @@
 #include "CompiCapabilities.h"
 #include "RgbAutomationClock.h"
 #include "ComponentCatalog.h"
+#include "ComponentWiringTransaction.h"
 
 namespace esp32core {
 
@@ -34,6 +35,9 @@ class LocalWifiControl final {
   // status (resolved pins + lifecycle). The firmware is the final GPIO
   // authority; clients never infer pin ownership from their own config.
   using ComponentStatus = bool (*)(char* output, size_t capacity, void* context);
+  using ComponentWiringChange = WiringOutcome (*)(
+      const char* id, uint8_t expected, uint8_t requested, void* context);
+  using ComponentWiringSupported = bool (*)(const char* id, void* context);
 
   LocalWifiControl(PinManager& pins, RgbState state, RgbCommand manualCommand,
                    RgbCommand runtimeCommand, DeviceId deviceId)
@@ -48,6 +52,13 @@ class LocalWifiControl final {
   void setComponentStatus(ComponentStatus source, void* context) {
     status_ = source;
     statusContext_ = context;
+  }
+
+  void setComponentWiring(ComponentWiringChange apply,
+                          ComponentWiringSupported supported, void* context) {
+    wiringChange_ = apply;
+    wiringSupported_ = supported;
+    wiringContext_ = context;
   }
 
   // Owner key printed over the physical serial console. Shared by the SoftAP
@@ -170,6 +181,75 @@ class LocalWifiControl final {
         return;
       }
       server_.send(200, "application/json", body);
+    });
+
+    // Firmware is the sole GPIO authority. These privileged endpoints are
+    // reachable only from the authenticated laboratory SoftAP, never STA/WAN.
+    server_.on("/v2/components/wiring", HTTP_GET, [this]() {
+      if (!authorized()) return;
+      const bool dht = wiringSupported_ && wiringSupported_("dht22", wiringContext_);
+      const bool soil = wiringSupported_ && wiringSupported_("soil_moisture", wiringContext_);
+      String body = "{\"version\":1,\"persistence\":\"until_reboot\",\"revision\":" +
+                    String(wiringRevision_) + ",\"supported\":[";
+      if (dht) body += "\"dht22\"";
+      if (soil) {
+        if (dht) body += ",";
+        body += "\"soil_moisture\"";
+      }
+      body += "]}";
+      server_.send(200, "application/json", body);
+    });
+
+    server_.on("/v2/components/wiring/apply", HTTP_POST, [this]() {
+      if (!authorized()) return;
+      const String id = server_.arg("componentId");
+      const String nonce = server_.arg("requestId");
+      const String expected = server_.arg("expectedPin");
+      const String desired = server_.arg("pin");
+      if (nonce.length() != 16 || !hexNonce(nonce) ||
+          (id != "dht22" && id != "soil_moisture")) {
+        jsonError(400, "invalid_wiring_request"); return;
+      }
+      int oldPin = -1, newPin = -1;
+      if (!decimal(expected, 0, 39, oldPin) ||
+          !decimal(desired, 0, 39, newPin)) {
+        jsonError(400, "invalid_wiring_pins"); return;
+      }
+      if (nonce == lastWiringNonce_) {
+        if (id == lastWiringComponent_ &&
+            oldPin == lastExpectedPin_ && newPin == lastRequestedPin_) {
+          server_.send(200, "application/json", lastWiringReceipt_);
+        } else jsonError(409, "request_id_reused");
+        return;
+      }
+      if (wiringChange_ == nullptr || wiringSupported_ == nullptr ||
+          !wiringSupported_(id.c_str(), wiringContext_)) {
+        jsonError(422, "component_not_reconfigurable"); return;
+      }
+      const WiringOutcome outcome = wiringChange_(
+          id.c_str(), static_cast<uint8_t>(oldPin),
+          static_cast<uint8_t>(newPin), wiringContext_);
+      if (outcome != WiringOutcome::Applied &&
+          outcome != WiringOutcome::AlreadyApplied) {
+        const int status = outcome == WiringOutcome::Stale ||
+                           outcome == WiringOutcome::Reserved ? 409 :
+                           outcome == WiringOutcome::RecoveryFailed ? 500 : 422;
+        jsonError(status, wiringOutcomeName(outcome));
+        return;
+      }
+      if (outcome == WiringOutcome::Applied) ++wiringRevision_;
+      String receipt = "{\"version\":1,\"outcome\":\"" +
+          String(wiringOutcomeName(outcome)) + "\",\"componentId\":\"" + id +
+          "\",\"requestId\":\"" + nonce +
+          "\",\"pin\":" + String(newPin) +
+          ",\"revision\":" + String(wiringRevision_) +
+          ",\"persistence\":\"until_reboot\"}";
+      lastWiringNonce_ = nonce;
+      lastWiringComponent_ = id;
+      lastExpectedPin_ = oldPin;
+      lastRequestedPin_ = newPin;
+      lastWiringReceipt_ = receipt;
+      server_.send(200, "application/json", receipt);
     });
 
     server_.on("/v2/firmware", HTTP_GET, [this]() {
@@ -543,6 +623,15 @@ class LocalWifiControl final {
   void* telemetryContext_ = nullptr;
   ComponentStatus status_ = nullptr;
   void* statusContext_ = nullptr;
+  ComponentWiringChange wiringChange_ = nullptr;
+  ComponentWiringSupported wiringSupported_ = nullptr;
+  void* wiringContext_ = nullptr;
+  uint32_t wiringRevision_ = 0;
+  String lastWiringNonce_;
+  String lastWiringComponent_;
+  int lastExpectedPin_ = -1;
+  int lastRequestedPin_ = -1;
+  String lastWiringReceipt_;
   Preferences prefs_;
   WebServer server_{80};
   ExperimentRuntime experiment_;
@@ -551,6 +640,15 @@ class LocalWifiControl final {
   bool manualLevels_[PinManager::kPinCount] = {};
   uint32_t manualTouched_ = 0;
   bool active_ = false;
+
+  static bool hexNonce(const String& nonce) {
+    for (size_t i = 0; i < nonce.length(); ++i) {
+      const char c = nonce[i];
+      if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+            (c >= 'A' && c <= 'F'))) return false;
+    }
+    return true;
+  }
 
   static String randomKey() {
     char result[17] = {};
