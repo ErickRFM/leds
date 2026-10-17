@@ -99,7 +99,17 @@ class SoilMoistureModule final : public IModule {
   bool configurePin(uint8_t next) {
     if (ready_ || !PinManager::analogInputCapable(next) ||
         PinManager::reservedForRgb(next)) return false;
-    pin_ = next;
+    if (pin_ != next) {
+      pin_ = next;
+      // A new ADC1 source is not calibrated with the previous sensor's dry
+      // and wet reference points. Even a failed apply/rollback must never
+      // advertise old percentages against a potentially different probe.
+      clearCalibration();
+      dryRaw_ = 0;
+      wetRaw_ = 0;
+      moistureReading_ = {MeasurementType::SoilMoisture,
+                          MeasurementStatus::NotCalibrated, false, 0.0f, "%", 0};
+    }
     return true;
   }
   bool ready() const { return ready_; }
