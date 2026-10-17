@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -57,6 +58,11 @@ import java.util.Locale
  * always shown separately and never treated as accepted. Offline mode shows the
  * last confirmed snapshot, clearly labelled as not live.
  */
+private enum class HardwareSection(val label: String) {
+    STATUS("Estado"), SENSORS("Sensores"), PINS("Conexiones"),
+    AUTOMATION("Automatización"), PROJECT("Proyecto")
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HardwareLabScreen(
@@ -78,6 +84,7 @@ fun HardwareLabScreen(
     var showConfigEditor by remember { mutableStateOf(false) }
     var showAdvanced by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
+    var section by rememberSaveable { mutableStateOf(HardwareSection.STATUS) }
     var syncMessage by remember { mutableStateOf<String?>(null) }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -115,7 +122,7 @@ fun HardwareLabScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Componentes") },
+                title = { Text("Hardware Lab") },
                 actions = {
                     IconButton(
                         onClick = {
@@ -136,230 +143,249 @@ fun HardwareLabScreen(
             contentPadding = PaddingValues(top = 10.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            item {
+            item(key = "hardware_authority") {
                 AuthorityCard(connected = state.connected, authorized = authorized,
                     error = state.authorityError)
             }
-            item {
-                Row(Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Panel de componentes", style = MaterialTheme.typography.titleMedium)
-                    TextButton(
-                        onClick = { showAdvanced = !showAdvanced },
-                        modifier = Modifier.testTag("component_advanced_toggle")
-                    ) { Text(if (showAdvanced) "Ocultar detalles" else "Ver detalles") }
+            item(key = "hardware_tabs") {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().testTag("hardware_tabs"),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(HardwareSection.entries) { target ->
+                        FilterChip(
+                            selected = section == target,
+                            onClick = {
+                                section = target
+                                scope.launch { listState.scrollToItem(0) }
+                            },
+                            label = { Text(target.label) },
+                            modifier = Modifier.testTag("hardware_tab_${target.name.lowercase()}")
+                        )
+                    }
                 }
             }
-            item {
-                Text("Estado confirmado por el firmware",
-                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
-            when {
-                freshness == ComponentStatusFreshness.LIVE && confirmed != null -> {
-                    item {
-                        Text("En vivo · actualizado ${formatTime(state.firmwareStatus?.receivedAtMs)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.testTag("component_live"))
+            when (section) {
+                HardwareSection.STATUS -> {
+                    item(key = "hardware_confirmed_header") {
+                        Text("Estado confirmado por el firmware",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold)
                     }
-                    items(confirmed, key = { it.id }) { component ->
-                        FirmwareComponentCard(component = component, live = true)
-                    }
-                }
-                freshness == ComponentStatusFreshness.LAST_KNOWN && lastKnown != null -> {
-                    item {
-                        Text("Último estado confirmado ${formatTime(state.lastKnownStatus?.confirmedAtMs)} · no es telemetría en vivo",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.tertiary,
-                            modifier = Modifier.testTag("component_last_known"))
-                    }
-                    items(lastKnown, key = { it.id }) { component ->
-                        FirmwareComponentCard(component = component, live = false)
-                    }
-                }
-                else -> {
-                    item {
-                        Card(Modifier.fillMaxWidth().testTag("component_none")) {
-                            Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                                Text("Sin estado confirmado")
-                                Text("Conecta y autoriza el ESP32 para leer GPIO reales. " +
-                                    "Nada se simula mientras está desconectado.",
+                    when {
+                        freshness == ComponentStatusFreshness.LIVE && confirmed != null -> {
+                            item(key = "hardware_live_notice") {
+                                Text("En vivo · actualizado ${formatTime(state.firmwareStatus?.receivedAtMs)}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.testTag("component_live"))
+                            }
+                            items(confirmed, key = { "firmware_${it.id}" }) { component ->
+                                FirmwareComponentCard(component = component, live = true)
+                            }
+                        }
+                        freshness == ComponentStatusFreshness.LAST_KNOWN && lastKnown != null -> {
+                            item(key = "hardware_cached_notice") {
+                                Text("Último estado confirmado ${formatTime(state.lastKnownStatus?.confirmedAtMs)} · no es telemetría en vivo",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                    modifier = Modifier.testTag("component_last_known"))
+                            }
+                            items(lastKnown, key = { "cached_${it.id}" }) { component ->
+                                FirmwareComponentCard(component = component, live = false)
+                            }
+                        }
+                        else -> {
+                            item(key = "hardware_no_report") {
+                                Card(Modifier.fillMaxWidth().testTag("component_none")) {
+                                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                                        Text("Sin estado confirmado")
+                                        Text("Conecta y autoriza el ESP32 para leer GPIO reales. " +
+                                            "Nada se simula mientras está desconectado.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    syncMessage?.let { message ->
+                        item(key = "hardware_sync_message") {
+                            Text(message, style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    item(key = "hardware_shortcuts") {
+                        Card(Modifier.fillMaxWidth().testTag("hardware_quick_actions")) {
+                            Column(Modifier.fillMaxWidth().padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("Accesos rápidos", style = MaterialTheme.typography.titleMedium)
+                                Button(onClick = {
+                                    section = HardwareSection.SENSORS
+                                    scope.launch { listState.scrollToItem(0) }
+                                }, modifier = Modifier.fillMaxWidth()) { Text("Ver sensores") }
+                                OutlinedButton(onClick = {
+                                    section = HardwareSection.PINS
+                                    scope.launch { listState.scrollToItem(0) }
+                                }, modifier = Modifier.fillMaxWidth()) { Text("Configurar GPIO") }
+                            }
+                        }
+                    }
+                }
+                HardwareSection.SENSORS -> {
+                    item(key = "hardware_sensors_title") {
+                        Text("Lecturas reales de sensores",
+                            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    }
+                    item(key = "hardware_dht22") { Dht22TelemetryCard(state = state) }
+                    item(key = "hardware_soil_calibration") {
+                        SoilCalibrationCard(
+                            state = state,
+                            onCalibrate = { showSoilWizard = true },
+                            onClear = { scope.launch { viewModel.clearSoilCalibration() } }
+                        )
+                    }
+                    item(key = "hardware_soil_sensor") { SoilTelemetryCard(state = state) }
+                    item(key = "hardware_oled_title") {
+                        Text("Pantalla OLED",
+                            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    }
+                    item(key = "hardware_oled_card") { OledStatusCard(state = state) }
+                    item(key = "hardware_sensor_more") {
+                        TextButton(
+                            onClick = { showAdvanced = !showAdvanced },
+                            modifier = Modifier.testTag("component_advanced_toggle")
+                        ) { Text(if (showAdvanced) "Ocultar gráficas e historial" else "Ver gráficas e historial") }
+                    }
+                    if (showAdvanced) {
+                        item(key = "hardware_charts") { TelemetryChartsSection(state = state) }
+                        item(key = "hardware_history_header") {
+                            Text("Historial de telemetría (local)",
+                                style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        }
+                        item(key = "hardware_history") { TelemetryHistoryCard(state = state) }
+                    }
+                }
+                HardwareSection.PINS -> {
+                    item(key = "hardware_pins_header") {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Conexiones GPIO", style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold)
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                TextButton(onClick = { showConfigEditor = true },
+                                    modifier = Modifier.testTag("component_config_edit")) {
+                                    Text("Editar")
+                                }
+                                TextButton(onClick = { showCatalog = true },
+                                    modifier = Modifier.testTag("component_add")) {
+                                    Icon(Icons.Default.Add, null); Text("Agregar")
+                                }
+                            }
+                        }
+                    }
+                    item(key = "hardware_desired_warning") {
+                        Text("Asignación guardada localmente: el firmware no ha aceptado " +
+                            "estos cambios hasta confirmar por una API compatible.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (configIssues.isNotEmpty()) {
+                        item(key = "hardware_config_issues") {
+                            ConfigValidationIssues(components = state.desiredConfig.components)
+                        }
+                    }
+                    if (state.desiredConfig.components.isEmpty()) {
+                        item(key = "hardware_config_empty") {
+                            Card(Modifier.fillMaxWidth()) {
+                                Text("Sin conexiones configuradas localmente",
+                                    modifier = Modifier.padding(16.dp),
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    } else {
+                        items(state.desiredConfig.components, key = { "desired_${it.id}" }) { desired ->
+                            DesiredComponentCard(desired = desired, confirmedCatalogIds = knownIds)
+                        }
+                    }
+                    item(key = "hardware_templates_toggle") {
+                        TextButton(onClick = { showAdvanced = !showAdvanced },
+                            modifier = Modifier.testTag("component_advanced_toggle")) {
+                            Text(if (showAdvanced) "Ocultar plantillas" else "Ver plantillas no detectadas")
+                        }
+                    }
+                    if (showAdvanced && missingTemplates.isNotEmpty()) {
+                        items(missingTemplates, key = { "template_${it.id}" }) { descriptor ->
+                            DisabledTemplateCard(descriptor = descriptor)
+                        }
+                    }
+                }
+                HardwareSection.AUTOMATION -> {
+                    item(key = "hardware_alerts_title") {
+                        Text("Alertas", style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold)
+                    }
+                    item(key = "hardware_alerts") {
+                        AlertsCard(state = state, onEdit = { showAlertEditor = true })
+                    }
+                    item(key = "hardware_automation_title") {
+                        Text("Automatizaciones", style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold)
+                    }
+                    item(key = "hardware_automation") {
+                        AutomationCard(state = state, onEdit = { showAutomationEditor = true })
+                    }
+                }
+                HardwareSection.PROJECT -> {
+                    item(key = "hardware_project_title") {
+                        Text("Proyecto (importar / exportar)",
+                            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    }
+                    item(key = "hardware_project_description") {
+                        Text("Archivos locales de componentes, alertas, automatizaciones y calibración. " +
+                            "Nunca incluyen claves ni tokens.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    state.importError?.let { error ->
+                        item(key = "hardware_project_error") {
+                            Card(
+                                Modifier.fillMaxWidth().testTag("project_import_error"),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer)
+                            ) {
+                                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("No se pudo importar el proyecto",
+                                        color = MaterialTheme.colorScheme.onErrorContainer)
+                                    Text(error, style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer)
+                                    TextButton(onClick = { viewModel.cancelImport() },
+                                        modifier = Modifier.testTag("project_import_error_dismiss")) {
+                                        Text("Descartar")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    item(key = "hardware_project_actions") {
+                        Card(Modifier.fillMaxWidth().testTag("project_portable")) {
+                            Row(Modifier.fillMaxWidth().padding(16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = {
+                                    exportLauncher.launch("${ComponentDashboardViewModel.DEFAULT_PROJECT_NAME}.json")
+                                }, modifier = Modifier.weight(1f).testTag("project_export")) {
+                                    Text("Exportar")
+                                }
+                                OutlinedButton(onClick = {
+                                    importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+                                }, modifier = Modifier.weight(1f).testTag("project_import")) {
+                                    Text("Importar")
+                                }
                             }
                         }
                     }
                 }
             }
-            item {
-                Text("Lecturas reales de sensores",
-                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
-            item {
-                Dht22TelemetryCard(state = state)
-            }
-            item {
-                SoilCalibrationCard(
-                    state = state,
-                    onCalibrate = { showSoilWizard = true },
-                    onClear = { scope.launch { viewModel.clearSoilCalibration() } }
-                )
-            }
-            item {
-                SoilTelemetryCard(state = state)
-            }
-            item {
-                Text("Alertas",
-                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
-            item {
-                AlertsCard(state = state, onEdit = { showAlertEditor = true })
-            }
-            if (showAdvanced) {
-                item {
-                    Text("Gráficas (ventana de 30 min)",
-                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                }
-                item { TelemetryChartsSection(state = state) }
-            }
-            item {
-                Text("Automatizaciones",
-                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
-            item {
-                AutomationCard(state = state, onEdit = { showAutomationEditor = true })
-            }
-            item {
-                Text("Pantalla OLED (display)",
-                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
-            item {
-                OledStatusCard(state = state)
-            }
-            if (showAdvanced) {
-                item {
-                    Text("Historial de telemetría (local)",
-                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                }
-                item { TelemetryHistoryCard(state = state) }
-            }
-
-            syncMessage?.let { message ->
-                item {
-                    Text(message, style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-
-            item {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Configuración local (pendiente)",
-                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        TextButton(onClick = { showConfigEditor = true },
-                            modifier = Modifier.testTag("component_config_edit")) {
-                            Text("Editar")
-                        }
-                        TextButton(onClick = { showCatalog = true },
-                            modifier = Modifier.testTag("component_add")) {
-                            Icon(Icons.Default.Add, contentDescription = null); Text("Agregar")
-                        }
-                    }
-                }
-            }
-            item {
-                Text("Esta configuración es un deseo local; no implica que el ESP32 la haya aceptado.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (configIssues.isNotEmpty()) {
-                item { ConfigValidationIssues(components = state.desiredConfig.components) }
-            }
-            if (state.desiredConfig.components.isEmpty()) {
-                item {
-                    Card(Modifier.fillMaxWidth()) {
-                        Text("No hay componentes locales configurados",
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            } else {
-                items(state.desiredConfig.components, key = { "desired_${it.id}" }) { desired ->
-                    DesiredComponentCard(desired = desired, confirmedCatalogIds = knownIds)
-                }
-            }
-
-            if (showAdvanced && missingTemplates.isNotEmpty()) {
-                item {
-                    Text("Plantillas no detectadas por el firmware",
-                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                }
-                item {
-                    Text("Estos componentes del catálogo no están presentes/activos según el firmware.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                items(missingTemplates, key = { "template_${it.id}" }) { descriptor ->
-                    DisabledTemplateCard(descriptor = descriptor)
-                }
-            }
-
-            if (showAdvanced) {
-            item {
-                Text("Proyecto (importar / exportar)",
-                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
-            item {
-                Text("El archivo solo contiene componentes, alertas, automatizaciones y calibración. " +
-                    "Nunca incluye claves ni tokens.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (state.importError != null) {
-                item {
-                    Card(
-                        Modifier.fillMaxWidth().testTag("project_import_error"),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer)
-                    ) {
-                        Column(Modifier.fillMaxWidth().padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("No se pudo importar el proyecto",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer)
-                            Text(state.importError!!,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer)
-                            TextButton(
-                                onClick = { viewModel.cancelImport() },
-                                modifier = Modifier.testTag("project_import_error_dismiss")
-                            ) { Text("Descartar") }
-                        }
-                    }
-                }
-            }
-            item {
-                Card(Modifier.fillMaxWidth().testTag("project_portable")) {
-                    Row(Modifier.fillMaxWidth().padding(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = {
-                                exportLauncher.launch("${ComponentDashboardViewModel.DEFAULT_PROJECT_NAME}.json")
-                            },
-                            modifier = Modifier.weight(1f).testTag("project_export")
-                        ) { Text("Exportar") }
-                        OutlinedButton(
-                            onClick = {
-                                importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
-                            },
-                            modifier = Modifier.weight(1f).testTag("project_import")
-                        ) { Text("Importar") }
-                    }
-                }
-            }
-            } // End of advanced project tools.
         }
     }
 
