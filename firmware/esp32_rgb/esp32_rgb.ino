@@ -605,7 +605,7 @@ void processEnrollmentFrames() {
     if (!found) break;
     // The owner session owns all state transitions; the loop is the sole
     // caller, so no locking is needed around it.
-    char reply[96] = {};
+    char reply[kEnrollLineMax + 1] = {};
     if (!ownerSession.handleFrame(buffer, reply, sizeof(reply))) {
       publishControlReply("ERR reply_too_long");
       continue;

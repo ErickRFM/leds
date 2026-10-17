@@ -75,7 +75,9 @@ void fromHex(const char* in, uint8_t* out, size_t n) {
 
 std::string challengeNonce(const std::string& reply) {
   assert(reply.rfind("CHALLENGE ", 0) == 0);
-  return reply.substr(10);
+  const std::string rest = reply.substr(10);
+  const std::size_t space = rest.find(' ');
+  return space == std::string::npos ? rest : rest.substr(0, space);
 }
 
 std::string authLine(TestOnlySessionCrypto& crypto, const SessionKeyPair& owner,
@@ -104,6 +106,14 @@ std::string attemptAuth(OwnerEnrollmentSession& session, TestOnlySessionCrypto& 
   assert(session.handleFrame("BEGIN 00112233445566778899aabbccddeeff", reply, sizeof(reply)));
   const std::string deviceNonce = challengeNonce(reply);
   assert(deviceNonce.size() == kNonceHexLength);
+  {
+    // The challenge must carry the board's X25519 public key for the client.
+    char devicePubHex[kPubKeyBytes * 2 + 1];
+    toHex(devicePublic, kPubKeyBytes, devicePubHex);
+    const std::string challenge(reply);
+    assert(challenge.size() == 10 + kNonceHexLength + 1 + kPubKeyBytes * 2);
+    assert(challenge.substr(challenge.size() - kPubKeyBytes * 2) == devicePubHex);
+  }
   assert(session.handleFrame(authLine(crypto, owner, devicePublic, deviceNonce.c_str(),
                                       kClientNonceHex, counter)
                                  .c_str(),
