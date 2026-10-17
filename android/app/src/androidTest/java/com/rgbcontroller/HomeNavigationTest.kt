@@ -150,13 +150,13 @@ class HomeNavigationTest {
     fun moduleCatalogBuildsLocalDraftWithoutFirmware() {
         composeRule.onNodeWithTag("nav_modules").performClick()
         composeRule.onNodeWithTag("modules_tab_catalog").performClick()
-        composeRule.onNodeWithTag("module_symbol_dht22").assertExists()
+        composeRule.onNodeWithTag("module_symbol_dht22", useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag("module_catalog_dht22").performClick()
         composeRule.onNodeWithTag("module_pin_editor").assertExists()
         composeRule.onNodeWithTag("module_pin_save").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("module_card_dht22").assertExists()
-        composeRule.onNodeWithTag("module_symbol_dht22").assertExists()
+        composeRule.onNodeWithTag("module_symbol_dht22", useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag("module_config_dht22").performClick()
         composeRule.onNodeWithTag("module_pin_editor").assertExists()
     }
