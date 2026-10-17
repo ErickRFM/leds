@@ -96,11 +96,21 @@ class LocalLabClient(private val context: Context) {
         val names = mapOf(
             "dht22" to "sensor.dht22",
             "soil_moisture" to "sensor.soil_moisture",
-            "ssd1306_oled" to "display.ssd1306"
+            "ssd1306_oled" to "display.ssd1306",
+            "led_rgb" to "led.rgb"
         )
         val firmwareId = names[id] ?: error("Este componente no admite reasignación en caliente.")
-        val count = if (id == "ssd1306_oled") 2 else 1
+        val count = when (id) {
+            "led_rgb" -> 3
+            "ssd1306_oled" -> 2
+            else -> 1
+        }
         require(target.size == count && target.all { it in 0..39 })
+        if (id == "led_rgb") {
+            require(target.distinct().size == 3 && target.all(::allowedOutput)) {
+                "El RGB necesita tres GPIO PWM de salida diferentes."
+            }
+        }
         val before = componentStatus(key)
         val components = before.optJSONArray("components") ?: error("No hay estado de componentes.")
         fun moduleFor(array: org.json.JSONArray): JSONObject? =
@@ -115,19 +125,24 @@ class LocalLabClient(private val context: Context) {
             "El firmware no incluye este driver. Actualiza el ESP32."
         )
         val expected = ComponentApplyCasPolicy.expected(prior, count)
-        val next = target + List(2 - count) { 0 }
+        val next = target + List(maxOf(2, count) - count) { 0 }
         // One nonce per user transaction. The firmware caches successful
         // receipts to avoid applying duplicate POST requests twice.
         val requestId = UUID.randomUUID().toString().replace("-", "").take(16)
-        val response = try {
-            request("POST", "/v2/components/apply", key, mapOf(
+        val arguments = mutableMapOf(
             "id" to id,
             "from1" to expected[0].toString(),
             "from2" to expected[1].toString(),
             "to1" to next[0].toString(),
             "to2" to next[1].toString(),
             "requestId" to requestId
-            ))
+        )
+        if (count == 3) {
+            arguments["from3"] = expected[2].toString()
+            arguments["to3"] = next[2].toString()
+        }
+        val response = try {
+            request("POST", "/v2/components/apply", key, arguments)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (refused: LabHttpException) {

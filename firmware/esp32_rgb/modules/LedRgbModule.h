@@ -23,7 +23,8 @@ class LedRgbModule final : public IModule {
   uint16_t version() const override { return 1; }
 
   bool begin(PinManager& manager) override {
-    if (ready_) return false;
+    if (ready_ || renderInitial_ == nullptr || renderEffect_ == nullptr ||
+        active_ == nullptr) return false;
     for (size_t i = 0; i < 3; ++i) {
       if (!manager.acquire(pins_[i], id(), PinFunction::PwmOutput)) {
         releaseClaims(manager);
@@ -32,7 +33,10 @@ class LedRgbModule final : public IModule {
     }
     for (size_t i = 0; i < 3; ++i) {
       if (!ledcAttach(pins_[i], 5000, 8)) {
-        for (size_t j = 0; j < i; ++j) ledcDetach(pins_[j]);
+        for (size_t j = 0; j < i; ++j) {
+          ledcDetach(pins_[j]);
+          pinMode(pins_[j], INPUT);  // Never leave a partially attached PWM driven.
+        }
         releaseClaims(manager);
         return false;
       }
@@ -61,6 +65,18 @@ class LedRgbModule final : public IModule {
     releaseClaims(manager);
   }
 
+  // Only the authorized transaction coordinator may move a STOPPED RGB.
+  // Never accept input-only pins, duplicate signals or non-ESP32 outputs.
+  bool configurePins(uint8_t red, uint8_t green, uint8_t blue) {
+    if (ready_ || red == green || red == blue || green == blue ||
+        !PinManager::outputCapable(red) || !PinManager::outputCapable(green) ||
+        !PinManager::outputCapable(blue)) return false;
+    pins_[0] = red;
+    pins_[1] = green;
+    pins_[2] = blue;
+    return true;
+  }
+
   bool ready() const { return ready_; }
   uint8_t redPin() const { return pins_[0]; }
   uint8_t greenPin() const { return pins_[1]; }
@@ -70,7 +86,7 @@ class LedRgbModule final : public IModule {
   void releaseClaims(PinManager& manager) {
     for (const uint8_t pin : pins_) manager.release(pin, id());
   }
-  const uint8_t pins_[3];
+  uint8_t pins_[3];
   const bool commonAnode_;
   Render renderInitial_;
   RenderEffect renderEffect_;

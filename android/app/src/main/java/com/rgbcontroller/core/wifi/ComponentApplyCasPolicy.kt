@@ -9,7 +9,7 @@ import org.json.JSONObject
  */
 internal object ComponentApplyCasPolicy {
     fun expected(prior: JSONObject, count: Int): List<Int> {
-        require(count in 1..2)
+        require(count in 1..3)
         val pins = prior.optJSONArray("pins") ?: error("El firmware no reporta GPIO.")
         val original = (0 until pins.length()).map { pins.optInt(it, -1) }
         val active = prior.optBoolean("active")
@@ -17,11 +17,11 @@ internal object ComponentApplyCasPolicy {
             check(original.size == count && original.all { it in 0..39 }) {
                 "El firmware no reporta las señales activas esperadas."
             }
-            return original + List(2 - count) { 0 }
+            return original + List(maxOf(2, count) - count) { 0 }
         }
         check(original.isEmpty()) {
             "El firmware reportó pines sin una reserva activa; actualiza el estado antes de aplicar."
         }
-        return listOf(0, 0)
+        return List(maxOf(2, count)) { 0 }
     }
 }

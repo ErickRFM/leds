@@ -31,8 +31,15 @@ int main() {
   assert(guard.inspect({"aabbcc", "dht22", 0, 0, 18, 0}) == Verdict::Invalid);
   assert(guard.inspect({"001122334455667z", "dht22", 0, 0, 18, 0}) == Verdict::Invalid);
   assert(guard.inspect({"001122334455667788", "dht22", 0, 0, 18, 0}) == Verdict::Invalid);
-  assert(guard.inspect({"0011223344556688", "led_rgb", 0, 0, 27, 0}) == Verdict::Invalid);
-  assert(guard.inspect({"0011223344556688", "ssd1306_oled", 0, 0, 21, 22}) == Verdict::New);
+  // RGB has three independently verified PWM signals. Changing only B on
+  // the same request ID must be treated as a conflicting replay.
+  Guard::Request rgb{"0011223344556688", "led_rgb", 27, 25, 18, 19, 26, 23};
+  assert(guard.inspect(rgb) == Verdict::New);
+  assert(guard.commit(rgb));
+  assert(guard.inspect(rgb) == Verdict::IdenticalRetry);
+  Guard::Request alteredBlue{"0011223344556688", "led_rgb", 27, 25, 18, 19, 26, 22};
+  assert(guard.inspect(alteredBlue) == Verdict::ConflictingReuse);
+  assert(guard.inspect({"0011223344556699", "ssd1306_oled", 0, 0, 21, 22}) == Verdict::New);
   assert(guard.inspect({"AABBCCDDEEFF1122", "soil_moisture", 0, 0, 34, 0}) == Verdict::New);
 
   // Bounded ring behavior: every successful change consumes at most one entry.
