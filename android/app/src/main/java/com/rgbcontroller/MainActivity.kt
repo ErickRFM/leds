@@ -80,6 +80,7 @@ private sealed class Screen(
     data object Devices : Screen("devices", "Equipos", Icons.Default.Bluetooth)
     data object Connect : Screen("connect", "Conectar", Icons.Default.Bluetooth)
     data object Hub : Screen("hub", "Hardware", Icons.Default.Memory)
+    data object LabTools : Screen("lab-tools", "Laboratorio", Icons.Default.Memory)
 }
 
 /**
@@ -127,7 +128,7 @@ fun MainAppNavHost(
         val entry by navController.currentBackStackEntryAsState()
         val route = entry?.destination?.route
         val nested = route == Screen.Devices.route || route == Screen.Settings.route ||
-            route == Screen.Connect.route
+            route == Screen.Connect.route || route == Screen.LabTools.route
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
@@ -136,6 +137,7 @@ fun MainAppNavHost(
                         title = { Text(when (route) {
                             Screen.Devices.route -> "Dispositivos"
                             Screen.Connect.route -> "Conexiones"
+                            Screen.LabTools.route -> "Laboratorio avanzado"
                             else -> "Ajustes"
                         }) },
                         navigationIcon = {
@@ -170,7 +172,8 @@ fun MainAppNavHost(
                                 indicatorColor = MaterialTheme.colorScheme.primaryContainer
                             ),
                             selected = route == screen.route ||
-                                (screen == Screen.Home && nested),
+                                (screen == Screen.Hub && route == Screen.LabTools.route) ||
+                                (screen == Screen.Home && nested && route != Screen.LabTools.route),
                             onClick = { navController.navigateTopLevel(screen) }
                         )
                     }
@@ -227,7 +230,18 @@ fun MainAppNavHost(
                     DevicesScreen(bleManager, preferencesRepository,
                         onInspectSecurity = { navController.navigate(Screen.Hub.route) })
                 }
-                composable(Screen.Hub.route) {                     HardwareLabScreen(session = session, bleManager = bleManager) }
+                composable(Screen.Hub.route) {
+                    HardwareLabScreen(
+                        session = session,
+                        bleManager = bleManager,
+                        onOpenLabTools = { navController.navigate(Screen.LabTools.route) }
+                    )
+                }
+                // Preserve the existing diagnostics/GPIO/experiment engine instead
+                // of losing access when the component dashboard became Hardware.
+                composable(Screen.LabTools.route) {
+                    LabHubScreen(labSession = session, bleManager = bleManager)
+                }
             }
         }
     }

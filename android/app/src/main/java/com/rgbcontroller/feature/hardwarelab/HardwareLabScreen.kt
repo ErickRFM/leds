@@ -67,7 +67,8 @@ private enum class HardwareSection(val label: String) {
 @Composable
 fun HardwareLabScreen(
     session: CompiLabSession? = null,
-    bleManager: BleManager? = null
+    bleManager: BleManager? = null,
+    onOpenLabTools: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -229,6 +230,10 @@ fun HardwareLabScreen(
                                     section = HardwareSection.PINS
                                     scope.launch { listState.scrollToItem(0) }
                                 }, modifier = Modifier.fillMaxWidth()) { Text("Configurar GPIO") }
+                                OutlinedButton(
+                                    onClick = onOpenLabTools,
+                                    modifier = Modifier.fillMaxWidth().testTag("hardware_open_lab_tools")
+                                ) { Text("Laboratorio avanzado · GPIO, diagnóstico y experimentos") }
                             }
                         }
                     }

@@ -127,6 +127,17 @@ class HomeNavigationTest {
     }
 
     @Test
+    fun advancedLabToolsRemainReachableFromHardware() {
+        composeRule.onNodeWithTag("nav_hub").performClick()
+        composeRule.onNodeWithTag("hardware_open_lab_tools").performClick()
+        composeRule.onNodeWithText("Laboratorio avanzado").assertExists()
+        composeRule.onNodeWithText("Diagnóstico").performClick()
+        composeRule.onNodeWithText("Identidad V4 del ESP32").assertExists()
+        composeRule.onNodeWithTag("nav_back").performClick()
+        composeRule.onNodeWithText("Hardware Lab").assertExists()
+    }
+
+    @Test
     fun moduleCatalogBuildsLocalDraftWithoutFirmware() {
         composeRule.onNodeWithTag("nav_modules").performClick()
         composeRule.onNodeWithTag("modules_tab_catalog").performClick()
