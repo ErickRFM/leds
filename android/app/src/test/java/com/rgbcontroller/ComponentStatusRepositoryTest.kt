@@ -45,6 +45,24 @@ class ComponentStatusRepositoryTest {
         assertNotNull(state.persisted)
     }
 
+    @Test fun compiledCatalogDriversAreNotReportedAsDetectedHardware() = runBlocking {
+        val repo = newRepo()
+        repo.setDevice("board-a")
+        repo.setConnected(true)
+        val payload = """
+          {"version":1,"gpioAuthority":"firmware","components":[
+            {"id":"led.rgb","type":"actuator","interface":"pwm","state":"active","active":true,"pins":[27,25,26]},
+            {"id":"sensor.dht22","type":"sensor","interface":"one_wire","state":"catalog","active":false,"pins":[32]},
+            {"id":"sensor.soil_moisture","type":"sensor","interface":"adc","state":"catalog","active":false,"pins":[34]}
+          ]}
+        """.trimIndent()
+        assertTrue(repo.ingest(payload))
+        assertEquals(setOf("led_rgb"), repo.state.value.confirmedCatalogIds)
+        // A user's separately saved DHT22 draft cannot manufacture a detection.
+        repo.setDesired(LocalDesiredConfig(listOf(LocalDesiredComponent("dht22", "sensor", listOf(32)))))
+        assertEquals(setOf("led_rgb"), repo.state.value.confirmedCatalogIds)
+    }
+
     @Test fun validPayloadBecomesLiveAndPersists() = runBlocking {
         val storage = FakeComponentStatusStorage()
         val repo = newRepo(storage)
