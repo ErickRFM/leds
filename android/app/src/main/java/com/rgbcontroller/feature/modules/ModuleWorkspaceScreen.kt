@@ -50,6 +50,7 @@ import com.rgbcontroller.core.components.widgets.SoilMoistureWidget
 import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.wifi.CompiLabSession
 import com.rgbcontroller.core.wifi.LocalLabClient
+import com.rgbcontroller.core.wifi.ComponentApplyUnconfirmedException
 import kotlinx.coroutines.CancellationException
 import com.rgbcontroller.core.wifi.LabConnectionState
 import com.rgbcontroller.core.wifi.LabTransport
@@ -440,16 +441,26 @@ fun ModuleWorkspaceScreen(
                             }
                             labClient.applyComponentPinsConfirmed(key, id, pins)
                         }
-                        check(wifiAuthorized && session.revision == revision) {
-                            "Sesión cambiada: vuelve a verificar los GPIO del firmware."
+                        if (!wifiAuthorized || session.revision != revision) {
+                            throw ComponentApplyUnconfirmedException(
+                                "La sesión cambió tras el recibo; verifica los GPIO del dispositivo actual.")
                         }
-                        vm.refresh()
                         applyMessage = "Pines confirmados por el firmware. Solo vigentes hasta reiniciar el ESP32."
+                        try { vm.refresh() }
+                        catch (cancelled: CancellationException) { throw cancelled }
+                        catch (_: Exception) { /* Receipt already verified; leave success intact. */ }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
+                    } catch (unconfirmed: ComponentApplyUnconfirmedException) {
+                        applyMessage = "Sin confirmar: ${unconfirmed.message ?: "consulta GPIO antes de reintentar"}"
+                        try { vm.refresh() }
+                        catch (cancelled: CancellationException) { throw cancelled }
+                        catch (_: Exception) { /* Status may remain unavailable. */ }
                     } catch (failure: Exception) {
-                        applyMessage = "No aplicado: ${failure.message ?: "verifica el ESP32 y sus conexiones"}"
-                        vm.refresh()
+                        applyMessage = "Rechazado: ${failure.message ?: "verifica la sesión y las conexiones"}"
+                        try { vm.refresh() }
+                        catch (cancelled: CancellationException) { throw cancelled }
+                        catch (_: Exception) { /* Preserve the explicit rejection. */ }
                     } finally {
                         applying = false
                     }
@@ -632,7 +643,8 @@ private fun ModulePinWizard(
                 if (applyMessage != null) {
                     Text(applyMessage,
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (applyMessage.startsWith("No aplicado")) MaterialTheme.colorScheme.error
+                        color = if (applyMessage.startsWith("Rechazado") ||
+                            applyMessage.startsWith("Sin confirmar")) MaterialTheme.colorScheme.error
                             else MaterialTheme.colorScheme.primary,
                         modifier = Modifier.testTag("module_apply_result"))
                 }
