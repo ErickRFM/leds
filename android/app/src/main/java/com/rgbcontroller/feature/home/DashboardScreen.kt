@@ -49,8 +49,10 @@ fun DashboardScreen(
 ) {
     val connection by bleManager.connectionState.collectAsState()
     val bleReady = connection == BleConnectionState.Ready
-    val wifiReady = session?.transport == LabTransport.WIFI_LAB &&
-        session.connectionState == LabConnectionState.AUTHORIZED && session.wifiReady
+    val wifiReady = session?.let {
+        it.transport == LabTransport.WIFI_LAB &&
+            it.connectionState == LabConnectionState.AUTHORIZED && it.wifiReady
+    } == true
     val ready = bleReady || wifiReady
     val status = when (connection) {
         BleConnectionState.Ready -> "ESP32 listo"
