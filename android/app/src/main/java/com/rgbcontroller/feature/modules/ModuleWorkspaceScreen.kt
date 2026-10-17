@@ -138,6 +138,21 @@ fun ModuleWorkspaceScreen(
                     item {
                         ModuleRuntimeCard(id, runtime(id), currentlyVerified)
                     }
+                    val savedPins = state.desiredConfig.components
+                        .firstOrNull { it.id == id }?.pins
+                    val physicalPins = runtime(id)?.pins
+                    val shownPins = physicalPins?.takeIf {
+                        it.size == PinAssignmentPolicy.profile(id)?.signals?.size
+                    } ?: savedPins
+                    if (shownPins != null && PinAssignmentPolicy.profile(id) != null) {
+                        item(key = "module_visual_$id") {
+                            ModuleWiringDiagram(
+                                profile = PinAssignmentPolicy.profile(id)!!,
+                                pins = shownPins,
+                                firmwareConfirmed = physicalPins == shownPins && currentlyVerified
+                            )
+                        }
+                    }
                     item { ModuleReadings(id, state) }
                     item {
                         OutlinedButton(onClick = { editingId = id }, modifier = Modifier.fillMaxWidth()) {
@@ -459,12 +474,8 @@ private fun ModulePinWizard(
                         }
                     }
                 }
-                Text(
-                    "Vista previa: " + profile.signals.mapIndexed { i, signal ->
-                        "${signal.label} → GPIO ${pins[i]}"
-                    }.joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall
-                )
+                ModuleWiringDiagram(profile, pins, firmwareConfirmed = false,
+                    modifier = Modifier.testTag("module_pin_preview"))
                 for (issue in issues) {
                     Text(issue, color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
