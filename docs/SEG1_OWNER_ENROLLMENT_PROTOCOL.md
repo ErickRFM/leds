@@ -63,7 +63,9 @@ El core **no** implementa primitivas. La capa de firmware calculará
 - cifrado de comandos AES-GCM con nonce/contador de sesión.
 
 Android guarda el material del propietario en **Keystore** y nunca lo expone en
-logs ni en exportaciones.
+logs ni en exportaciones. La implementación Kotlin reutiliza estas primitivas vía
+BouncyCastle (`core/security/BouncyCastleSessionCrypto.kt`), porque X25519 de JCA
+solo existe desde Android 13 (API 33) y la app soporta API 26+.
 
 ## Puertas físicas (PENDING_HARDWARE_VALIDATION)
 
@@ -85,7 +87,7 @@ rechazan).
 ```
 client -> board   PAIR <code> <ownerId> <pubKeyHex>
 client -> board   BEGIN <clientNonce>
-board  -> client  CHALLENGE <deviceNonce>
+board  -> client  CHALLENGE <deviceNonce> <devicePubKeyHex>
 client -> board   AUTH <clientNonce> <counter> <proofHex>
 board  -> client  OK
 board  -> client  ERR <reason>
@@ -93,6 +95,11 @@ client -> board   REVOKE
 client -> board   RECOVER <code>
 client -> board   RESET <code>
 ```
+
+El `CHALLENGE` incluye la **clave pública X25519 del tablero**: sin ella un
+cliente no puede derivar el secreto ECDH (`ECDH(ownerPriv, devicePub)`) ni
+calcular el proof. Se transporta en la propia respuesta del reto (sin UUIDs
+nuevos) y queda ligada al nonce del desafío y al proof resultante.
 
 `OwnerEnrollmentFrames::parse` acepta y clasifica todas ellas (incluidas las
 del tablero, para round-trip); los encoders (`encodeChallenge`, `encodeOk`,

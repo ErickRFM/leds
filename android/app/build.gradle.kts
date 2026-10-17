@@ -77,6 +77,9 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("androidx.datastore:datastore-preferences:1.1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")
+    // X25519 on every supported API level (JCA XDH is API 33+). Used solely for
+    // the owner-enrollment handshake; see core/security.
+    implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20231013")

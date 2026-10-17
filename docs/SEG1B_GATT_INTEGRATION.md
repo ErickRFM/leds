@@ -36,13 +36,34 @@ enrolamiento (`kNonceBytes = 16`), independientes del nonce AES-GCM de 12 bytes.
 Esto elimina la ambigüedad previa y hace coherente el tamaño del nonce con
 `OwnerEnrollment::kNonceHexMax`.
 
+Además, la respuesta del reto pasa a ser
+`CHALLENGE <deviceNonce> <devicePubKeyHex>`: sin la clave pública X25519 del
+tablero el cliente no puede derivar `ECDH(ownerPriv, devicePub)` ni producir el
+proof. Es un cambio mínimo que mantiene el canal existente (sin UUIDs nuevos).
+
+## Cliente Android (SEG.1b-2c)
+
+- `core/security/SessionCrypto.kt`, `BouncyCastleSessionCrypto.kt`,
+  `SessionKeySchedule.kt`, `Hex.kt`: espejo en Kotlin de las primitivas y del
+  KDF del firmware. BouncyCastle aporta X25519 en todas las API soportadas
+  (API 26+), ya que el JCA `XDH` solo existe desde API 33.
+- `core/ble/enrollment/EnrollmentReply.kt` + `OwnerEnrollmentClient.kt`: cliente
+  de protocolo puro que construye `PAIR/BEGIN/AUTH`, parsea `OK/ERR/CHALLENGE`
+  (estricto) y deriva el proof. El contador es estrictamente creciente.
+- `OwnerEnrollmentClientTest.kt`: handshake completo contra un tablero simulado
+  con X25519/HMAC reales, anti-replay del contador y parseo fail-closed.
+
 ## Verificación automática
 
 - `tests/owner_enrollment_session_test.cpp`: primer arranque, enrolamiento,
   autenticación, **persistencia y anti-replay tras reinicio**, revocación +
   recuperación, y **fallo en cerrado** de un almacén que no puede leer/escribir.
-- `tests/session_key_schedule_test.cpp` y `tests/security_adversarial_test.cpp`
-  actualizados al tamaño de nonce de 16 bytes.
+  Ahora comprueba además que `CHALLENGE` lleva la clave pública del tablero.
+- `tests/owner_enrollment_frames_test.cpp` y `tests/security_adversarial_test.cpp`
+  actualizados al `CHALLENGE` con clave pública.
+- `tests/session_key_schedule_test.cpp` actualizado al nonce de 16 bytes.
+- Android: `OwnerEnrollmentClientTest` (JVM, BouncyCastle) dentro de
+  `testDebugUnitTest` (243 tests, 0 fallos).
 - El firmware compila para `esp32:esp32:esp32:PartitionScheme=min_spiffs`.
 
 ## PENDING_HARDWARE_VALIDATION
@@ -54,7 +75,9 @@ Esto elimina la ambigüedad previa y hace coherente el tamaño del nonce con
 
 ## Siguiente sub-bloque
 
-- **Cliente Android de enrolamiento** (SEG.1b-2c): X25519 + `SessionKeySchedule`
-  en el teléfono, almacenamiento del keypair, y estados reales
-  (`BleSecurityState`) derivados **de las respuestas del firmware**, nunca de
-  estado local. Hasta entonces, Android no debe mostrar "autorizado".
+- **Cableado en `BleManager` + persistencia Keystore** (SEG.1b-2d): enviar los
+  frames por la característica WRITE existente, guardar el keypair del
+  propietario con Keystore y derivar `BleSecurityState` solo de las respuestas
+  del firmware. Hasta entonces, `BleManager` conserva el camino legacy que
+  **falla en cerrado** (el firmware ya no reconoce `AUTH <clave>`, así que la app
+  nunca se marca como autorizada).

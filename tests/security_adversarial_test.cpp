@@ -87,7 +87,7 @@ struct DeviceHarness {
   std::string handle(const char* line) {
     EnrollmentFrame frame;
     if (!OwnerEnrollmentFrames::parse(line, frame)) return "ERR malformed";
-    char response[96];
+    char response[192];
     switch (frame.verb) {
       case EnrollmentVerb::PAIR: {
         const EnrollmentResult result =
@@ -109,7 +109,10 @@ struct DeviceHarness {
           return response;
         }
         padNonce(pendingDeviceNonceHex, pendingDeviceNonceBin);
-        OwnerEnrollmentFrames::encodeChallenge(response, sizeof(response), pendingDeviceNonceHex);
+        char devicePubHex[65];
+        toHex(deviceKeys.publicKey, sizeof(deviceKeys.publicKey), devicePubHex);
+        OwnerEnrollmentFrames::encodeChallenge(response, sizeof(response),
+                                               pendingDeviceNonceHex, devicePubHex);
         return response;
       }
       case EnrollmentVerb::AUTH: {
@@ -168,7 +171,9 @@ struct DeviceHarness {
 
 static std::string challengeNonce(const std::string& response) {
   assert(response.rfind("CHALLENGE ", 0) == 0);
-  return response.substr(10);
+  const std::string rest = response.substr(10);
+  const std::size_t space = rest.find(' ');
+  return space == std::string::npos ? rest : rest.substr(0, space);
 }
 
 static std::string clientAuthLine(TestOnlySessionCrypto& crypto, const SessionKeyPair& ownerKeys,
@@ -226,7 +231,17 @@ int main() {
   assert(!device.privilegedAllowed(PrivilegeClass::HARDWARE_WRITE));
 
   // ---- BEGIN issues a challenge; correct proof authenticates ---------------
-  std::string deviceNonceHex = challengeNonce(device.handle("BEGIN 00112233445566778899aabbccddeeff"));
+  const std::string challengeReply =
+      device.handle("BEGIN 00112233445566778899aabbccddeeff");
+  std::string deviceNonceHex = challengeNonce(challengeReply);
+  {
+    // The challenge carries the board's X25519 public key so a client can
+    // derive the shared secret without any extra channel.
+    char devicePubHex[65];
+    toHex(device.deviceKeys.publicKey, sizeof(device.deviceKeys.publicKey), devicePubHex);
+    assert(challengeReply.size() == 10 + deviceNonceHex.size() + 1 + 64);
+    assert(challengeReply.substr(challengeReply.size() - 64) == devicePubHex);
+  }
   assert(device.handle(clientAuthLine(crypto, ownerKeys, device.deviceKeys, clientNonceHex,
                                       deviceNonceHex.c_str(), 1)
                            .c_str()) == "OK");

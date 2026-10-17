@@ -35,6 +35,7 @@ class OwnerEnrollmentSession final {
  public:
   static constexpr size_t kNonceBytes = SessionKeySchedule::kNonceBytes;
   static constexpr size_t kNonceHexLength = kNonceBytes * 2;
+  static constexpr size_t kPubKeyHexLength = kSessionPublicKeyBytes * 2;
   static constexpr size_t kOwnerIdMax = OwnerEnrollment::kOwnerIdMax;
 
   OwnerEnrollmentSession(SessionCrypto& crypto, OwnerEnrollmentStore& store)
@@ -97,6 +98,11 @@ class OwnerEnrollmentSession final {
     if (!crypto_.randomBytes(raw, sizeof(raw))) return false;
     toHex(raw, sizeof(raw), out);
     return true;
+  }
+
+  /** The board's own X25519 public key as hex; sent in the CHALLENGE reply. */
+  void devicePublicKeyHex(char out[kPubKeyHexLength + 1]) const {
+    toHex(deviceKeys_.publicKey, kSessionPublicKeyBytes, out);
   }
 
   void tick(uint32_t nowMs) {
@@ -186,7 +192,10 @@ class OwnerEnrollmentSession final {
     }
     std::memcpy(deviceNonceHex_, deviceNonceHex, sizeof(deviceNonceHex_));
     fromHex(deviceNonceHex, kNonceBytes, deviceNonceBin_);
-    if (!OwnerEnrollmentFrames::encodeChallenge(replyOut, capacity, deviceNonceHex)) {
+    char publicKeyHex[kPubKeyHexLength + 1];
+    devicePublicKeyHex(publicKeyHex);
+    if (!OwnerEnrollmentFrames::encodeChallenge(replyOut, capacity, deviceNonceHex,
+                                                publicKeyHex)) {
       return writeErr(replyOut, capacity, "reply_too_long");
     }
     return true;

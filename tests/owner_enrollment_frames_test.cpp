@@ -69,8 +69,16 @@ int main() {
   assert(frame.verb == EnrollmentVerb::RESET);
 
   // Board verbs are recognised for round-trip.
-  assert(OwnerEnrollmentFrames::parse("CHALLENGE 00112233445566778899aabbccddeeff", frame));
+  static const char* kDevicePub = "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100";
+  assert(OwnerEnrollmentFrames::parse(
+      "CHALLENGE 00112233445566778899aabbccddeeff "
+      "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100",
+      frame));
   assert(frame.verb == EnrollmentVerb::CHALLENGE);
+  assert(std::string(frame.deviceNonce) == "00112233445566778899aabbccddeeff");
+  assert(std::string(frame.pubKeyHex) == kDevicePub);
+  // A challenge without the device public key is now malformed.
+  assert(!OwnerEnrollmentFrames::parse("CHALLENGE 00112233445566778899aabbccddeeff", frame));
   assert(OwnerEnrollmentFrames::parse("OK", frame));
   assert(frame.verb == EnrollmentVerb::OK);
   assert(OwnerEnrollmentFrames::parse("ERR bad_code", frame));
@@ -85,12 +93,16 @@ int main() {
   assert(!OwnerEnrollmentFrames::parse("   ", frame));
 
   // Encoders write bounded, canonical responses.
-  char challengeBuffer[32];
-  const size_t challengeLen =
-      OwnerEnrollmentFrames::encodeChallenge(challengeBuffer, sizeof(challengeBuffer), "00112233");
-  assert(challengeLen == std::string("CHALLENGE 00112233").size());
-  assert(std::string(challengeBuffer) == "CHALLENGE 00112233");
-  assert(OwnerEnrollmentFrames::encodeChallenge(nullptr, 0, "x") == 0);
+  char challengeBuffer[128];
+  const size_t challengeLen = OwnerEnrollmentFrames::encodeChallenge(
+      challengeBuffer, sizeof(challengeBuffer), "00112233", kDevicePub);
+  assert(challengeLen == std::string(challengeBuffer).size());
+  assert(std::string(challengeBuffer) == std::string("CHALLENGE 00112233 ") + kDevicePub);
+  // A too-small buffer fails closed: empty output, zero length.
+  char tiny[16];
+  assert(OwnerEnrollmentFrames::encodeChallenge(tiny, sizeof(tiny), "00112233", kDevicePub) == 0);
+  assert(tiny[0] == '\0');
+  assert(OwnerEnrollmentFrames::encodeChallenge(nullptr, 0, "x", "y") == 0);
   assert(OwnerEnrollmentFrames::encodeErr(nullptr, 0, "x") == 0);
 
   char okBuffer[8];

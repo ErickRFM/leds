@@ -13,13 +13,17 @@ namespace esp32core {
  *
  *   client -> board   PAIR <code> <ownerId> <pubKeyHex>
  *   client -> board   BEGIN <clientNonce>
- *   board  -> client  CHALLENGE <deviceNonce>
+ *   board  -> client  CHALLENGE <deviceNonce> <devicePubKeyHex>
  *   client -> board   AUTH <clientNonce> <counter> <proofHex>
  *   board  -> client  OK
  *   board  -> client  ERR <reason>
  *   client -> board   REVOKE
  *   client -> board   RECOVER <code>
  *   client -> board   RESET <code>
+ *
+ * CHALLENGE carries the board X25519 public key so the client can run ECDH with
+ * its own owner private key; without it no client could ever derive the session
+ * proof. The key is bound to the fresh device nonce and proven by the AUTH proof.
  */
 enum class EnrollmentVerb : uint8_t {
   NONE = 0,
@@ -106,9 +110,10 @@ class OwnerEnrollmentFrames final {
     // Board-originated verbs are recognised so the parser round-trips, but a
     // client must never be able to inject them as requests.
     if (equals(tokens[0], "CHALLENGE")) {
-      if (count != 2) return false;
+      if (count != 3) return false;
       out.verb = EnrollmentVerb::CHALLENGE;
-      return copyBounded(out.deviceNonce, tokens[1], 32);
+      if (!copyBounded(out.deviceNonce, tokens[1], 32)) return false;
+      return copyBounded(out.pubKeyHex, tokens[2], 64);
     }
     if (equals(tokens[0], "OK")) {
       if (count != 1) return false;
@@ -123,8 +128,17 @@ class OwnerEnrollmentFrames final {
     return false;
   }
 
-  static size_t encodeChallenge(char* out, size_t cap, const char* deviceNonce) {
-    return format(out, cap, "CHALLENGE %s", deviceNonce ? deviceNonce : "");
+  static size_t encodeChallenge(char* out, size_t cap, const char* deviceNonce,
+                                const char* devicePubKeyHex) {
+    if (!out || cap == 0) return 0;
+    const int written = std::snprintf(out, cap, "CHALLENGE %s %s",
+                                      deviceNonce ? deviceNonce : "",
+                                      devicePubKeyHex ? devicePubKeyHex : "");
+    if (written < 0 || static_cast<size_t>(written) >= cap) {
+      out[0] = '\0';
+      return 0;
+    }
+    return static_cast<size_t>(written);
   }
 
   static size_t encodeOk(char* out, size_t cap) {
