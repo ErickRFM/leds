@@ -16,9 +16,15 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.DeveloperBoard
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
+import com.rgbcontroller.core.components.registry.ComponentCatalog
+import com.rgbcontroller.core.components.status.ComponentStatusFreshness
+import com.rgbcontroller.feature.hardwarelab.ComponentDashboardViewModel
+import com.rgbcontroller.core.components.model.ComponentMeasurement
+import com.rgbcontroller.core.components.status.ComponentDashboardState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -48,6 +54,17 @@ fun DashboardScreen(
     session: CompiLabSession? = null
 ) {
     val connection by bleManager.connectionState.collectAsState()
+    val context = LocalContext.current
+    val moduleVm: ComponentDashboardViewModel = viewModel(
+        factory = remember(session, bleManager) {
+            ComponentDashboardViewModel.factory(context.applicationContext, session, bleManager)
+        }
+    )
+    val moduleState by moduleVm.uiState.collectAsState()
+    LaunchedEffect(Unit) { moduleVm.loadPersisted() }
+    LaunchedEffect(session?.connectionState, session?.transport) {
+        moduleVm.onConnectionChanged()
+    }
     val bleReady = connection == BleConnectionState.Ready
     val wifiReady = session?.let {
         it.transport == LabTransport.WIFI_LAB &&
@@ -119,6 +136,7 @@ fun DashboardScreen(
             }
         }
 
+        HomeActiveModuleCard(moduleState, onLed)
         Text("Accesos rápidos", style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -130,7 +148,7 @@ fun DashboardScreen(
             QuickAction("Hardware", Icons.Default.Memory, onHardware, Modifier.weight(1f))
         }
 
-        Text("Herramientas principales", style = MaterialTheme.typography.titleLarge,
+        Text("Herramientas", style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold)
         CompiModuleCard("Mis módulos", "Biblioteca, componentes y conexiones GPIO",
             Icons.Default.ColorLens, onClick = onLed, modifier = Modifier.testTag("open_led"))
@@ -144,7 +162,9 @@ fun DashboardScreen(
         Card(shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                Text(if (ready) "Dispositivo Bluetooth sincronizado" else "Sin actividad verificada",
+                Text(if (wifiReady) "Sesión Wi-Fi autorizada"
+                    else if (bleReady) "Dispositivo Bluetooth sincronizado"
+                    else "Sin actividad verificada",
                     fontWeight = FontWeight.Medium)
                 Text("La información se confirma desde el ESP32; no se simulan registros.",
                     style = MaterialTheme.typography.bodySmall,
@@ -153,6 +173,110 @@ fun DashboardScreen(
         }
         CompiInlineMessage("Wi-Fi local y las operaciones de hardware requieren un ESP32 compatible. " +
             "El editor no instala firmware automáticamente.")
+    }
+}
+
+
+/**
+ * Condensed Home module summary from the same firmware/last-known contract as
+ * Hardware. The card never uses local draft values as actual sensor readings.
+ */
+@Composable
+private fun HomeActiveModuleCard(
+    state: ComponentDashboardState,
+    onOpenModules: () -> Unit
+) {
+    val live = state.freshness == ComponentStatusFreshness.LIVE &&
+        state.connected && state.authorityError == null
+    val reported = state.authoritative ?: state.persisted
+    val available = reported.orEmpty().filter { it.active }
+    val isEnvironmental = available.any {
+        ComponentCatalog.catalogIdForFirmwareId(it.id) == "dht22"
+    }
+    val isSoil = available.any {
+        ComponentCatalog.catalogIdForFirmwareId(it.id) == "soil_moisture"
+    }
+    val firstId = available.firstOrNull()?.id?.let(ComponentCatalog::catalogIdForFirmwareId)
+    val title = when {
+        isEnvironmental && isSoil -> "Sensor ambiental"
+        firstId != null -> ComponentCatalog.get(firstId)?.name ?: firstId
+        state.desiredConfig.components.isNotEmpty() -> "Módulos por configurar"
+        else -> "Configura tu primer módulo"
+    }
+    val telemetry = state.authoritativeTelemetry ?: state.persistedTelemetry
+    fun reading(type: String): ComponentMeasurement? =
+        telemetry?.let { ComponentTelemetryCodec.find(it, type) }
+            ?.takeIf { it.valid && it.status == "fresh" && it.value.isFinite() }
+
+    Card(
+        onClick = onOpenModules,
+        modifier = Modifier.fillMaxWidth().testTag("home_active_module"),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(22.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Módulo actual", style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                Text("Cambiar", style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Default.ChevronRight, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.DeveloperBoard, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(title, style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold)
+                    Text(when {
+                        live -> "Estado confirmado por el ESP32"
+                        reported != null -> "Última confirmación · no en vivo"
+                        else -> "Borrador local · pendiente de conexión"
+                    }, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            if (isEnvironmental || isSoil) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (isEnvironmental) {
+                        HomeMetric("Temperatura", reading("temperature")?.value, "°C",
+                            Modifier.weight(1f))
+                        HomeMetric("Humedad", reading("humidity")?.value, "%",
+                            Modifier.weight(1f))
+                    }
+                    if (isSoil) {
+                        HomeMetric("Suelo", reading("soil_moisture")?.value, "%",
+                            Modifier.weight(1f))
+                    }
+                }
+                Text(if (live) "Lecturas del firmware"
+                     else "Últimas lecturas confirmadas · no son actuales",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else if (reported == null) {
+                Text("Selecciona un sensor, LED, pantalla o actuador de la biblioteca.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeMetric(label: String, value: Float?, suffix: String, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(value?.let { "%.1f".format(java.util.Locale.ROOT, it) + suffix } ?: "—",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = if (value == null) MaterialTheme.colorScheme.onSurfaceVariant
+                else MaterialTheme.colorScheme.primary)
+        Text(label, style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
