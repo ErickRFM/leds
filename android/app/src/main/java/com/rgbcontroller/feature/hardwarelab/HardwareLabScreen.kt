@@ -946,9 +946,8 @@ private fun TelemetryHistoryCard(state: ComponentDashboardState) {
                 Text("Sin historial local todavía. Nada se simula sin lecturas reales.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                return@Column
-            }
-            val series = history.groupBy { it.componentId to it.measurementType }
+            } else {
+                val series = history.groupBy { it.componentId to it.measurementType }
                 .toSortedMap(compareBy({ it.first }, { it.second }))
             for ((key, samples) in series) {
                 val (componentId, type) = key
@@ -964,6 +963,7 @@ private fun TelemetryHistoryCard(state: ComponentDashboardState) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            } // Non-empty history; no early return from Compose layout.
         }
     }
 }
