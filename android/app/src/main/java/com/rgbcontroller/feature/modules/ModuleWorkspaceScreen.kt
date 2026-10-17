@@ -101,7 +101,10 @@ fun ModuleWorkspaceScreen(
     val currentlyVerified = state.freshness == ComponentStatusFreshness.LIVE &&
         state.authorityError == null && state.connected
     val confirmed = (state.authoritative ?: state.persisted).orEmpty()
-    val names = confirmed.map { ComponentCatalog.catalogIdForFirmwareId(it.id) }
+    // Catalog-only entries mean the driver was compiled, not that a sensor
+    // is physically present. Never auto-create a user's module from them.
+    val names = confirmed.filter { it.active || it.state != "catalog" }
+        .map { ComponentCatalog.catalogIdForFirmwareId(it.id) }
     // A BLE Ready state confirms access to the existing RGB protocol, not
     // general sensor/GPIO firmware leases. Expose only the RGB module in BLE mode.
     val configured = (state.desiredConfig.components.map { it.id } + names +
