@@ -20,7 +20,7 @@ object ComponentCatalog {
             type = ComponentType.SENSOR,
             interfaces = setOf(HardwareInterface.ADC),
             capabilities = setOf("soil_moisture", "analog", "calibrated"),
-            requiredPins = setOf(32, 33, 34, 35, 36, 39),
+            requiredPins = setOf(34), // Default ADC1 signal; other candidates belong to PinAssignmentPolicy.
             description = "Sensor capacitivo de humedad del suelo (ADC1)",
             category = "sensors"
         ),
@@ -46,12 +46,12 @@ object ComponentCatalog {
         ),
         HardwareComponentDescriptor(
             id = "analog_sensor",
-            name = "Sensor Anal�gico",
+            name = "Sensor Analógico",
             type = ComponentType.SENSOR,
             interfaces = setOf(HardwareInterface.ADC),
             capabilities = setOf("analog", "raw"),
             requiredPins = emptySet(),
-            description = "Sensor gen�rico anal�gico ADC1",
+            description = "Sensor genérico anal�gico ADC1",
             category = "sensors"
         ),
         HardwareComponentDescriptor(
@@ -61,17 +61,17 @@ object ComponentCatalog {
             interfaces = setOf(HardwareInterface.DIGITAL, HardwareInterface.GPIO),
             capabilities = setOf("digital", "input"),
             requiredPins = emptySet(),
-            description = "Sensor digital gen�rico",
+            description = "Perfil para entrada digital. Se activa solo con firmware compatible.",
             category = "sensors"
         ),
         HardwareComponentDescriptor(
             id = "actuator_relay",
-            name = "Rel�/Actuador",
+            name = "Relé/Actuador",
             type = ComponentType.ACTUATOR,
             interfaces = setOf(HardwareInterface.GPIO, HardwareInterface.DIGITAL),
             capabilities = setOf("actuator", "control"),
             requiredPins = emptySet(),
-            description = "Actuador digital",
+            description = "Salida digital configurable; requiere controlador/firmware compatible.",
             category = "actuators"
         )
     )
