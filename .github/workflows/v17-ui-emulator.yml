@@ -11,9 +11,13 @@ permissions:
   contents: read
 
 jobs:
-  hardware-scroll-emulator:
+  mobile-ux-emulator:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [30, 35]
     steps:
       - uses: actions/checkout@v4
       - name: Java 17
@@ -30,21 +34,21 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Instrumented Hardware scroll test (real Android 30 emulator)
+      - name: Instrumented module and navigation UX (real Android emulator)
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 30
+          api-level: ${{ matrix.api-level }}
           target: google_apis
           arch: x86_64
           profile: pixel_6
           disable-animations: true
           emulator-boot-timeout: 600
-          script: cd android && gradle connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.rgbcontroller.HardwareDashboardScrollTest --stacktrace
+          script: cd android && gradle connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.rgbcontroller.HardwareDashboardScrollTest,com.rgbcontroller.ModuleWiringRegressionTest,com.rgbcontroller.HomeNavigationTest' --stacktrace
       - name: Upload emulator instrumentation evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: compi-v17-hardware-scroll-emulator-results
+          name: compi-v17-mobile-ux-api${{ matrix.api-level }}-results
           if-no-files-found: ignore
           path: |
             android/app/build/reports/androidTests/
