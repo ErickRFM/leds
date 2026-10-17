@@ -91,6 +91,58 @@ class BoardCompatibilityTest {
     }
 
     @Test
+    fun soilImportNeverReservesAllAdcCandidates() {
+        val report = BoardCompatibilityEngine.evaluate(
+            project(LocalDesiredComponent("soil_moisture", "sensor", listOf(32, 33, 34, 35, 36, 39))),
+            BoardProfiles.ESP32_LEGACY_V1
+        )
+        assertEquals(CompatibilityLevel.REQUIRES_REMAP, report.level)
+        assertEquals(1, report.remapped.single().toPins.size)
+        assertTrue(report.remapped.single().toPins.single() in setOf(32, 33, 34, 35, 36, 39))
+        assertTrue(report.issues.any { it is CompatibilityIssue.SignalMismatch })
+    }
+
+    @Test
+    fun dhtOnFlashBootOrRgbPinIsRemappedToSafeDigitalPin() {
+        for (pin in listOf(0, 6, 10, 12, 25, 26, 27, 34, 35)) {
+            val report = BoardCompatibilityEngine.evaluate(
+                project(LocalDesiredComponent("dht22", "sensor", listOf(pin))),
+                BoardProfiles.ESP32_LEGACY_V1
+            )
+            assertEquals("GPIO $pin", CompatibilityLevel.REQUIRES_REMAP, report.level)
+            assertTrue(report.remapped.single().toPins.single() in
+                setOf(16, 17, 18, 19, 21, 22, 23, 32, 33))
+        }
+    }
+
+    @Test
+    fun rgbImportRequiresThreeDistinctOutputPins() {
+        val report = BoardCompatibilityEngine.evaluate(
+            project(LocalDesiredComponent("led_rgb", "lighting", listOf(27, 27, 26))),
+            BoardProfiles.ESP32_LEGACY_V1
+        )
+        assertEquals(CompatibilityLevel.REQUIRES_REMAP, report.level)
+        val pins = report.remapped.single().toPins
+        assertEquals(3, pins.distinct().size)
+        assertTrue(pins.all { it in setOf(16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33) })
+    }
+
+    @Test
+    fun gpioRemapDoesNotStealPinsFromPriorModules() {
+        val report = BoardCompatibilityEngine.evaluate(
+            project(
+                LocalDesiredComponent("dht22", "sensor", listOf(32)),
+                LocalDesiredComponent("soil_moisture", "sensor", listOf(32)),
+                LocalDesiredComponent("ssd1306_oled", "display", listOf(21, 22))
+            ), BoardProfiles.ESP32_LEGACY_V1
+        )
+        assertEquals(CompatibilityLevel.REQUIRES_REMAP, report.level)
+        val newSoilPin = report.remapped.single().toPins.single()
+        assertTrue(newSoilPin in setOf(33, 34, 35, 36, 39))
+        assertFalse(newSoilPin in setOf(25, 26, 27))
+    }
+
+    @Test
     fun unknownBoardIsReportedAsUnknown() {
         val report = BoardCompatibilityEngine.evaluate(
             project(LocalDesiredComponent("dht22", "sensor", listOf(32))),
