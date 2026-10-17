@@ -119,6 +119,38 @@ fun DashboardScreen(
             }
         }
 
+        Card(
+            onClick = onLed,
+            shape = RoundedCornerShape(22.dp),
+            modifier = Modifier.fillMaxWidth().testTag("home_current_module"),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                Modifier.fillMaxWidth().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Módulo actual", style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    Text("Cambiar", color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.labelLarge)
+                    Icon(Icons.Default.ChevronRight, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary)
+                }
+                Text(when {
+                    bleReady -> "LED RGB · control por Bluetooth disponible"
+                    wifiReady -> "ESP32 autorizado · consulta los módulos confirmados"
+                    else -> "Sin módulo activo confirmado"
+                }, style = MaterialTheme.typography.bodyLarge)
+                Text(if (ready)
+                    "Abre Módulos para consultar lecturas reales y asignaciones GPIO."
+                else
+                    "Conecta tu ESP32 o crea un borrador desde la biblioteca.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+
         Text("Accesos rápidos", style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -144,7 +176,9 @@ fun DashboardScreen(
         Card(shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                Text(if (ready) "Dispositivo Bluetooth sincronizado" else "Sin actividad verificada",
+                Text(if (bleReady) "Enlace Bluetooth confirmado"
+                     else if (wifiReady) "Sesión Wi-Fi de laboratorio autorizada"
+                     else "Sin actividad verificada",
                     fontWeight = FontWeight.Medium)
                 Text("La información se confirma desde el ESP32; no se simulan registros.",
                     style = MaterialTheme.typography.bodySmall,
