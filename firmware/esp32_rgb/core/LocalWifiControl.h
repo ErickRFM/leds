@@ -60,9 +60,8 @@ class LocalWifiControl final {
     applyContext_ = context;
   }
 
-  // Owner key printed over the physical serial console. Shared by the SoftAP
-  // HTTP header check and the BLE owner-authorization challenge. Never logged
-  // or transmitted after provisioning.
+  // Independent LAB HTTP access key, printed only to physical serial.
+  // This is NOT the BLE owner's X25519 enrollment identity or session key.
   String accessKey() const { return accessKey_; }
 
   void begin() {
@@ -673,9 +672,19 @@ class LocalWifiControl final {
     }
     return out;
   }
+  // Compare all key bytes without early mismatch exit. Length is public and
+  // restricted to the fixed 16-hex-character lab credential format.
+  static bool keyMatches(const String& presented, const String& expected) {
+    if (presented.length() != 16 || expected.length() != 16) return false;
+    uint8_t mismatch = 0;
+    for (size_t i = 0; i < 16; ++i) {
+      mismatch |= static_cast<uint8_t>(presented[i] ^ expected[i]);
+    }
+    return mismatch == 0;
+  }
   bool authorized() {
     if (server_.client().localIP() != WiFi.softAPIP() ||
-        server_.header("X-Device-Key") != accessKey_) {
+        !keyMatches(server_.header("X-Device-Key"), accessKey_)) {
       jsonError(403, "forbidden");
       return false;
     }
