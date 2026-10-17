@@ -240,7 +240,7 @@ fun ComponentConfigEditorDialog(
 @Composable
 fun ConfigValidationIssues(components: List<LocalDesiredComponent>) {
     val issues = LabConfigValidation.validateDesired(components)
-    if (issues.isEmpty()) return
+    if (issues.isNotEmpty()) {
     Card(Modifier.fillMaxWidth().testTag("component_config_issues")) {
         Column(Modifier.fillMaxWidth().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -254,4 +254,5 @@ fun ConfigValidationIssues(components: List<LocalDesiredComponent>) {
             }
         }
     }
+    } // Empty lists render no validation card, without exiting the composition.
 }
