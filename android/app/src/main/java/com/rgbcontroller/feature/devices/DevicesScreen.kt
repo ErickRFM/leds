@@ -120,7 +120,7 @@ fun DevicesScreen(
                 onClick = {
                     if (searching) bleManager.stopScan() else {
                         searched = true
-                        bleManager.startScan()
+                        bleManager.startScan(lastMac)
                     }
                 },
                 enabled = !busy && !ready,
