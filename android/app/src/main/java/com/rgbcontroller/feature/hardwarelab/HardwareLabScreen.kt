@@ -32,6 +32,7 @@ import com.rgbcontroller.core.components.telemetry.TelemetryChart
 import com.rgbcontroller.core.components.widgets.TelemetryChartCard
 import com.rgbcontroller.core.components.model.HardwareComponentDescriptor
 import com.rgbcontroller.core.components.registry.ComponentCatalog
+import com.rgbcontroller.core.components.registry.PinAssignmentPolicy
 import com.rgbcontroller.core.components.status.ComponentDashboardState
 import com.rgbcontroller.core.components.status.ComponentStatusFreshness
 import com.rgbcontroller.core.components.status.OledRuntime
@@ -376,10 +377,7 @@ fun HardwareLabScreen(
                                     next += LocalDesiredComponent(
                                         id = desc.id,
                                         type = desc.type.name.lowercase(Locale.getDefault()),
-                                        pins = when (desc.id) {
-                                            "soil_moisture" -> listOf(34) // One ADC1 input.
-                                            else -> desc.requiredPins.sorted()
-                                        }
+                                        pins = PinAssignmentPolicy.profile(desc.id)?.defaults.orEmpty()
                                     )
                                 }
                                 scope.launch { viewModel.setLocalDesired(LocalDesiredConfig(next)) }
