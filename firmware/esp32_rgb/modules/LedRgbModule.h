@@ -23,7 +23,8 @@ class LedRgbModule final : public IModule {
   uint16_t version() const override { return 1; }
 
   bool begin(PinManager& manager) override {
-    if (ready_) return false;
+    if (ready_ || renderInitial_ == nullptr || renderEffect_ == nullptr ||
+        active_ == nullptr) return false;
     for (size_t i = 0; i < 3; ++i) {
       if (!manager.acquire(pins_[i], id(), PinFunction::PwmOutput)) {
         releaseClaims(manager);
@@ -32,7 +33,10 @@ class LedRgbModule final : public IModule {
     }
     for (size_t i = 0; i < 3; ++i) {
       if (!ledcAttach(pins_[i], 5000, 8)) {
-        for (size_t j = 0; j < i; ++j) ledcDetach(pins_[j]);
+        for (size_t j = 0; j < i; ++j) {
+          ledcDetach(pins_[j]);
+          pinMode(pins_[j], INPUT);  // Never leave a partially attached PWM driven.
+        }
         releaseClaims(manager);
         return false;
       }
