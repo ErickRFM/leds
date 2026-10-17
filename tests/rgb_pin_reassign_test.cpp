@@ -12,6 +12,7 @@ inline bool ledcAttach(int pin, int frequency, int resolution) {
   assert(frequency == 5000 && resolution == 8);
   if (pin == failAttachPin) return false;
   attached[pin] = true;
+  pinMode(pin, OUTPUT);  // Real PWM attach drives the configured pad.
   return true;
 }
 inline bool ledcDetach(int pin) { attached[pin] = false; return true; }
@@ -54,6 +55,7 @@ int main() {
   assert(!rgb.begin(manager));
   assert(manager.leasedCount() == 0);
   assert(!attached[18] && !attached[19] && !attached[23]);
+  assert(testPinModes[18] == INPUT && testPinModes[19] == INPUT);
   failAttachPin = -1;
   assert(rgb.configurePins(27, 25, 26));
   assert(rgb.begin(manager));
