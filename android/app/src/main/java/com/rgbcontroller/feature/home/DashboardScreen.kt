@@ -191,39 +191,21 @@ fun DashboardScreen(
         Text("Accesos rápidos", style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            QuickAction("Módulos", Icons.Default.ColorLens, onLed, Modifier.weight(1f))
-            QuickAction("Conectar", Icons.Default.Devices, onDevices, Modifier.weight(1f))
+            QuickAction("Módulos", Icons.Default.ColorLens, onLed,
+                Modifier.weight(1f).testTag("open_led"))
+            QuickAction("GPIO", Icons.Default.Memory, onHardware,
+                Modifier.weight(1f).testTag("open_hardware"))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            QuickAction("Studio", Icons.Default.Code, onCode, Modifier.weight(1f))
-            QuickAction("Hardware", Icons.Default.Memory, onHardware, Modifier.weight(1f))
+            QuickAction("Sensores", Icons.Default.DeveloperBoard, onLed, Modifier.weight(1f))
+            QuickAction("Studio", Icons.Default.Code, onCode,
+                Modifier.weight(1f).testTag("open_code"))
         }
-
-        Text("Herramientas", style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold)
-        CompiModuleCard("Mis módulos", "Biblioteca, componentes y conexiones GPIO",
-            Icons.Default.ColorLens, onClick = onLed, modifier = Modifier.testTag("open_led"))
-        CompiModuleCard("Compi Studio", "Editar código, importar y ejecutar scripts compatibles",
-            Icons.Default.Code, onClick = onCode, modifier = Modifier.testTag("open_code"))
-        CompiModuleCard("Hardware Lab", "GPIO, sensores, Wi-Fi y diagnóstico",
-            Icons.Default.Memory, onClick = onHardware, modifier = Modifier.testTag("open_hardware"))
-
-        Text("Actividad reciente", style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold)
-        Card(shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                Text(if (wifiReady) "Sesión Wi-Fi autorizada"
-                    else if (bleReady) "Dispositivo Bluetooth sincronizado"
-                    else "Sin actividad verificada",
-                    fontWeight = FontWeight.Medium)
-                Text("La información se confirma desde el ESP32; no se simulan registros.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+        if (!ready) {
+            Text("Conecta tu ESP32 para consultar sensores y controlar hardware.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall)
         }
-        CompiInlineMessage("Wi-Fi local y las operaciones de hardware requieren un ESP32 compatible. " +
-            "El editor no instala firmware automáticamente.")
     }
 }
 
