@@ -51,9 +51,9 @@ import kotlinx.coroutines.CancellationException
 import java.util.UUID
 
 /**
- * Component-driven workspace. Firmware reports are read-only; edited wiring is
- * always a draft until a future supported firmware apply/ack protocol exists.
- * Never report BLE RGB readiness as general GPIO/sensor authorization.
+ * Component-driven workspace with strict separation of local drafts,
+ * live firmware state and authorized, readback-confirmed hot wiring changes.
+ * BLE readiness never authorizes GPIO or environmental-sensor writes.
  */
 @Composable
 fun ModuleWorkspaceScreen(
@@ -194,8 +194,8 @@ fun ModuleWorkspaceScreen(
                         }
                     }
                     item {
-                        Text("Las conexiones editadas son locales hasta que el firmware permita " +
-                            "aplicarlas y confirme el nuevo estado.",
+                        Text("Guardar crea un borrador. Reasignar físicamente requiere " +
+                            "firmware compatible, autorización y lectura de confirmación.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -255,16 +255,22 @@ fun ModuleWorkspaceScreen(
                 }
             }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = !showLibrary, onClick = { showLibrary = false },
-                        label = { Text("Mis módulos") },
-                        modifier = Modifier.testTag("modules_tab_mine")
+                SingleChoiceSegmentedButtonRow(
+                    modifier = Modifier.fillMaxWidth().testTag("modules_section_tabs")
+                ) {
+                    SegmentedButton(
+                        selected = !showLibrary,
+                        onClick = { showLibrary = false },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                        modifier = Modifier.testTag("modules_tab_mine"),
+                        label = { Text("Mis módulos") }
                     )
-                    FilterChip(
-                        selected = showLibrary, onClick = { showLibrary = true },
-                        label = { Text("Biblioteca") },
-                        modifier = Modifier.testTag("modules_tab_catalog")
+                    SegmentedButton(
+                        selected = showLibrary,
+                        onClick = { showLibrary = true },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                        modifier = Modifier.testTag("modules_tab_catalog"),
+                        label = { Text("Biblioteca") }
                     )
                 }
             }
@@ -330,17 +336,28 @@ fun ModuleWorkspaceScreen(
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(descriptor?.name ?: id, fontWeight = FontWeight.SemiBold,
                                     style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    when {
-                                        physical != null && currentlyVerified ->
-                                            "Firmware: ${physical.state} · ${if (physical.active) "activo" else "no activo"}"
-                                        physical != null -> "Última confirmación del firmware · no en vivo"
-                                        bleReady && id == "led_rgb" -> "Control BLE RGB disponible · GPIO sin confirmar"
-                                        else -> "Borrador local · sin confirmar"
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                val stateLabel = when {
+                                    physical != null && currentlyVerified && physical.active ->
+                                        "Firmware confirmado · activo"
+                                    physical != null && currentlyVerified ->
+                                        "Firmware confirmado · inactivo"
+                                    physical != null -> "Último confirmado · no en vivo"
+                                    bleReady && id == "led_rgb" ->
+                                        "Control BLE listo · GPIO sin confirmar"
+                                    else -> "Borrador local · sin confirmar"
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = if (physical?.active == true && currentlyVerified)
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    else MaterialTheme.colorScheme.surfaceVariant
+                                ) {
+                                    Text(stateLabel, style = MaterialTheme.typography.labelSmall,
+                                        color = if (physical?.active == true && currentlyVerified)
+                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
+                                }
                                 Text(
                                     "GPIO ${(physical?.pins ?: local?.pins).orEmpty().joinToString().ifBlank { "sin asignar" }}",
                                     style = MaterialTheme.typography.labelMedium
