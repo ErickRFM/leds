@@ -16,6 +16,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.util.UUID
 
 /** Debug-only client for WPA2 SoftAP at 192.168.4.1; no WAN and no TLS. */
 class LocalLabClient(private val context: Context) {
@@ -119,15 +120,21 @@ class LocalLabClient(private val context: Context) {
             original + List(2 - count) { 0 }
         } else listOf(0, 0)
         val next = target + List(2 - count) { 0 }
+        // One nonce per user transaction. The firmware caches successful
+        // receipts to avoid applying duplicate POST requests twice.
+        val requestId = UUID.randomUUID().toString().replace("-", "").take(16)
         val response = request("POST", "/v2/components/apply", key, mapOf(
             "id" to id,
             "from1" to expected[0].toString(),
             "from2" to expected[1].toString(),
             "to1" to next[0].toString(),
-            "to2" to next[1].toString()
+            "to2" to next[1].toString(),
+            "requestId" to requestId
         ))
-        check(response.optString("status") == "APPLIED") {
-            "El ESP32 no confirmó la aplicación de pines."
+        check(response.optString("status") == "APPLIED" &&
+            response.optBoolean("runtimeOnly") &&
+            response.optString("requestId") == requestId) {
+            "El ESP32 no confirmó la transacción GPIO (firma de solicitud inválida)."
         }
         val after = componentStatus(key)
         val verified = after.optJSONArray("components")?.let(::moduleFor)
