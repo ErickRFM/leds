@@ -468,7 +468,9 @@ void renderEffect(uint32_t now) {
     writeLed(rgb.r, rgb.g, rgb.b, adjusted);
     return;
   }
-  uint32_t pos = ((elapsed * 4U) / rgb.speed) % 768U;
+  // Promote before multiplying so long-running animations do not overflow at ~12.4 days.
+  const uint32_t pos = static_cast<uint32_t>(
+      ((static_cast<uint64_t>(elapsed) * 4ULL) / rgb.speed) % 768ULL);
   uint8_t r = 0, g = 0, b = 0;
   if (pos < 256U) { r = 255 - pos; g = pos; }
   else if (pos < 512U) { g = 511 - pos; b = pos - 256; }
