@@ -30,6 +30,7 @@ import com.rgbcontroller.core.components.model.ComponentMeasurement
 import com.rgbcontroller.core.components.model.ComponentRuntimeStatus
 import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
 import com.rgbcontroller.core.components.registry.ComponentCatalog
+import com.rgbcontroller.core.components.registry.ModuleGrouping
 import com.rgbcontroller.core.components.registry.PinAssignmentPolicy
 import com.rgbcontroller.core.components.status.ComponentDashboardState
 import com.rgbcontroller.core.components.status.ComponentStatusFreshness
@@ -134,6 +135,7 @@ fun ModuleWorkspaceScreen(
     // general sensor/GPIO firmware leases. Expose only the RGB module in BLE mode.
     val configured = (state.desiredConfig.components.map { it.id } + names +
         (if (bleReady) listOf("led_rgb") else emptyList())).distinct()
+    val visibleModules = ModuleGrouping.visibleModuleIds(configured)
     val runtime = { id: String -> confirmed.firstOrNull {
         ComponentCatalog.catalogIdForFirmwareId(it.id) == id
     } }
@@ -148,15 +150,60 @@ fun ModuleWorkspaceScreen(
                 IconButton(onClick = { openedId = null }, modifier = Modifier.testTag("module_back")) {
                     Icon(Icons.Default.ArrowBack, contentDescription = "Volver a módulos")
                 }
-                Text(ComponentCatalog.get(id)?.name ?: id,
+                Text(if (id == ModuleGrouping.ENVIRONMENTAL) "Sensor ambiental"
+                    else ComponentCatalog.get(id)?.name ?: id,
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.weight(1f))
-                TextButton(
-                    onClick = { editingId = id },
-                    modifier = Modifier.testTag("module_edit_pins")
-                ) { Icon(Icons.Default.Tune, null); Text("GPIO") }
+                if (id != ModuleGrouping.ENVIRONMENTAL) {
+                    TextButton(
+                        onClick = { editingId = id },
+                        modifier = Modifier.testTag("module_edit_pins")
+                    ) { Icon(Icons.Default.Tune, null); Text("GPIO") }
+                }
             }
-            if (id == "led_rgb") {
+            if (id == ModuleGrouping.ENVIRONMENTAL) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().testTag("module_environmental_detail"),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 28.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item {
+                        Text("DHT22 + humedad del suelo. Cada sensor conserva " +
+                            "su estado, sus lecturas y la autoridad de sus GPIO.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    items(ModuleGrouping.environmentalParts, key = { it }) { part ->
+                        val physical = runtime(part)
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(ComponentCatalog.get(part)?.name ?: part,
+                                style = MaterialTheme.typography.titleMedium)
+                            ModuleRuntimeCard(part, physical, currentlyVerified)
+                            val profile = PinAssignmentPolicy.profile(part)
+                            val configuredPins = state.desiredConfig.components
+                                .firstOrNull { it.id == part }?.pins
+                            val shown = physical?.pins?.takeIf {
+                                it.size == profile?.signals?.size
+                            } ?: configuredPins
+                            if (profile != null && shown != null) {
+                                ModuleWiringDiagram(profile, shown,
+                                    firmwareConfirmed = currentlyVerified &&
+                                        physical?.pins == shown)
+                            }
+                            ModuleReadings(part, state)
+                            OutlinedButton(
+                                onClick = { editingId = part },
+                                modifier = Modifier.fillMaxWidth()
+                                    .testTag("module_environmental_config_$part")
+                            ) {
+                                Icon(Icons.Default.Tune, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Configurar ${ComponentCatalog.get(part)?.name ?: part}")
+                            }
+                        }
+                    }
+                }
+            } else if (id == "led_rgb") {
                 // Reuse the *real* V16 BLE/Wi-Fi control path; no fake RGB widget.
                 Box(Modifier.weight(1f)) {
                     LedModuleScreen(bleManager, preferencesRepository, session,
@@ -308,7 +355,7 @@ fun ModuleWorkspaceScreen(
                         }
                     }
                 }
-                if (configured.isEmpty()) {
+                if (visibleModules.isEmpty()) {
                     item {
                         Card(Modifier.fillMaxWidth().testTag("modules_empty")) {
                             Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -322,7 +369,8 @@ fun ModuleWorkspaceScreen(
                         }
                     }
                 }
-                items(configured, key = { "module_$it" }) { id ->
+                items(visibleModules, key = { "module_$it" }) { id ->
+                    val isEnvironmental = id == ModuleGrouping.ENVIRONMENTAL
                     val descriptor = ComponentCatalog.get(id)
                     val physical = runtime(id)
                     val local = state.desiredConfig.components.firstOrNull { it.id == id }
@@ -334,9 +382,24 @@ fun ModuleWorkspaceScreen(
                         Row(Modifier.fillMaxWidth().padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(descriptor?.name ?: id, fontWeight = FontWeight.SemiBold,
+                                Text(if (isEnvironmental) "Sensor Ambiental"
+                                    else descriptor?.name ?: id,
+                                    fontWeight = FontWeight.SemiBold,
                                     style = MaterialTheme.typography.titleMedium)
+                                if (isEnvironmental) {
+                                    Text("DHT22 · Humedad del suelo (ADC1)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                val groupConfirmed = ModuleGrouping.environmentalParts.all { part ->
+                                    runtime(part)?.active == true
+                                }
                                 val stateLabel = when {
+                                    isEnvironmental && currentlyVerified && groupConfirmed ->
+                                        "Sensores confirmados · en vivo"
+                                    isEnvironmental && currentlyVerified ->
+                                        "Estado parcial · revisa cada sensor"
+                                    isEnvironmental -> "Grupo local · sin lecturas simuladas"
                                     physical != null && currentlyVerified && physical.active ->
                                         "Firmware confirmado · activo"
                                     physical != null && currentlyVerified ->
@@ -359,13 +422,22 @@ fun ModuleWorkspaceScreen(
                                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
                                 }
                                 Text(
-                                    "GPIO ${(physical?.pins ?: local?.pins).orEmpty().joinToString().ifBlank { "sin asignar" }}",
+                                    if (isEnvironmental) "GPIO: " + ModuleGrouping.environmentalParts
+                                        .joinToString(" · ") { part ->
+                                            val pins = (runtime(part)?.pins ?: state.desiredConfig.components
+                                                .firstOrNull { it.id == part }?.pins).orEmpty()
+                                            "${part}: ${pins.joinToString().ifBlank { "sin asignar" }}"
+                                        }
+                                    else "GPIO ${(physical?.pins ?: local?.pins).orEmpty()
+                                        .joinToString().ifBlank { "sin asignar" }}",
                                     style = MaterialTheme.typography.labelMedium
                                 )
                             }
-                            IconButton(onClick = { editingId = id },
-                                modifier = Modifier.testTag("module_config_$id")) {
-                                Icon(Icons.Default.Tune, contentDescription = "Editar GPIO de $id")
+                            if (!isEnvironmental) {
+                                IconButton(onClick = { editingId = id },
+                                    modifier = Modifier.testTag("module_config_$id")) {
+                                    Icon(Icons.Default.Tune, contentDescription = "Editar GPIO de $id")
+                                }
                             }
                             Icon(Icons.Default.ChevronRight, contentDescription = null)
                         }
