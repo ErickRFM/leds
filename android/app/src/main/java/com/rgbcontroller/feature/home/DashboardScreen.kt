@@ -93,7 +93,7 @@ fun DashboardScreen(
                     HomeDeviceStats(
                         wifiDbm = diagnostics.optInt("wifiRssi", 0).takeIf { it != 0 },
                         latencyMs = duration.coerceAtLeast(0),
-                        firmware = firmware.optString("firmwareVersion").ifBlank { null },
+                        firmware = firmware.optString("firmwareVersion").takeIf { it.isNotBlank() },
                         freeHeap = diagnostics.optLong("freeHeap", -1).takeIf { it >= 0 }
                     )
                 }
