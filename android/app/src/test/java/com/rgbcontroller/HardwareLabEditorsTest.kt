@@ -132,6 +132,15 @@ class HardwareLabEditorsTest {
         assertFalse(ComponentConfigDraft("led_rgb", "40, 41, 42").validate().isValid)
     }
 
+    @Test fun soilPinSelectionUsesOneAdc1PinAndRejectsMultiple() {
+        val ok = ComponentConfigDraft("soil_moisture", "34").validate()
+        assertTrue(ok.isValid)
+        assertEquals(listOf(34), ok.value!!.pins)
+        assertFalse(ComponentConfigDraft("soil_moisture", "32, 33, 34, 35, 36, 39").validate().isValid)
+        assertFalse(ComponentConfigDraft("soil_moisture", "25").validate().isValid)
+        assertFalse(ComponentConfigDraft("soil_moisture", "").validate().isValid)
+    }
+
     @Test fun configValidationFlagsDuplicatesAndUnknownIds() {
         val issues = LabConfigValidation.validateDesired(
             listOf(
