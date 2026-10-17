@@ -119,7 +119,7 @@ class HomeNavigationTest {
         composeRule.onNodeWithText("Hardware Lab").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.onNodeWithTag("home_settings").performClick()
-        composeRule.onNodeWithText("Ajustes").assertExists()
+        composeRule.onNodeWithTag("settings_screen").assertExists()
         composeRule.onNodeWithTag("nav_back").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
