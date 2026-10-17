@@ -57,6 +57,10 @@ class BleManager(private val context: Context) {
     private val _discoveredDevices = MutableStateFlow<List<BluetoothDevice>>(emptyList())
     val discoveredDevices: StateFlow<List<BluetoothDevice>> = _discoveredDevices.asStateFlow()
 
+    private val _scanStatistics = MutableStateFlow(BleScanStatistics())
+    val scanStatistics: StateFlow<BleScanStatistics> = _scanStatistics.asStateFlow()
+    private var rememberedAddress: String? = null
+
     private val _deviceState = MutableStateFlow("Sin estado del ESP32")
     val deviceState: StateFlow<String> = _deviceState.asStateFlow()
 
@@ -177,33 +181,50 @@ class BleManager(private val context: Context) {
         }
     }
 
+    private fun acceptAdvertisement(result: ScanResult) {
+        if (!scanning) return
+        val device = result.device
+        val name = result.scanRecord?.deviceName
+        val cachedName = try { device.name } catch (_: SecurityException) { null }
+        val hasService = result.scanRecord?.serviceUuids
+            ?.any { it.uuid == SERVICE_UUID } == true
+        val address = try { device.address } catch (_: SecurityException) { null }
+        val candidate = BleDiscoveryPolicy.isCandidate(
+            name, cachedName, hasService, address, rememberedAddress)
+        _scanStatistics.value = _scanStatistics.value.copy(
+            advertisements = _scanStatistics.value.advertisements + 1)
+        if (!candidate || address == null) return
+        if (_discoveredDevices.value.none { it.address == address }) {
+            _discoveredDevices.value = _discoveredDevices.value + device
+            _scanStatistics.value = _scanStatistics.value.copy(
+                compatibleDevices = _discoveredDevices.value.size)
+        }
+    }
+
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
-            if (!scanning) return
-            // Some ESP32 advertisements omit the service UUID in initial frames.
-            // Discovery alone never authorizes commands; GATT validates the service.
-            val advertisedService = result.scanRecord?.serviceUuids
-                ?.any { it.uuid == SERVICE_UUID } == true
-            val advertisedName = result.scanRecord?.deviceName
-            val device = result.device
-            val legacyName = try { device.name } catch (_: SecurityException) { null }
-            if (!advertisedService && advertisedName != "RGB-ESP32" &&
-                legacyName != "RGB-ESP32") return
-            if (_discoveredDevices.value.none { it.address == device.address }) {
-                _discoveredDevices.value = _discoveredDevices.value + device
-            }
+            acceptAdvertisement(result)
+        }
+
+        override fun onBatchScanResults(results: MutableList<ScanResult>) {
+            results.forEach(::acceptAdvertisement)
         }
 
         override fun onScanFailed(errorCode: Int) {
             if (!scanning) return
             scanning = false
             handler.removeCallbacks(scanTimeout)
-            _connectionState.value = BleConnectionState.Error("Error de escaneo: $errorCode")
+            _scanStatistics.value = _scanStatistics.value.copy(
+                completed = true, failureCode = errorCode)
+            _connectionState.value = BleConnectionState.Error(
+                "Escaneo BLE falló ($errorCode). Reinicia Bluetooth y vuelve a buscar.")
         }
     }
 
-    fun startScan() {
+    fun startScan(knownAddress: String? = null) {
         if (scanning) return
+        rememberedAddress = knownAddress?.trim()?.takeIf { it.isNotEmpty() }
+        _scanStatistics.value = BleScanStatistics()
         if (!hasPermissions()) {
             _connectionState.value = BleConnectionState.Error("Concede permisos Bluetooth/ubicación en Ajustes")
             return
@@ -239,10 +260,16 @@ class BleManager(private val context: Context) {
             handler.postDelayed(scanTimeout, 10000)
         } catch (e: SecurityException) {
             scanning = false
+            _scanStatistics.value = _scanStatistics.value.copy(completed = true)
             _connectionState.value = BleConnectionState.Error("Permiso Bluetooth denegado")
         } catch (e: IllegalStateException) {
             scanning = false
+            _scanStatistics.value = _scanStatistics.value.copy(completed = true)
             _connectionState.value = BleConnectionState.Error("Bluetooth no disponible")
+        } catch (e: IllegalArgumentException) {
+            scanning = false
+            _scanStatistics.value = _scanStatistics.value.copy(completed = true)
+            _connectionState.value = BleConnectionState.Error("Configuración de escaneo no compatible")
         }
     }
 
@@ -250,6 +277,7 @@ class BleManager(private val context: Context) {
         handler.removeCallbacks(scanTimeout)
         if (!scanning) return
         scanning = false
+        _scanStatistics.value = _scanStatistics.value.copy(completed = true)
         try { adapter?.bluetoothLeScanner?.stopScan(scanCallback) }
         catch (_: SecurityException) { }
         if (_connectionState.value == BleConnectionState.Scanning) {
