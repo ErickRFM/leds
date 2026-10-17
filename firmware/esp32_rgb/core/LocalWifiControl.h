@@ -14,6 +14,7 @@
 #include "CompiCapabilities.h"
 #include "RgbAutomationClock.h"
 #include "ComponentCatalog.h"
+#include "ComponentApplyReplayGuard.h"
 
 namespace esp32core {
 
@@ -199,6 +200,26 @@ class LocalWifiControl final {
           !parseInt("to2", 0, 39, to2)) {
         jsonError(400, "invalid_gpio_assignment"); return;
       }
+      const String requestId = server_.arg("requestId");
+      const ComponentApplyReplayGuard::Request request = {
+          requestId.c_str(), componentId.c_str(),
+          static_cast<uint8_t>(from1), static_cast<uint8_t>(from2),
+          static_cast<uint8_t>(to1), static_cast<uint8_t>(to2)};
+      const auto replayVerdict = replayGuard_.inspect(request);
+      if (replayVerdict == ComponentApplyReplayGuard::Verdict::Invalid) {
+        jsonError(400, "invalid_gpio_request_id"); return;
+      }
+      if (replayVerdict == ComponentApplyReplayGuard::Verdict::ConflictingReuse) {
+        jsonError(409, "gpio_request_id_reused_with_different_assignment"); return;
+      }
+      // A committed duplicate is never applied again. Android still verifies
+      // current pin ownership independently; a later change can invalidate it.
+      if (replayVerdict == ComponentApplyReplayGuard::Verdict::IdenticalRetry) {
+        server_.send(200, "application/json",
+            String("{\"status\":\"APPLIED\",\"runtimeOnly\":true,") +
+            "\"replayed\":true,\"requestId\":\"" + requestId + "\"}");
+        return;
+      }
       const bool oled = componentId == "ssd1306_oled";
       if ((!oled && (from2 != 0 || to2 != 0)) ||
           (oled && (from1 == from2 || to1 == to2)) ||
@@ -211,10 +232,15 @@ class LocalWifiControl final {
                   static_cast<uint8_t>(to2), applyContext_)) {
         jsonError(409, "component_apply_rejected_or_rolled_back"); return;
       }
-      // The Android client must GET /v2/components/status and check every pin
-      // before claiming success. This ACK is NOT a physical wire test.
+      // Cache success only; a rejected request can be retried with the same ID.
+      if (!replayGuard_.commit(request)) {
+        jsonError(500, "gpio_transaction_cache_error"); return;
+      }
+      // The Android client must GET /v2/components/status and verify leases.
+      // This receipt does not prove physical wiring or successful sensor reads.
       server_.send(200, "application/json",
-          "{\"status\":\"APPLIED\",\"runtimeOnly\":true}");
+          String("{\"status\":\"APPLIED\",\"runtimeOnly\":true,") +
+          "\"replayed\":false,\"requestId\":\"" + requestId + "\"}");
     });
 
     server_.on("/v2/firmware", HTTP_GET, [this]() {
@@ -590,6 +616,7 @@ class LocalWifiControl final {
   void* statusContext_ = nullptr;
   ComponentApply apply_ = nullptr;
   void* applyContext_ = nullptr;
+  ComponentApplyReplayGuard replayGuard_;
   Preferences prefs_;
   WebServer server_{80};
   ExperimentRuntime experiment_;
