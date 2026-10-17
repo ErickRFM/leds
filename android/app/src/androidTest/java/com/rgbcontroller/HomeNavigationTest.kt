@@ -4,6 +4,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.assertTextContains
@@ -68,9 +70,11 @@ class HomeNavigationTest {
 
     @Test
     fun hardwareSectionsAreReachableWithoutADevice() {
-        composeRule.onNodeWithTag("open_hardware").performClick()
-        composeRule.onNodeWithText("Hardware Lab").assertExists()
-
+        composeRule.onNodeWithTag("open_hardware").performScrollTo().performClick()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithTag("hardware_tab_sensors")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
         composeRule.onNodeWithTag("hardware_tab_sensors").performClick()
         composeRule.onNodeWithTag("component_telemetry_dht22").assertExists()
 
@@ -160,7 +164,7 @@ class HomeNavigationTest {
         composeRule.onNodeWithTag("nav_back").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
 
-        composeRule.onNodeWithTag("open_hardware").performClick()
+        composeRule.onNodeWithTag("open_hardware").performScrollTo().performClick()
         composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
     }
