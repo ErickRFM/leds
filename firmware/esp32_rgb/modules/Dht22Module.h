@@ -87,6 +87,13 @@ class Dht22Module final : public IModule {
     temperature_ = {MeasurementType::Temperature, MeasurementStatus::Absent, false, 0.0f, "C", 0};
   }
 
+  // Reconfigure only while stopped; runtime apply owns stop/begin/rollback.
+  bool configurePin(uint8_t next) {
+    if (ready_ || !PinManager::outputCapable(next) ||
+        PinManager::reservedForRgb(next)) return false;
+    pin_ = next;
+    return true;
+  }
   bool ready() const { return ready_; }
   uint8_t pin() const { return pin_; }
   uint16_t consecutiveFailures() const { return consecutiveFailures_; }
@@ -103,7 +110,7 @@ class Dht22Module final : public IModule {
   static constexpr float kMaxTemperature = 85.0f;
 
  private:
-  const uint8_t pin_;
+  uint8_t pin_;
   const ReadFn read_;
   void* const context_;
   const uint32_t minIntervalMs_;
