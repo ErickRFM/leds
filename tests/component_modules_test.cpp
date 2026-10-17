@@ -119,12 +119,21 @@ int main() {
     assert(dht.pin() == 18);
     assert(dht.begin(pins));
     assert(pins.belongsTo(18, dht.id()));
+    assert(soil.setCalibration(3850, 950));
+    assert(soil.calibrated());
     soil.stop(pins);
     assert(!soil.configurePin(25));
     assert(!soil.configurePin(19)); // no ADC1 on GPIO19
-    assert(soil.configurePin(35));
+    assert(soil.configurePin(34));  // same physical source preserves calibration
+    assert(soil.calibrated());
+    assert(soil.configurePin(35));  // new probe requires new dry/wet reference
+    assert(!soil.calibrated());
+    assert(soil.moistureReading().status == MeasurementStatus::NotCalibrated);
+    assert(!soil.moistureReading().valid);
     assert(soil.begin(pins));
     assert(pins.belongsTo(35, soil.id()));
+    soil.applySample(2500, 1000);
+    assert(!soil.moistureReading().valid); // never show a stale percentage
     display.stop(pins);
     assert(!display.configurePins(19, 19));
     assert(!display.configurePins(25, 23));
