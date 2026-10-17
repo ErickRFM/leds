@@ -45,7 +45,10 @@ fun ConnectionCenterScreen(
     val debug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     val client = remember(context) { LocalLabClient(context.applicationContext) }
     val scope = rememberCoroutineScope()
-    var tab by rememberSaveable { mutableStateOf(ConnectTab.BLUETOOTH) }
+    var tab by rememberSaveable {
+        mutableStateOf(if (session.transport == LabTransport.WIFI_LAB) ConnectTab.WIFI
+        else ConnectTab.BLUETOOTH)
+    }
     var busy by remember { mutableStateOf(false) }
     var connectionError by remember { mutableStateOf<String?>(null) }
 
