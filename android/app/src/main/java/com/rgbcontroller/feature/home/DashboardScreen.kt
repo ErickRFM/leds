@@ -29,6 +29,9 @@ import com.rgbcontroller.core.ble.BleConnectionState
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.ui.CompiModuleCard
 import com.rgbcontroller.core.ui.CompiInlineMessage
+import com.rgbcontroller.core.wifi.CompiLabSession
+import com.rgbcontroller.core.wifi.LabConnectionState
+import com.rgbcontroller.core.wifi.LabTransport
 
 /**
  * Compi V9 home: the visual reference is the layout contract, but device states
@@ -41,10 +44,14 @@ fun DashboardScreen(
     onCode: () -> Unit,
     onDevices: () -> Unit,
     onHardware: () -> Unit,
-    onSettings: () -> Unit = {}
+    onSettings: () -> Unit = {},
+    session: CompiLabSession? = null
 ) {
     val connection by bleManager.connectionState.collectAsState()
-    val ready = connection == BleConnectionState.Ready
+    val bleReady = connection == BleConnectionState.Ready
+    val wifiReady = session?.transport == LabTransport.WIFI_LAB &&
+        session.connectionState == LabConnectionState.AUTHORIZED && session.wifiReady
+    val ready = bleReady || wifiReady
     val status = when (connection) {
         BleConnectionState.Ready -> "ESP32 listo"
         BleConnectionState.Scanning -> "Buscando ESP32"
@@ -87,7 +94,8 @@ fun DashboardScreen(
                     Icon(Icons.Default.CheckCircle, contentDescription = null,
                         tint = if (ready) Color(0xFF27D987) else MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.width(12.dp))
-                    Text(status, style = MaterialTheme.typography.headlineSmall,
+                    Text(if (wifiReady) "ESP32 Wi-Fi autorizado" else status,
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     Icon(Icons.Default.ChevronRight, contentDescription = null)
                 }
@@ -95,28 +103,34 @@ fun DashboardScreen(
                     Icon(Icons.Default.Bluetooth, contentDescription = null, tint = Color(0xFF57A4FF))
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Bluetooth", fontWeight = FontWeight.SemiBold)
-                        Text(subtitle, style = MaterialTheme.typography.bodySmall,
+                        Text(if (wifiReady) "Wi-Fi laboratorio" else "Bluetooth", fontWeight = FontWeight.SemiBold)
+                        Text(if (wifiReady) "Sesión local autorizada" else subtitle,
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
-                Text("Wi-Fi de laboratorio: consulta su estado desde Hardware",
+                Text(if (wifiReady) "Wi-Fi: enlace autorizado, pendiente de lecturas de módulos"
+                    else "Conexiones Wi-Fi: consulta el estado desde Hardware",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            QuickAction("LED RGB", Icons.Default.ColorLens, onLed, Modifier.weight(1f))
+        Text("Accesos rápidos", style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            QuickAction("Módulos", Icons.Default.ColorLens, onLed, Modifier.weight(1f))
+            QuickAction("Conectar", Icons.Default.Devices, onDevices, Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             QuickAction("Studio", Icons.Default.Code, onCode, Modifier.weight(1f))
             QuickAction("Hardware", Icons.Default.Memory, onHardware, Modifier.weight(1f))
-            QuickAction("Equipos", Icons.Default.Devices, onDevices, Modifier.weight(1f))
         }
 
         Text("Herramientas principales", style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold)
-        CompiModuleCard("LED RGB", "Color, brillo, favoritos y efectos",
+        CompiModuleCard("Mis módulos", "Biblioteca, componentes y conexiones GPIO",
             Icons.Default.ColorLens, onClick = onLed, modifier = Modifier.testTag("open_led"))
         CompiModuleCard("Compi Studio", "Editar código, importar y ejecutar scripts compatibles",
             Icons.Default.Code, onClick = onCode, modifier = Modifier.testTag("open_code"))
@@ -130,7 +144,7 @@ fun DashboardScreen(
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                 Text(if (ready) "Dispositivo Bluetooth sincronizado" else "Sin actividad verificada",
                     fontWeight = FontWeight.Medium)
-                Text("Los eventos de hardware se mostrarán cuando sean confirmados; no se simulan registros.",
+                Text("La información se confirma desde el ESP32; no se simulan registros.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
