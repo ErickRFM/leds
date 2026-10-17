@@ -41,10 +41,14 @@ import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.wifi.CompiLabSession
 import com.rgbcontroller.core.wifi.LabConnectionState
 import com.rgbcontroller.core.wifi.LabTransport
+import com.rgbcontroller.core.wifi.LocalLabClient
+import com.rgbcontroller.core.wifi.ComponentWiringProtocol
 import com.rgbcontroller.feature.hardwarelab.ComponentDashboardViewModel
 import com.rgbcontroller.feature.led.LedModuleScreen
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
+import java.util.UUID
 
 /**
  * Component-driven workspace. Firmware reports are read-only; edited wiring is
@@ -74,6 +78,10 @@ fun ModuleWorkspaceScreen(
     var showLibrary by rememberSaveable { mutableStateOf(false) }
     var openedId by rememberSaveable { mutableStateOf<String?>(null) }
     var editingId by remember { mutableStateOf<String?>(null) }
+    val labClient = remember(context) { LocalLabClient(context.applicationContext) }
+    var liveWiringIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var applyBusy by remember { mutableStateOf(false) }
+    var applyFeedback by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         vm.loadPersisted()
@@ -89,6 +97,31 @@ fun ModuleWorkspaceScreen(
             while (true) {
                 delay(7_500L)
                 vm.refresh()
+            }
+        }
+    }
+
+    // Firmware capabilities, not catalog metadata, authorize hot reconfiguration.
+    LaunchedEffect(wifiAuthorized, session.revision) {
+        liveWiringIds = emptySet()
+        if (wifiAuthorized) {
+            try {
+                val revision = session.revision
+                val key = session.key
+                val advertised = session.serialized {
+                    if (!wifiAuthorized || session.revision != revision) null
+                    else labClient.componentWiringCapabilities(key)
+                }
+                if (advertised != null && wifiAuthorized && session.revision == revision) {
+                    liveWiringIds = ComponentWiringProtocol.mutableComponents.filterTo(mutableSetOf()) {
+                        ComponentWiringProtocol.supported(advertised, it)
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // Old firmware has read-only status; do not enable hardware writes.
+                liveWiringIds = emptySet()
             }
         }
     }
@@ -338,12 +371,55 @@ fun ModuleWorkspaceScreen(
         val effectiveDraft = draft ?: current?.let {
             LocalDesiredComponent(id, it.type, it.pins)
         }
+        val canRewire = wifiAuthorized && currentlyVerified &&
+            id in liveWiringIds && current?.active == true && current.pins.size == 1
         ModulePinWizard(
             componentId = id,
             initial = effectiveDraft,
             otherLocal = state.desiredConfig.components,
             reported = state.authoritative.orEmpty(),
-            onDismiss = { editingId = null },
+            firmwarePin = current?.pins?.singleOrNull(),
+            canApplyFirmware = canRewire,
+            applyBusy = applyBusy,
+            applyFeedback = applyFeedback,
+            onApplyFirmware = { pins ->
+                val targetPin = pins.single()
+                val previous = current!!.pins.single()
+                val requestId = UUID.randomUUID().toString().replace("-", "").take(16)
+                applyBusy = true
+                applyFeedback = null
+                scope.launch {
+                    try {
+                        val revision = session.revision
+                        val key = session.key
+                        session.serialized {
+                            check(wifiAuthorized && session.revision == revision) {
+                                "La sesión de control cambió. Reconecta el ESP32."
+                            }
+                            labClient.applyComponentWiringConfirmed(
+                                key, id, previous, targetPin, requestId
+                            )
+                        }
+                        vm.refresh()
+                        val desc = ComponentCatalog.get(id)
+                        if (desc != null) {
+                            val updated = state.desiredConfig.components.filterNot { it.id == id } +
+                                LocalDesiredComponent(id, desc.type.name.lowercase(), pins)
+                            vm.setLocalDesired(LocalDesiredConfig(updated))
+                        }
+                        applyFeedback = "GPIO ${targetPin} confirmado por el firmware. " +
+                            "El cambio es temporal hasta reiniciar el ESP32."
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (failure: Exception) {
+                        applyFeedback = "No confirmado: ${failure.message ?: "error de comunicación"}. " +
+                            "Consulta el estado real antes de reintentar."
+                    } finally {
+                        applyBusy = false
+                    }
+                }
+            },
+            onDismiss = { if (!applyBusy) { editingId = null; applyFeedback = null } },
             onSave = { pins ->
                 val desc = ComponentCatalog.get(id)
                 if (desc != null) {
@@ -352,6 +428,7 @@ fun ModuleWorkspaceScreen(
                     scope.launch { vm.setLocalDesired(LocalDesiredConfig(next)) }
                 }
                 editingId = null
+                applyFeedback = null
                 showLibrary = false
             },
             onRemove = if (draft == null) null else {
@@ -423,6 +500,11 @@ private fun ModulePinWizard(
     initial: LocalDesiredComponent?,
     otherLocal: List<LocalDesiredComponent>,
     reported: List<ComponentRuntimeStatus>,
+    firmwarePin: Int?,
+    canApplyFirmware: Boolean,
+    applyBusy: Boolean,
+    applyFeedback: String?,
+    onApplyFirmware: (List<Int>) -> Unit,
     onDismiss: () -> Unit,
     onSave: (List<Int>) -> Unit,
     onRemove: (() -> Unit)?
@@ -438,6 +520,7 @@ private fun ModulePinWizard(
         mutableStateOf(initial?.pins?.takeIf { it.size == profile.signals.size } ?: profile.defaults)
     }
     var expanded by remember { mutableIntStateOf(-1) }
+    var confirmHardwareApply by remember { mutableStateOf(false) }
     val issues = PinAssignmentPolicy.validate(componentId, pins, otherLocal, reported)
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -449,7 +532,8 @@ private fun ModulePinWizard(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("Indica a qué pin conectaste cada señal. No se modifica el firmware.",
+                Text("Asigna las señales. Guardar borrador no modifica el ESP32; " +
+                    "aplicar requiere un enlace Wi-Fi autorizado y comprobación posterior.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 for ((index, signal) in profile.signals.withIndex()) {
@@ -480,6 +564,22 @@ private fun ModulePinWizard(
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.testTag("module_pin_warning"))
                 }
+                if (!canApplyFirmware) {
+                    Text("Reasignación física no disponible: se requiere firmware compatible, " +
+                        "componente activo y sesión Wi-Fi autorizada. RGB/OLED aún son fijos.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    Text("Pin actual confirmado: GPIO ${firmwarePin}. Solo hasta reiniciar.",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                if (applyFeedback != null) {
+                    Text(applyFeedback, modifier = Modifier.testTag("module_wiring_feedback"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (applyFeedback.startsWith("GPIO")) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.error)
+                }
+                if (applyBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 if (onRemove != null) {
                     TextButton(onClick = onRemove, modifier = Modifier.testTag("module_pin_remove")) {
                         Text("Quitar configuración local")
@@ -488,13 +588,46 @@ private fun ModulePinWizard(
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = { onSave(pins) },
-                enabled = issues.isEmpty(),
-                modifier = Modifier.testTag("module_pin_save")
-            ) { Text("Guardar borrador") }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                TextButton(
+                    onClick = { onSave(pins) },
+                    enabled = !applyBusy && issues.isEmpty(),
+                    modifier = Modifier.testTag("module_pin_save")
+                ) { Text("Guardar borrador") }
+                Button(
+                    onClick = { confirmHardwareApply = true },
+                    enabled = !applyBusy && canApplyFirmware &&
+                        issues.isEmpty() && pins.size == 1 && pins[0] != firmwarePin,
+                    modifier = Modifier.testTag("module_pin_apply")
+                ) { Text("Aplicar") }
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
     )
+    if (confirmHardwareApply) {
+        AlertDialog(
+            onDismissRequest = { confirmHardwareApply = false },
+            title = { Text("Confirmar cambio en ESP32") },
+            text = {
+                Text("El firmware detendrá temporalmente el módulo, intentará pasar de " +
+                    "GPIO ${firmwarePin} a GPIO ${pins.singleOrNull()} y restaurará el " +
+                    "anterior si falla. Comprueba el cableado físico antes de continuar. " +
+                    "El ajuste se perderá al reiniciar.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmHardwareApply = false
+                    onApplyFirmware(pins)
+                }, modifier = Modifier.testTag("module_pin_confirm_apply")) {
+                    Text("Confirmar y verificar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmHardwareApply = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
     } // Keep the wizard composition balanced when switching component profiles.
 }
