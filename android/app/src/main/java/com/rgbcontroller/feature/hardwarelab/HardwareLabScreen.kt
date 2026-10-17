@@ -84,7 +84,9 @@ fun HardwareLabScreen(
     var showConfigEditor by remember { mutableStateOf(false) }
     var showSensorDetails by rememberSaveable { mutableStateOf(false) }
     var showPinTemplates by rememberSaveable { mutableStateOf(false) }
-    val listState = rememberLazyListState()
+    // Each tab owns a fresh lazy slot table and scroll position. Reusing the
+    // same SubcomposeLayout while replacing all section items may corrupt the
+    // slot table during a concurrent animated scroll (verified on API 30).
     var section by rememberSaveable { mutableStateOf(HardwareSection.STATUS) }
     var syncMessage by remember { mutableStateOf<String?>(null) }
 
@@ -137,6 +139,8 @@ fun HardwareLabScreen(
             )
         }
     ) { padding ->
+        key(section) {
+        val listState = rememberLazyListState()
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding)
                 .padding(horizontal = 16.dp).testTag("component_dashboard_list"),
@@ -158,7 +162,7 @@ fun HardwareLabScreen(
                             selected = section == target,
                             onClick = {
                                 section = target
-                                scope.launch { listState.scrollToItem(0) }
+                                // key(section) replaces the previous list; no concurrent scroll.
                             },
                             label = { Text(target.label) },
                             modifier = Modifier.testTag("hardware_tab_${target.name.lowercase()}")
@@ -223,7 +227,7 @@ fun HardwareLabScreen(
                                 Text("Accesos rápidos", style = MaterialTheme.typography.titleMedium)
                                 Button(onClick = {
                                     section = HardwareSection.SENSORS
-                                    scope.launch { listState.scrollToItem(0) }
+                                    // New section starts at its own top.
                                 }, modifier = Modifier.fillMaxWidth()) { Text("Ver sensores") }
                                 OutlinedButton(onClick = {
                                     section = HardwareSection.PINS
@@ -388,6 +392,7 @@ fun HardwareLabScreen(
                 }
             }
         }
+        } // Dedicated, independently composed LazyColumn for each section.
     }
 
     if (showCatalog) {
