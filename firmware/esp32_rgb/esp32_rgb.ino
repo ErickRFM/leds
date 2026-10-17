@@ -765,7 +765,10 @@ void setup() {
   securitySetup.setAuthenticationMode(ESP_LE_AUTH_REQ_SC_BOND);
   securitySetup.setInitEncryptionKey(ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK);
   BLEDevice::setSecurityCallbacks(new BleLinkSecurityCallbacks());
-  BLEDevice::setEncryptionLevel(ESP_BLE_SEC_ENCRYPT);
+  // Arduino-ESP32 3.0.7 exposes neither BLEDevice::setEncryptionLevel nor
+  // BLESecurity::setEncryptionLevel. Authentication mode and key distribution
+  // above configure secure bonding; owner commands remain fail-closed until
+  // OwnerEnrollmentSession authenticates their cryptographic session.
   BLEServer* server = BLEDevice::createServer();
   server->setCallbacks(new ServerCallbacks());
   BLEService* service = server->createService(SERVICE_UUID);
