@@ -104,7 +104,8 @@ class LocalWifiControl final {
     Serial.print("App pairing key (not Wi-Fi password): ");
     Serial.println(accessKey_);
     Serial.println("Use only for local bench testing; no TLS / no WAN.");
-    WiFi.begin();
+    // STA was started before softAP(). Do not restart it here: the additional
+    // WiFi.begin() can reconfigure the shared radio after AP initialization.
 
     server_.on("/v2/status", HTTP_GET, [this]() {
       if (!authorized()) return;
