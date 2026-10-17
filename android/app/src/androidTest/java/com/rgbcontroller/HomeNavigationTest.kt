@@ -4,7 +4,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.assertTextContains
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -74,19 +74,13 @@ class HomeNavigationTest {
         composeRule.onNodeWithTag("hardware_tab_sensors").performClick()
         composeRule.onNodeWithTag("component_telemetry_dht22").assertExists()
 
-        composeRule.onNodeWithTag("hardware_tabs")
-            .performScrollToNode(androidx.compose.ui.test.hasTestTag("hardware_tab_pins"))
-        composeRule.onNodeWithTag("hardware_tab_pins").performClick()
+        composeRule.onNodeWithTag("hardware_tab_pins").performScrollTo().performClick()
         composeRule.onNodeWithTag("component_config_edit").assertExists()
 
-        composeRule.onNodeWithTag("hardware_tabs")
-            .performScrollToNode(androidx.compose.ui.test.hasTestTag("hardware_tab_automation"))
-        composeRule.onNodeWithTag("hardware_tab_automation").performClick()
+        composeRule.onNodeWithTag("hardware_tab_automation").performScrollTo().performClick()
         composeRule.onNodeWithTag("component_alerts").assertExists()
 
-        composeRule.onNodeWithTag("hardware_tabs")
-            .performScrollToNode(androidx.compose.ui.test.hasTestTag("hardware_tab_project"))
-        composeRule.onNodeWithTag("hardware_tab_project").performClick()
+        composeRule.onNodeWithTag("hardware_tab_project").performScrollTo().performClick()
         composeRule.onNodeWithTag("project_portable").assertExists()
 
         composeRule.onNodeWithTag("nav_home").performClick()
