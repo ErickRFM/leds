@@ -44,6 +44,7 @@ import com.rgbcontroller.core.wifi.LabTransport
 import com.rgbcontroller.feature.hardwarelab.ComponentDashboardViewModel
 import com.rgbcontroller.feature.led.LedModuleScreen
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 /**
  * Component-driven workspace. Firmware reports are read-only; edited wiring is
@@ -81,7 +82,19 @@ fun ModuleWorkspaceScreen(
     LaunchedEffect(session.connectionState, session.transport, bleReady) {
         vm.onConnectionChanged()
     }
+    // Foreground only: refresh real sensor values while this destination is visible.
+    // Cancellation on navigation avoids background Wi-Fi traffic/battery drain.
+    LaunchedEffect(wifiAuthorized) {
+        if (wifiAuthorized) {
+            while (true) {
+                delay(7_500L)
+                vm.refresh()
+            }
+        }
+    }
 
+    val currentlyVerified = state.freshness == ComponentStatusFreshness.LIVE &&
+        state.authorityError == null && state.connected
     val confirmed = (state.authoritative ?: state.persisted).orEmpty()
     val names = confirmed.map { ComponentCatalog.catalogIdForFirmwareId(it.id) }
     // A BLE Ready state confirms access to the existing RGB protocol, not
@@ -123,7 +136,7 @@ fun ModuleWorkspaceScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     item {
-                        ModuleRuntimeCard(id, runtime(id), state.freshness == ComponentStatusFreshness.LIVE)
+                        ModuleRuntimeCard(id, runtime(id), currentlyVerified)
                     }
                     item { ModuleReadings(id, state) }
                     item {
@@ -271,7 +284,7 @@ fun ModuleWorkspaceScreen(
                                     style = MaterialTheme.typography.titleMedium)
                                 Text(
                                     when {
-                                        physical != null && state.freshness == ComponentStatusFreshness.LIVE ->
+                                        physical != null && currentlyVerified ->
                                             "Firmware: ${physical.state} · ${if (physical.active) "activo" else "no activo"}"
                                         physical != null -> "Última confirmación del firmware · no en vivo"
                                         bleReady && id == "led_rgb" -> "Control BLE RGB disponible · GPIO sin confirmar"
@@ -362,7 +375,8 @@ private fun ModuleRuntimeCard(id: String, runtime: ComponentRuntimeStatus?, live
 
 @Composable
 private fun ModuleReadings(id: String, state: ComponentDashboardState) {
-    val live = state.telemetryFreshness == ComponentStatusFreshness.LIVE
+    val live = state.telemetryFreshness == ComponentStatusFreshness.LIVE &&
+        state.authorityError == null && state.connected
     val measurements = state.authoritativeTelemetry ?: state.persistedTelemetry
     fun reading(type: String): ComponentMeasurement? =
         ComponentTelemetryCodec.find(measurements.orEmpty(), type)
