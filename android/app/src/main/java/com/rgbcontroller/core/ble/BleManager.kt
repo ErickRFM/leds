@@ -12,7 +12,6 @@ import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothStatusCodes
 import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
@@ -20,7 +19,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.os.ParcelUuid
 import androidx.core.content.ContextCompat
 import com.rgbcontroller.core.model.RgbDeviceState
 import com.rgbcontroller.core.model.RgbDeviceCommand
@@ -182,7 +180,15 @@ class BleManager(private val context: Context) {
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             if (!scanning) return
+            // Some ESP32 advertisements omit the service UUID in initial frames.
+            // Discovery alone never authorizes commands; GATT validates the service.
+            val advertisedService = result.scanRecord?.serviceUuids
+                ?.any { it.uuid == SERVICE_UUID } == true
+            val advertisedName = result.scanRecord?.deviceName
             val device = result.device
+            val legacyName = try { device.name } catch (_: SecurityException) { null }
+            if (!advertisedService && advertisedName != "RGB-ESP32" &&
+                legacyName != "RGB-ESP32") return
             if (_discoveredDevices.value.none { it.address == device.address }) {
                 _discoveredDevices.value = _discoveredDevices.value + device
             }
@@ -223,16 +229,19 @@ class BleManager(private val context: Context) {
         try {
             _discoveredDevices.value = emptyList()
             _connectionState.value = BleConnectionState.Scanning
+            // Avoid controller-side UUID filter; keep app-side match above.
+            scanning = true
             scanner.startScan(
-                listOf(ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE_UUID)).build()),
+                null,
                 ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(),
                 scanCallback
             )
-            scanning = true
             handler.postDelayed(scanTimeout, 10000)
         } catch (e: SecurityException) {
+            scanning = false
             _connectionState.value = BleConnectionState.Error("Permiso Bluetooth denegado")
         } catch (e: IllegalStateException) {
+            scanning = false
             _connectionState.value = BleConnectionState.Error("Bluetooth no disponible")
         }
     }
