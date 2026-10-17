@@ -112,6 +112,9 @@ fun DevicesScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Text("Este ID no concede acceso ni demuestra propiedad.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else if (lastMac != null) {
                         Text("Último ESP32: …${lastMac!!.takeLast(5)}",
                             style = MaterialTheme.typography.labelMedium,
