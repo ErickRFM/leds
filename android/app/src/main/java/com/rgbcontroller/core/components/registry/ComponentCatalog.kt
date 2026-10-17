@@ -46,32 +46,32 @@ object ComponentCatalog {
         ),
         HardwareComponentDescriptor(
             id = "analog_sensor",
-            name = "Sensor Anal�gico",
+            name = "Sensor analógico",
             type = ComponentType.SENSOR,
             interfaces = setOf(HardwareInterface.ADC),
             capabilities = setOf("analog", "raw"),
             requiredPins = emptySet(),
-            description = "Sensor gen�rico anal�gico ADC1",
+            description = "Sensor genérico analógico ADC1 · requiere perfil de firmware",
             category = "sensors"
         ),
         HardwareComponentDescriptor(
             id = "digital_sensor",
-            name = "Sensor Digital",
+            name = "Sensor digital",
             type = ComponentType.SENSOR,
             interfaces = setOf(HardwareInterface.DIGITAL, HardwareInterface.GPIO),
             capabilities = setOf("digital", "input"),
             requiredPins = emptySet(),
-            description = "Sensor digital gen�rico",
+            description = "Sensor digital genérico · requiere perfil de firmware",
             category = "sensors"
         ),
         HardwareComponentDescriptor(
             id = "actuator_relay",
-            name = "Rel�/Actuador",
+            name = "Relé / actuador",
             type = ComponentType.ACTUATOR,
             interfaces = setOf(HardwareInterface.GPIO, HardwareInterface.DIGITAL),
             capabilities = setOf("actuator", "control"),
             requiredPins = emptySet(),
-            description = "Actuador digital",
+            description = "Actuador digital · requiere perfil de firmware",
             category = "actuators"
         )
     )
