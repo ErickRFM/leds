@@ -99,6 +99,8 @@ BLECharacteristic* stateCharacteristic = nullptr;
 BLECharacteristic* gpioStatusCharacteristic = nullptr;
 uint32_t lastGpioBleUpdateMs = 0;
 volatile bool connected = false;
+volatile bool restartBleAdvertising = false;
+volatile uint32_t bleDisconnectMs = 0;
 // Single source of truth for BLE link security and owner authorization.
 esp32core::BleSecurityPolicy bleSecurity;
 // SEG.1b-2b: the owner-enrollment session is the authority for privileged BLE
@@ -325,10 +327,11 @@ class ServerCallbacks : public BLEServerCallbacks {
     // The owner session drops too; ownership itself survives for recovery.
     ownerSession.onDisconnect();
     syncBleAuthState();
-    Serial.println("BLE disconnected; restarting advertising");
-    if (server) {
-      BLEDevice::startAdvertising();
-    }
+    // The GAP callback runs on a BLE task. Restart from loop(), where a
+    // short settling delay avoids races with the controller teardown.
+    bleDisconnectMs = millis();
+    restartBleAdvertising = true;
+    Serial.println("BLE disconnected; scheduling advertising restart");
   }
 };
 
@@ -816,6 +819,7 @@ void setup() {
     Serial.println("ERROR: owner store unavailable; control services disabled");
     while (true) delay(1000);
   }
+  Serial.println("BOOT: identity and owner store ready");
 
   pinMode(kBootButtonPin, INPUT_PULLUP);
 
@@ -853,11 +857,9 @@ void setup() {
     while (true) delay(1000);
   }
 
-  wifiLab.setComponentTelemetry(collectComponentTelemetry, nullptr);
-  wifiLab.setComponentStatus(collectComponentStatus, nullptr);
-  wifiLab.setComponentApply(applyComponentPins, nullptr);
-  wifiLab.begin();
-
+  Serial.println("BOOT: hardware modules ready; starting BLE");
+  // Start BLE *before* SoftAP/STA. Wi-Fi setup and NVS negotiation must not
+  // prevent the local discovery beacon from becoming visible first.
   BLEDevice::init(DEVICE_NAME);
   // STATE frames can be longer than the 20-byte default notification payload.
   // Android requests 128 as well; peers must negotiate before subscribing.
@@ -897,18 +899,35 @@ void setup() {
 
   service->start();
   BLEAdvertising* advertising = BLEDevice::getAdvertising();
+  // The 128-bit UUID is in the primary announcement and the complete
+  // legacy name is explicitly placed in the scan response (both fit within
+  // their separate 31-byte BLE legacy payloads). Android can match either.
   advertising->addServiceUUID(SERVICE_UUID);
+  BLEAdvertisementData scanResponse;
+  scanResponse.setName(DEVICE_NAME);
   advertising->setScanResponse(true);
+  advertising->setScanResponseData(scanResponse);
   advertising->setMinPreferred(0x06);
   advertising->setMaxPreferred(0x12);
   BLEDevice::startAdvertising();
-
   publishState();
-  Serial.println("BLE initialized & advertising");
+  Serial.println("BOOT: BLE advertising RGB-ESP32; service 4b9d0001");
+  wifiLab.setComponentTelemetry(collectComponentTelemetry, nullptr);
+  wifiLab.setComponentStatus(collectComponentStatus, nullptr);
+  wifiLab.setComponentApply(applyComponentPins, nullptr);
+  Serial.println("BOOT: starting protected Wi-Fi SoftAP");
+  wifiLab.begin();
+  Serial.println("BOOT: setup complete (check Wi-Fi status above)");
 }
 
 void loop() {
   uint32_t now = millis();
+  if (restartBleAdvertising && !connected &&
+      static_cast<uint32_t>(now - bleDisconnectMs) >= 180u) {
+    restartBleAdvertising = false;
+    BLEDevice::startAdvertising();
+    Serial.println("BLE advertising restart requested");
+  }
   processBleCommands();
   ownerSession.tick(now);
   servePhysicalWindow(now);
