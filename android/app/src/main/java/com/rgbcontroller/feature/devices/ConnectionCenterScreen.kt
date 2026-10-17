@@ -4,6 +4,8 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.provider.Settings
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -18,6 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.model.RgbDeviceState
@@ -55,29 +58,37 @@ fun ConnectionCenterScreen(
     Column(Modifier.fillMaxSize()) {
         Text("Conectar dispositivo", style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp))
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            FilterChip(selected = tab == ConnectTab.BLUETOOTH,
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            TransportChoice(
+                label = "Bluetooth",
+                icon = Icons.Default.Bluetooth,
+                selected = tab == ConnectTab.BLUETOOTH,
+                modifier = Modifier.weight(1f).testTag("connect_bluetooth"),
                 onClick = {
                     tab = ConnectTab.BLUETOOTH
                     session.selectTransport(LabTransport.BLUETOOTH)
-                },
-                label = { Text("Bluetooth") },
-                leadingIcon = { Icon(Icons.Default.Bluetooth, null) },
-                modifier = Modifier.weight(1f).testTag("connect_bluetooth"))
-            FilterChip(selected = tab == ConnectTab.WIFI,
+                }
+            )
+            TransportChoice(
+                label = "Wi-Fi",
+                icon = Icons.Default.Wifi,
+                selected = tab == ConnectTab.WIFI,
+                modifier = Modifier.weight(1f).testTag("connect_wifi"),
                 onClick = {
                     tab = ConnectTab.WIFI
                     session.selectTransport(LabTransport.WIFI_LAB)
-                },
-                label = { Text("Wi-Fi") },
-                leadingIcon = { Icon(Icons.Default.Wifi, null) },
-                modifier = Modifier.weight(1f).testTag("connect_wifi"))
-            FilterChip(selected = tab == ConnectTab.USB,
-                onClick = { tab = ConnectTab.USB },
-                label = { Text("USB") },
-                leadingIcon = { Icon(Icons.Default.Usb, null) },
-                modifier = Modifier.weight(1f).testTag("connect_usb"))
+                }
+            )
+            TransportChoice(
+                label = "USB",
+                icon = Icons.Default.Usb,
+                selected = tab == ConnectTab.USB,
+                modifier = Modifier.weight(1f).testTag("connect_usb"),
+                onClick = { tab = ConnectTab.USB }
+            )
         }
 
         when (tab) {
@@ -171,6 +182,41 @@ fun ConnectionCenterScreen(
                     style = MaterialTheme.typography.bodyMedium)
                 OutlinedButton(onClick = onHardware) { Text("Ver herramientas de Hardware") }
             }
+        }
+    }
+}
+
+/** Compact single-line transport tabs that never split "Bluetooth" on narrow phones. */
+@Composable
+private fun TransportChoice(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
+    val color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+        else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = 52.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            1.dp,
+            if (selected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.outlineVariant
+        )
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(label, fontSize = 12.sp, color = color, maxLines = 1, softWrap = false)
         }
     }
 }
