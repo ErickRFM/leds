@@ -211,8 +211,8 @@ jobs:
           # platform's compiler.cpp.extra_flags (breaks core linkage).
           mkdir -p build/v17-sensors-sketch
           cp -a firmware/esp32_rgb build/v17-sensors-sketch/esp32_rgb
-          sed -i '1i #define COMPI_ENABLE_DHT22 1\n#define COMPI_ENABLE_SOIL 1' \
-            build/v17-sensors-sketch/esp32_rgb/esp32_rgb.ino
+          sed -i '1i#define COMPI_ENABLE_SOIL 1' build/v17-sensors-sketch/esp32_rgb/esp32_rgb.ino
+          sed -i '1i#define COMPI_ENABLE_DHT22 1' build/v17-sensors-sketch/esp32_rgb/esp32_rgb.ino
           arduino-cli compile --fqbn "$ARDUINO_FQBN" \
             --output-dir build/v17-sensors-probe build/v17-sensors-sketch/esp32_rgb
           python3 scripts/check-firmware-budget.py build/v17-sensors-probe
