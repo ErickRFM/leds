@@ -116,6 +116,10 @@ data class ComponentDashboardState(
      */
     val confirmedCatalogIds: Set<String>
         get() = (authoritative ?: persisted).orEmpty()
+            // A compiled driver in CATALOG state is not a detected, connected
+            // or GPIO-leased sensor. Only actual runtime activation or
+            // firmware detection may qualify a module as confirmed.
+            .filter { it.active || it.state == "detected" }
             .map { ComponentCatalog.catalogIdForFirmwareId(it.id) }
             .toSet()
 
