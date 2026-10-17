@@ -810,6 +810,8 @@ void setup() {
     while (true) delay(1000);
   }
 
+  Serial.println("BOOT: device identity NVS ready");
+
   // Fail-closed: without usable owner storage the privileged transport must
   // stay disabled rather than falling back to a weaker mode.
   if (!ownerSession.begin()) {
@@ -817,6 +819,7 @@ void setup() {
     while (true) delay(1000);
   }
 
+  Serial.println("BOOT: owner NVS ready");
   pinMode(kBootButtonPin, INPUT_PULLUP);
 
   pinManager.registerSystemPin(LED_R, "led.rgb");
@@ -853,10 +856,15 @@ void setup() {
     while (true) delay(1000);
   }
 
+  Serial.println("BOOT: firmware modules started");
   wifiLab.setComponentTelemetry(collectComponentTelemetry, nullptr);
   wifiLab.setComponentStatus(collectComponentStatus, nullptr);
   wifiLab.setComponentApply(applyComponentPins, nullptr);
   wifiLab.begin();
+  Serial.print("BOOT: Wi-Fi mode=");
+  Serial.print(static_cast<int>(WiFi.getMode()));
+  Serial.print(" AP-IP=");
+  Serial.println(WiFi.softAPIP());
 
   BLEDevice::init(DEVICE_NAME);
   // STATE frames can be longer than the 20-byte default notification payload.
@@ -905,6 +913,8 @@ void setup() {
 
   publishState();
   Serial.println("BLE initialized & advertising");
+  Serial.print("BOOT: after BLE init, AP-IP=");
+  Serial.println(WiFi.softAPIP());
 }
 
 void loop() {
