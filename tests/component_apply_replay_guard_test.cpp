@@ -39,7 +39,7 @@ int main() {
   assert(guard.inspect(rgb) == Verdict::IdenticalRetry);
   Guard::Request alteredBlue{"0011223344556688", "led_rgb", 27, 25, 18, 19, 26, 22};
   assert(guard.inspect(alteredBlue) == Verdict::ConflictingReuse);
-  assert(guard.inspect({"0011223344556688", "ssd1306_oled", 0, 0, 21, 22}) == Verdict::New);
+  assert(guard.inspect({"0011223344556699", "ssd1306_oled", 0, 0, 21, 22}) == Verdict::New);
   assert(guard.inspect({"AABBCCDDEEFF1122", "soil_moisture", 0, 0, 34, 0}) == Verdict::New);
 
   // Bounded ring behavior: every successful change consumes at most one entry.
