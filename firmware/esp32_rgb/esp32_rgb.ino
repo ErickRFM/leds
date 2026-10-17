@@ -545,8 +545,8 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
     entry.pins[0] = rgbModule.redPin();
     entry.pins[1] = rgbModule.greenPin();
     entry.pins[2] = rgbModule.bluePin();
-    entry.pinCount = 3;
     entry.active = rgbModule.ready();
+    entry.pinCount = entry.active ? 3 : 0;
     entry.state = entry.active ? esp32core::ComponentState::Active
                                : esp32core::ComponentState::Error;
   }
@@ -559,8 +559,8 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
     entry.type = esp32core::ComponentType::Sensor;
     entry.interfaceType = esp32core::HardwareInterface::OneWire;
     entry.pins[0] = dht22Module.pin();
-    entry.pinCount = 1;
     entry.active = dht22Module.ready();
+    entry.pinCount = entry.active ? 1 : 0;
     entry.state = entry.active ? esp32core::ComponentState::Active
                                : esp32core::ComponentState::Catalog;
   }
@@ -573,8 +573,8 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
     entry.type = esp32core::ComponentType::Sensor;
     entry.interfaceType = esp32core::HardwareInterface::Adc;
     entry.pins[0] = soilModule.pin();
-    entry.pinCount = 1;
     entry.active = soilModule.ready();
+    entry.pinCount = entry.active ? 1 : 0;
     entry.state = entry.active ? esp32core::ComponentState::Active
                                : esp32core::ComponentState::Catalog;
   }
@@ -588,8 +588,8 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
     entry.interfaceType = esp32core::HardwareInterface::I2c;
     entry.pins[0] = oledModule.sda();
     entry.pins[1] = oledModule.scl();
-    entry.pinCount = 2;
     entry.active = oledModule.ready();
+    entry.pinCount = entry.active ? 2 : 0;
     entry.state = entry.active ? esp32core::ComponentState::Active
                                : esp32core::ComponentState::Catalog;
   }
