@@ -99,6 +99,8 @@ BLECharacteristic* stateCharacteristic = nullptr;
 BLECharacteristic* gpioStatusCharacteristic = nullptr;
 uint32_t lastGpioBleUpdateMs = 0;
 volatile bool connected = false;
+volatile bool restartBleAdvertising = false;
+volatile uint32_t bleDisconnectMs = 0;
 // Single source of truth for BLE link security and owner authorization.
 esp32core::BleSecurityPolicy bleSecurity;
 // SEG.1b-2b: the owner-enrollment session is the authority for privileged BLE
@@ -325,10 +327,10 @@ class ServerCallbacks : public BLEServerCallbacks {
     // The owner session drops too; ownership itself survives for recovery.
     ownerSession.onDisconnect();
     syncBleAuthState();
-    Serial.println("BLE disconnected; restarting advertising");
-    if (server) {
-      BLEDevice::startAdvertising();
-    }
+    // Restart asynchronously in loop to avoid a GAP stop/start collision.
+    bleDisconnectMs = millis();
+    restartBleAdvertising = true;
+    Serial.println("BLE disconnected; advertising restart scheduled");
   }
 };
 
@@ -905,20 +907,31 @@ void setup() {
 
   service->start();
   BLEAdvertising* advertising = BLEDevice::getAdvertising();
+  // 128-bit GATT service remains in primary announcement. The name
+  // occupies a separate scan response, not the same 31-byte BLE packet.
   advertising->addServiceUUID(SERVICE_UUID);
+  BLEAdvertisementData scanResponse;
+  scanResponse.setName(DEVICE_NAME);
   advertising->setScanResponse(true);
+  advertising->setScanResponseData(scanResponse);
   advertising->setMinPreferred(0x06);
   advertising->setMaxPreferred(0x12);
   BLEDevice::startAdvertising();
 
   publishState();
-  Serial.println("BLE initialized & advertising");
+  Serial.println("BOOT: BLE advertising RGB-ESP32, service 4b9d0001");
   Serial.print("BOOT: after BLE init, AP-IP=");
   Serial.println(WiFi.softAPIP());
 }
 
 void loop() {
   uint32_t now = millis();
+  if (restartBleAdvertising && !connected &&
+      static_cast<uint32_t>(now - bleDisconnectMs) >= 180u) {
+    restartBleAdvertising = false;
+    BLEDevice::startAdvertising();
+    Serial.println("BOOT: BLE reannounced after disconnect");
+  }
   processBleCommands();
   ownerSession.tick(now);
   servePhysicalWindow(now);
