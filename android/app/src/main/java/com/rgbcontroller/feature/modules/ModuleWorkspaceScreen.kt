@@ -56,6 +56,7 @@ import java.util.UUID
  * live firmware state and authorized, readback-confirmed hot wiring changes.
  * BLE readiness never authorizes GPIO or environmental-sensor writes.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModuleWorkspaceScreen(
     bleManager: BleManager,
