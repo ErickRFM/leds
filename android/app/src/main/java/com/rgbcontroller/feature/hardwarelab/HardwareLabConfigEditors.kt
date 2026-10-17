@@ -3,6 +3,7 @@ package com.rgbcontroller.feature.hardwarelab
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -188,8 +189,12 @@ fun ComponentConfigEditorDialog(
                     }
                 }
                 Text("Añadir del catálogo", style = MaterialTheme.typography.labelMedium)
+                Text("Selecciona el componente y ajusta los GPIO propuestos. " +
+                    "Los cambios son locales hasta que el ESP32 los confirme.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()) {
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
                     catalog.forEach { descriptor ->
                         FilterChip(
                             selected = working.any { it.id == descriptor.id },
@@ -197,7 +202,8 @@ fun ComponentConfigEditorDialog(
                                 if (working.none { it.id == descriptor.id }) {
                                     working = working + ComponentConfigDraft(
                                         descriptor.id,
-                                        descriptor.requiredPins.sorted().joinToString(", ")
+                                        (if (descriptor.id == "soil_moisture") listOf(34)
+                                        else descriptor.requiredPins.sorted()).joinToString(", ")
                                     )
                                 }
                             },

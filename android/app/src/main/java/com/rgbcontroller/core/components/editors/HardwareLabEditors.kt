@@ -246,7 +246,15 @@ data class ComponentConfigDraft(
         val descriptor = catalog.find { it.id == id.trim() }
         if (descriptor == null) issues += EditorIssue("id", "El componente no está en el catálogo.")
         val pins = parsePins(pinsText, issues)
-        if (descriptor != null && descriptor.requiredPins.isNotEmpty() &&
+        if (descriptor?.id == "soil_moisture") {
+            // The ADC1 set is a list of possible inputs, not six simultaneous wires.
+            if (pins.size != 1 || pins.singleOrNull() !in descriptor.requiredPins) {
+                issues += EditorIssue(
+                    "pins",
+                    "Elige exactamente un GPIO ADC1: ${descriptor.requiredPins.sorted().joinToString(", ")}."
+                )
+            }
+        } else if (descriptor != null && descriptor.requiredPins.isNotEmpty() &&
             pins.isNotEmpty() && !pins.containsAll(descriptor.requiredPins)
         ) {
             issues += EditorIssue(
