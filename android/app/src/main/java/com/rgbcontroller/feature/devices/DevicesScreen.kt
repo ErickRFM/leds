@@ -194,7 +194,7 @@ fun DevicesScreen(
                 Icon(Icons.Default.Shield, contentDescription = null,
                     modifier = Modifier.size(17.dp))
                 Spacer(Modifier.width(6.dp))
-                Text(if (authorized) "Autorización verificada" else "Seguridad y permisos BLE")
+                Text(if (authorized) "Propietario autorizado" else "Diagnóstico del ESP32")
                 Icon(Icons.Default.ChevronRight, contentDescription = null,
                     modifier = Modifier.size(17.dp))
             }
