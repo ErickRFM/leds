@@ -78,15 +78,26 @@ class LocalWifiControl final {
       prefs_.putString("key", secret);
     }
     accessKey_ = secret;
-    // AP+STA leaves the provisioning Wi-Fi active while connecting to a
-    // user's router; all HTTP traffic is still rejected on STA interfaces.
+    apPassword_ = password;
+    // Recover stored STA credentials BEFORE starting the SoftAP. Starting STA
+    // after softAP() could reconfigure the radio and make discovery unreliable.
+    // Preserve both interfaces so the lab API remains AP-only.
     WiFi.mode(WIFI_AP_STA);
-    WiFi.persistent(true); // Wi-Fi STA credentials remain in NVS across reboot.
+    WiFi.persistent(true); // STA credentials remain in NVS across reboot.
     WiFi.setAutoReconnect(true);
-    if (!WiFi.softAP("ESP32-Control-Lab", password.c_str())) {
-      Serial.println("ERROR: protected lab SoftAP failed; HTTP disabled");
+    WiFi.begin();
+    WiFi.mode(WIFI_AP_STA);
+    bool apReady = false;
+    for (uint8_t attempt = 0; attempt < 3 && !apReady; ++attempt) {
+      apReady = WiFi.softAP("ESP32-Control-Lab", apPassword_.c_str());
+      if (!apReady) delay(250);
+    }
+    if (!apReady) {
+      Serial.println("ERROR: protected lab SoftAP failed after 3 attempts; HTTP disabled");
       return;
     }
+    Serial.print("SoftAP IP: ");
+    Serial.println(WiFi.softAPIP());
     Serial.println("=== ESP32 LAB ACCESS (PHYSICAL SERIAL ONLY) ===");
     Serial.print("SoftAP: ESP32-Control-Lab / password: ");
     Serial.println(password);
@@ -559,6 +570,23 @@ class LocalWifiControl final {
 
   void tick(uint32_t nowMs) {
     if (!active_) return;
+    // The ESP32 can remain booted even when the AP interface is dropped.
+    // Check infrequently to avoid disturbing clients or wearing flash.
+    if (static_cast<uint32_t>(nowMs - lastApCheckMs_) >= 15000U) {
+      lastApCheckMs_ = nowMs;
+      if ((WiFi.getMode() & WIFI_AP) == 0 ||
+          WiFi.softAPSSID() != "ESP32-Control-Lab" ||
+          WiFi.softAPIP() != IPAddress(192, 168, 4, 1)) {
+        Serial.println("WARN: lab SoftAP unavailable; attempting AP+STA recovery");
+        WiFi.mode(WIFI_AP_STA);
+        if (WiFi.softAP("ESP32-Control-Lab", apPassword_.c_str())) {
+          Serial.print("INFO: lab SoftAP restored at ");
+          Serial.println(WiFi.softAPIP());
+        } else {
+          Serial.println("ERROR: lab SoftAP recovery failed; will retry in 15 s");
+        }
+      }
+    }
     server_.handleClient();
     script_.tick(nowMs, sendScriptRgb, this);
     if (automation_.active()) {
@@ -621,6 +649,8 @@ class LocalWifiControl final {
   WebServer server_{80};
   ExperimentRuntime experiment_;
   String accessKey_;
+  String apPassword_; // NVS-backed, never sent over HTTP or diagnostics.
+  uint32_t lastApCheckMs_ = 0;
   bool manualPins_[PinManager::kPinCount] = {};
   bool manualLevels_[PinManager::kPinCount] = {};
   uint32_t manualTouched_ = 0;

@@ -26,7 +26,12 @@ class NvsOwnerEnrollmentStore final : public OwnerEnrollmentStore {
   bool load(OwnerEnrollmentSnapshot& out) override {
     out = OwnerEnrollmentSnapshot{};
     Preferences preferences;
-    if (!preferences.begin(kNamespace, true)) return false;  // read-only
+    // Preferences.begin(readOnly=true) fails for a namespace that does not
+    // exist yet (ESP_ERR_NVS_NOT_FOUND). That made a fresh install halt in
+    // setup() *before* the Wi-Fi SoftAP and BLE were started. Opening in
+    // read/write mode creates only the namespace; no owner is enrolled and
+    // load still rejects malformed or unreadable existing records.
+    if (!preferences.begin(kNamespace, false)) return false;
     const size_t length = preferences.getBytesLength(kKey);
     if (length == 0) {
       preferences.end();
