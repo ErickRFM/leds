@@ -900,7 +900,7 @@ void setup() {
   advertising->addServiceUUID(SERVICE_UUID);
   advertising->setScanResponse(true);
   advertising->setMinPreferred(0x06);
-  advertising->setMinPreferred(0x12);
+  advertising->setMaxPreferred(0x12);
   BLEDevice::startAdvertising();
 
   publishState();
