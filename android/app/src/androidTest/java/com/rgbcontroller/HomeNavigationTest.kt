@@ -64,7 +64,7 @@ class HomeNavigationTest {
     fun homeReturnsFromNestedBluetoothDevices() {
         composeRule.onNodeWithTag("open_led").performClick()
         composeRule.onNodeWithTag("modules_connect").performClick()
-        composeRule.onNodeWithText("Mis dispositivos").assertExists()
+        composeRule.onNodeWithText("Dispositivos cercanos").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
     }
@@ -142,9 +142,9 @@ class HomeNavigationTest {
         composeRule.onNodeWithTag("connect_wifi").performClick()
         composeRule.onNodeWithTag("connect_wifi_key").assertExists()
         composeRule.onNodeWithTag("connect_usb").performClick()
-        composeRule.onNodeWithText("USB · diagnóstico").assertExists()
+        composeRule.onNodeWithText("USB-OTG aún no controla Compi", substring = true).assertExists()
         composeRule.onNodeWithTag("connect_bluetooth").performClick()
-        composeRule.onNodeWithText("Mis dispositivos").assertExists()
+        composeRule.onNodeWithText("Dispositivos cercanos").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
     }

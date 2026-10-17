@@ -108,8 +108,7 @@ fun ConnectionCenterScreen(
     }
 
     Column(Modifier.fillMaxSize()) {
-        Text("Conectar dispositivo", style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp))
+        Spacer(Modifier.height(12.dp))
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -155,9 +154,7 @@ fun ConnectionCenterScreen(
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("ESP32 · Wi-Fi local", style = MaterialTheme.typography.titleMedium)
-                        Text("Conéctate primero a ESP32-Control-Lab en los ajustes del sistema. " +
-                            "El control Wi-Fi es de laboratorio (solo APK debug) y usa la clave " +
-                            "mostrada por el ESP32 en el monitor serie.",
+                        Text("Red: ESP32-Control-Lab · La clave aparece por serial (115200).",
                             style = MaterialTheme.typography.bodySmall)
                         OutlinedButton(onClick = {
                             context.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
@@ -261,7 +258,7 @@ fun ConnectionCenterScreen(
                     }
                     if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 } else {
-                    Text("El control HTTP de laboratorio no está habilitado en compilaciones release.",
+                    Text("Wi-Fi de laboratorio disponible solo en APK debug.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -284,11 +281,10 @@ fun ConnectionCenterScreen(
                 Modifier.fillMaxWidth().weight(1f).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text("USB · diagnóstico", style = MaterialTheme.typography.titleLarge)
-                Text("Compi no ofrece todavía control serial USB-OTG dentro de Android. " +
-                    "Puedes utilizar el puerto USB del ESP32 con Arduino IDE para flashear " +
-                    "el firmware o consultar el monitor serie; no se simula una conexión.",
-                    style = MaterialTheme.typography.bodyMedium)
+                Text("USB", style = MaterialTheme.typography.titleMedium)
+                Text("Para flashear y diagnosticar, utiliza Arduino IDE o un monitor serie en tu PC. " +
+                    "USB-OTG aún no controla Compi desde Android.",
+                    style = MaterialTheme.typography.bodySmall)
                 OutlinedButton(onClick = onHardware) { Text("Ver herramientas de Hardware") }
             }
         }

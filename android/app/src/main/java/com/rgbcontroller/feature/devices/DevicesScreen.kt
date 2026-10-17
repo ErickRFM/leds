@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
@@ -38,9 +39,11 @@ fun DevicesScreen(
     val connection by bleManager.connectionState.collectAsState()
     val security by bleManager.securityState.collectAsState()
     val devices by bleManager.discoveredDevices.collectAsState()
+    val scanStats by bleManager.scanStatistics.collectAsState()
     val publicId by bleManager.publicDeviceId.collectAsState()
     val lastMac by preferencesRepository.lastDeviceMac.collectAsState(initial = null)
     var searched by rememberSaveable { mutableStateOf(false) }
+    var showIdentityNote by rememberSaveable { mutableStateOf(false) }
     val busy = connection is BleConnectionState.Connecting ||
         connection is BleConnectionState.Discovering
     val searching = connection == BleConnectionState.Scanning
@@ -55,13 +58,13 @@ fun DevicesScreen(
         is BleConnectionState.Error -> "Conexión necesita atención"
     }
     val detail = when (val current = connection) {
-        BleConnectionState.Disconnected -> "Enciende tu ESP32 y busca dispositivos cercanos."
-        BleConnectionState.Scanning -> "Buscando dispositivos durante 10 segundos."
-        BleConnectionState.Connecting -> "Abriendo la conexión Bluetooth."
-        BleConnectionState.Discovering -> "Comprobando servicio, identidad y estado."
+        BleConnectionState.Disconnected -> "Listo para buscar."
+        BleConnectionState.Scanning -> "Escaneando BLE…"
+        BleConnectionState.Connecting -> "Conectando…"
+        BleConnectionState.Discovering -> "Verificando GATT…"
         BleConnectionState.Ready -> if (authorized)
-            "Enlace GATT y autorización confirmados por el firmware."
-        else "GATT disponible · falta confirmar autorización de propietario."
+            "Propietario autorizado por firmware."
+        else "BLE conectado · autorización pendiente."
         is BleConnectionState.Error -> current.message
     }
 
@@ -71,7 +74,8 @@ fun DevicesScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            SectionHeader("Mis dispositivos", "Descubre y administra tu ESP32")
+            Text("Dispositivos cercanos", style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold)
         }
         item {
             Card(
@@ -112,9 +116,14 @@ fun DevicesScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Text("Este ID no concede acceso ni demuestra propiedad.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        TextButton(onClick = { showIdentityNote = !showIdentityNote }) {
+                            Text(if (showIdentityNote) "Ocultar aviso" else "Acerca de la identidad")
+                        }
+                        if (showIdentityNote) {
+                            Text("Este ID no concede acceso ni confirma propiedad.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     } else if (lastMac != null) {
                         Text("Último ESP32: …${lastMac!!.takeLast(5)}",
                             style = MaterialTheme.typography.labelMedium,
@@ -129,7 +138,7 @@ fun DevicesScreen(
                     onClick = {
                         if (searching) bleManager.stopScan() else {
                             searched = true
-                            bleManager.startScan()
+                            bleManager.startScan(lastMac)
                         }
                     },
                     enabled = !busy && !ready,
@@ -146,29 +155,15 @@ fun DevicesScreen(
             }
         }
         item {
-            Card(Modifier.fillMaxWidth()) {
-                Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Shield, contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Seguridad del dispositivo", style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            if (authorized) "Propietario autorizado por el firmware"
-                            else "Conectarse no concede permisos de propietario",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    IconButton(onClick = onInspectSecurity) {
-                        Icon(Icons.Default.ChevronRight, contentDescription = "Ver seguridad")
-                    }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Resultados", style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                if (scanStats.advertisements > 0) {
+                    Text("${scanStats.compatibleDevices} compatibles",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-        }
-        item {
-            Text("Disponibles cerca", style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold)
         }
         if (devices.isEmpty()) {
             item {
@@ -182,7 +177,9 @@ fun DevicesScreen(
                                 searching -> "Buscando dispositivos cercanos…"
                                 connection is BleConnectionState.Error ->
                                     "Revisa Bluetooth, permisos y arranque del ESP32."
-                                searched -> "No se encontró RGB-ESP32. Comprueba el anuncio BLE."
+                                searched && scanStats.advertisements == 0 ->
+                                "No llegaron anuncios BLE. Revisa alimentación y arranque del ESP32."
+                            searched -> "Se recibieron anuncios BLE, pero ninguno coincidió con Compi."
                                 else -> "Pulsa «Buscar ESP32» para comenzar."
                             },
                             style = MaterialTheme.typography.bodySmall,
@@ -190,6 +187,16 @@ fun DevicesScreen(
                         )
                     }
                 }
+            }
+        }
+        item {
+            TextButton(onClick = onInspectSecurity, modifier = Modifier.testTag("ble_security_details")) {
+                Icon(Icons.Default.Shield, contentDescription = null,
+                    modifier = Modifier.size(17.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (authorized) "Propietario autorizado" else "Diagnóstico del ESP32")
+                Icon(Icons.Default.ChevronRight, contentDescription = null,
+                    modifier = Modifier.size(17.dp))
             }
         }
         items(devices, key = { it.address }) { device ->

@@ -36,8 +36,7 @@ fun ModuleWiringDiagram(
             style = MaterialTheme.typography.bodySmall,
             modifier = modifier.testTag("module_wiring_incomplete")
         )
-        return
-    }
+    } else {
 
     val wireColors = listOf(
         Color(0xFF54C9F0), Color(0xFF61D69A), Color(0xFFFFC96D),
@@ -159,4 +158,5 @@ fun ModuleWiringDiagram(
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+    } // Maintain balanced Compose groups across incomplete-to-valid wiring transitions.
 }
