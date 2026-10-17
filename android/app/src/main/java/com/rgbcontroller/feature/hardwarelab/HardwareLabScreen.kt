@@ -231,7 +231,7 @@ fun HardwareLabScreen(
                                 }, modifier = Modifier.fillMaxWidth()) { Text("Ver sensores") }
                                 OutlinedButton(onClick = {
                                     section = HardwareSection.PINS
-                                    scope.launch { listState.scrollToItem(0) }
+                                    // Independent section resets scroll to top.
                                 }, modifier = Modifier.fillMaxWidth()) { Text("Configurar GPIO") }
                             }
                         }
