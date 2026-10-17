@@ -96,6 +96,12 @@ class SoilMoistureModule final : public IModule {
 
   static constexpr uint16_t kAdcMax = 4095;
 
+  bool configurePin(uint8_t next) {
+    if (ready_ || !PinManager::analogInputCapable(next) ||
+        PinManager::reservedForRgb(next)) return false;
+    pin_ = next;
+    return true;
+  }
   bool ready() const { return ready_; }
   bool calibrated() const { return calibrated_; }
   uint8_t pin() const { return pin_; }
@@ -131,7 +137,7 @@ class SoilMoistureModule final : public IModule {
     return percent;
   }
 
-  const uint8_t pin_;
+  uint8_t pin_;
   const AdcReadFn read_;
   void* const context_;
   const uint32_t sampleIntervalMs_;
