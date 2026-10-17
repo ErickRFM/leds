@@ -28,6 +28,7 @@
 #include "core/ComponentContract.h"
 #include "core/ComponentCatalog.h"
 #include "core/ComponentStatus.h"
+#include "core/ComponentWiringTransaction.h"
 #include "core/SensorTelemetry.h"
 #include "core/SensorTelemetryCodec.h"
 #include "modules/Dht22Module.h"
@@ -116,21 +117,23 @@ uint32_t physicalProvisionHoldStarted = 0;
 uint32_t effectStarted = 0;
 
 #if COMPI_ENABLE_DHT22
+// The read driver follows firmware-confirmed volatile pin changes.
+uint8_t currentDhtPin = COMPI_DHT22_PIN;
 // Bit-banged AM2302/DHT22 read. Returns ok=false on timeout or checksum error;
 // callers must treat that as "no data", never as a valid 0% reading.
 esp32core::Dht22Module::Reading dht22Read(void*) {
   esp32core::Dht22Module::Reading result{false, 0.0f, 0.0f};
   uint8_t data[5] = {0, 0, 0, 0, 0};
-  pinMode(COMPI_DHT22_PIN, OUTPUT);
-  digitalWrite(COMPI_DHT22_PIN, LOW);
+  pinMode(currentDhtPin, OUTPUT);
+  digitalWrite(currentDhtPin, LOW);
   delay(2);
-  digitalWrite(COMPI_DHT22_PIN, HIGH);
+  digitalWrite(currentDhtPin, HIGH);
   delayMicroseconds(40);
-  pinMode(COMPI_DHT22_PIN, INPUT_PULLUP);
-  if (pulseIn(COMPI_DHT22_PIN, LOW, 1000) == 0) return result;
-  if (pulseIn(COMPI_DHT22_PIN, HIGH, 1000) == 0) return result;
+  pinMode(currentDhtPin, INPUT_PULLUP);
+  if (pulseIn(currentDhtPin, LOW, 1000) == 0) return result;
+  if (pulseIn(currentDhtPin, HIGH, 1000) == 0) return result;
   for (int i = 0; i < 40; ++i) {
-    const unsigned long highDuration = pulseIn(COMPI_DHT22_PIN, HIGH, 1000);
+    const unsigned long highDuration = pulseIn(currentDhtPin, HIGH, 1000);
     if (highDuration == 0) return result;
     data[i / 8] <<= 1;
     if (highDuration > 40) data[i / 8] |= 1;
@@ -585,6 +588,40 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
 }
 
 
+// Wiring is only supported for modules explicitly compiled into this firmware.
+// The transaction is synchronous on the sketch's WebServer loop, never BLE ISR.
+bool supportsWiring(const char* id, void*) {
+  if (!id) return false;
+#if COMPI_ENABLE_DHT22
+  if (std::strcmp(id, "dht22") == 0) return dht22Module.ready();
+#endif
+#if COMPI_ENABLE_SOIL
+  if (std::strcmp(id, "soil_moisture") == 0) return soilModule.ready();
+#endif
+  return false;
+}
+
+esp32core::WiringOutcome applyComponentWiring(
+    const char* id, uint8_t expected, uint8_t requested, void*) {
+  if (!id) return esp32core::WiringOutcome::Unsupported;
+#if COMPI_ENABLE_DHT22
+  if (std::strcmp(id, "dht22") == 0) {
+    const auto result = esp32core::rewireSingle(
+        pinManager, dht22Module, "dht22", expected, requested);
+    // The bit-banged reader's pin must follow successful/rolled-back leases.
+    currentDhtPin = dht22Module.pin();
+    return result;
+  }
+#endif
+#if COMPI_ENABLE_SOIL
+  if (std::strcmp(id, "soil_moisture") == 0) {
+    return esp32core::rewireSingle(
+        pinManager, soilModule, "soil_moisture", expected, requested);
+  }
+#endif
+  return esp32core::WiringOutcome::Unsupported;
+}
+
 esp32core::LocalWifiControl wifiLab(pinManager, stateString, applyRgbCommand,
     applyRgbRuntimeCommand, []() { return deviceIdentity.value(); });
 
@@ -752,6 +789,7 @@ void setup() {
 
   wifiLab.setComponentTelemetry(collectComponentTelemetry, nullptr);
   wifiLab.setComponentStatus(collectComponentStatus, nullptr);
+  wifiLab.setComponentWiring(applyComponentWiring, supportsWiring, nullptr);
   wifiLab.begin();
 
   BLEDevice::init(DEVICE_NAME);
