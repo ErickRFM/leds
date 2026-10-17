@@ -31,6 +31,7 @@ import com.rgbcontroller.core.components.editors.ComponentConfigDraft
 import com.rgbcontroller.core.components.editors.LabConfigValidation
 import com.rgbcontroller.core.components.editors.SoilCalibrationDraft
 import com.rgbcontroller.core.components.registry.ComponentCatalog
+import com.rgbcontroller.core.components.registry.PinAssignmentPolicy
 import com.rgbcontroller.core.components.status.LocalDesiredComponent
 
 /**
@@ -202,8 +203,7 @@ fun ComponentConfigEditorDialog(
                                 if (working.none { it.id == descriptor.id }) {
                                     working = working + ComponentConfigDraft(
                                         descriptor.id,
-                                        (if (descriptor.id == "soil_moisture") listOf(34)
-                                        else descriptor.requiredPins.sorted()).joinToString(", ")
+                                        PinAssignmentPolicy.profile(descriptor.id)?.defaults.orEmpty().joinToString(", ")
                                     )
                                 }
                             },

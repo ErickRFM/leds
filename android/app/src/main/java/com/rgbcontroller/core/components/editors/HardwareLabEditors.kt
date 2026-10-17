@@ -7,6 +7,7 @@ import com.rgbcontroller.core.components.automation.AutomationAction
 import com.rgbcontroller.core.components.automation.AutomationRule
 import com.rgbcontroller.core.components.model.HardwareComponentDescriptor
 import com.rgbcontroller.core.components.registry.ComponentCatalog
+import com.rgbcontroller.core.components.registry.PinAssignmentPolicy
 import com.rgbcontroller.core.components.status.LocalDesiredComponent
 import com.rgbcontroller.core.sensors.SoilCalibration
 
@@ -246,21 +247,10 @@ data class ComponentConfigDraft(
         val descriptor = catalog.find { it.id == id.trim() }
         if (descriptor == null) issues += EditorIssue("id", "El componente no está en el catálogo.")
         val pins = parsePins(pinsText, issues)
-        if (descriptor?.id == "soil_moisture") {
-            // The ADC1 set is a list of possible inputs, not six simultaneous wires.
-            if (pins.size != 1 || pins.singleOrNull() !in descriptor.requiredPins) {
-                issues += EditorIssue(
-                    "pins",
-                    "Elige exactamente un GPIO ADC1: ${descriptor.requiredPins.sorted().joinToString(", ")}."
-                )
+        if (descriptor != null) {
+            PinAssignmentPolicy.validate(descriptor.id, pins).forEach { message ->
+                issues += EditorIssue("pins", message)
             }
-        } else if (descriptor != null && descriptor.requiredPins.isNotEmpty() &&
-            pins.isNotEmpty() && !pins.containsAll(descriptor.requiredPins)
-        ) {
-            issues += EditorIssue(
-                "pins",
-                "Faltan GPIO requeridos: ${descriptor.requiredPins.sorted().joinToString(", ")}."
-            )
         }
         if (issues.isNotEmpty() || descriptor == null) return EditorResult(null, issues)
         return EditorResult.ok(
@@ -307,6 +297,10 @@ object LabConfigValidation {
         for (component in components) {
             if (ComponentCatalog.get(component.id) == null) {
                 issues += EditorIssue(component.id, "El componente no está en el catálogo.")
+            } else {
+                PinAssignmentPolicy.validate(component.id, component.pins, components).forEach {
+                    issues += EditorIssue(component.id, it)
+                }
             }
         }
         return issues

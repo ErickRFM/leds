@@ -45,13 +45,13 @@ class HomeNavigationTest {
     @Test
     fun homeReturnsFromLedWithoutConnectingToEsp32() {
         composeRule.onNodeWithTag("open_led").performClick()
-        composeRule.onNodeWithText("LED RGB").assertExists()
+        composeRule.onNodeWithTag("module_workspace_list").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
 
         // Re-entry must work too: no restored LED route may replace Home.
         composeRule.onNodeWithTag("open_led").performClick()
-        composeRule.onNodeWithText("LED RGB").assertExists()
+        composeRule.onNodeWithTag("module_workspace_list").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
     }
@@ -59,7 +59,7 @@ class HomeNavigationTest {
     @Test
     fun homeReturnsFromNestedBluetoothDevices() {
         composeRule.onNodeWithTag("open_led").performClick()
-        composeRule.onNodeWithText("Buscar ESP32").performClick()
+        composeRule.onNodeWithTag("modules_connect").performClick()
         composeRule.onNodeWithText("Mis dispositivos").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
@@ -104,8 +104,8 @@ class HomeNavigationTest {
 
     @Test
     fun v9FourPrimaryDestinationsAndSettingsAreReachable() {
-        composeRule.onNodeWithTag("nav_led").performClick()
-        composeRule.onNodeWithText("LED RGB").assertExists()
+        composeRule.onNodeWithTag("nav_modules").performClick()
+        composeRule.onNodeWithTag("module_workspace_list").assertExists()
         composeRule.onNodeWithTag("nav_code").performClick()
         composeRule.onNodeWithText("Compi Studio").assertExists()
         composeRule.onNodeWithTag("nav_hub").performClick()
@@ -116,6 +116,19 @@ class HomeNavigationTest {
         composeRule.onNodeWithText("Hardware Lab").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
+    }
+
+    @Test
+    fun moduleCatalogBuildsLocalDraftWithoutFirmware() {
+        composeRule.onNodeWithTag("nav_modules").performClick()
+        composeRule.onNodeWithTag("modules_tab_catalog").performClick()
+        composeRule.onNodeWithTag("module_catalog_dht22").performClick()
+        composeRule.onNodeWithTag("module_pin_editor").assertExists()
+        composeRule.onNodeWithTag("module_pin_save").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("module_card_dht22").assertExists()
+        composeRule.onNodeWithTag("module_config_dht22").performClick()
+        composeRule.onNodeWithTag("module_pin_editor").assertExists()
     }
 
     @Test

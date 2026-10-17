@@ -38,10 +38,12 @@ import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.ui.RgbTheme
 import com.rgbcontroller.feature.programs.ProgramEditorScreen
 import com.rgbcontroller.feature.devices.DevicesScreen
+import com.rgbcontroller.feature.devices.ConnectionCenterScreen
 import com.rgbcontroller.feature.home.DashboardScreen
 import com.rgbcontroller.feature.hub.LabHubScreen
 import com.rgbcontroller.feature.hardwarelab.HardwareLabScreen
 import com.rgbcontroller.feature.led.LedModuleScreen
+import com.rgbcontroller.feature.modules.ModuleWorkspaceScreen
 import com.rgbcontroller.feature.settings.SettingsScreen
 import androidx.compose.ui.unit.dp
 
@@ -72,10 +74,11 @@ private sealed class Screen(
     val icon: androidx.compose.ui.graphics.vector.ImageVector
 ) {
     data object Home : Screen("home", "Inicio", Icons.Default.Home)
-    data object Led : Screen("led", "LED", Icons.Default.ColorLens)
+    data object Modules : Screen("modules", "Módulos", Icons.Default.ColorLens)
     data object Code : Screen("code", "Studio", Icons.Default.Code)
     data object Settings : Screen("settings", "Ajustes", Icons.Default.Settings)
     data object Devices : Screen("devices", "Equipos", Icons.Default.Bluetooth)
+    data object Connect : Screen("connect", "Conectar", Icons.Default.Bluetooth)
     data object Hub : Screen("hub", "Hardware", Icons.Default.Memory)
 }
 
@@ -120,16 +123,21 @@ fun MainAppNavHost(
     }
     RgbTheme(theme) {
         val navController = rememberNavController()
-        val items = listOf(Screen.Home, Screen.Led, Screen.Code, Screen.Hub)
+        val items = listOf(Screen.Home, Screen.Modules, Screen.Code, Screen.Hub)
         val entry by navController.currentBackStackEntryAsState()
         val route = entry?.destination?.route
-        val nested = route == Screen.Devices.route || route == Screen.Settings.route
+        val nested = route == Screen.Devices.route || route == Screen.Settings.route ||
+            route == Screen.Connect.route
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 if (nested) {
                     TopAppBar(
-                        title = { Text(if (route == Screen.Devices.route) "Dispositivos" else "Ajustes") },
+                        title = { Text(when (route) {
+                            Screen.Devices.route -> "Dispositivos"
+                            Screen.Connect.route -> "Conexiones"
+                            else -> "Ajustes"
+                        }) },
                         navigationIcon = {
                             IconButton(
                                 modifier = Modifier.testTag("nav_back"),
@@ -177,11 +185,12 @@ fun MainAppNavHost(
                 composable(Screen.Home.route) {
                     DashboardScreen(
                         bleManager = bleManager,
-                        onLed = { navController.navigateTopLevel(Screen.Led) },
+                        onLed = { navController.navigateTopLevel(Screen.Modules) },
                         onCode = { navController.navigateTopLevel(Screen.Code) },
-                        onDevices = { navController.navigate(Screen.Devices.route) },
+                        onDevices = { navController.navigate(Screen.Connect.route) },
                         onHardware = { navController.navigateTopLevel(Screen.Hub) },
-                        onSettings = { navController.navigate(Screen.Settings.route) }
+                        onSettings = { navController.navigate(Screen.Settings.route) },
+                        session = session
                     )
                 }
                 // Retain a migration route for back stacks saved by Compi V8.
@@ -189,7 +198,16 @@ fun MainAppNavHost(
                 composable("center") {
                     LaunchedEffect(Unit) { navController.navigateTopLevel(Screen.Home) }
                 }
-                composable(Screen.Led.route) {
+                composable(Screen.Modules.route) {
+                    ModuleWorkspaceScreen(
+                        bleManager, preferencesRepository, session,
+                        onConnect = { navController.navigate(Screen.Connect.route) },
+                        onHardware = { navController.navigateTopLevel(Screen.Hub) }
+                    )
+                }
+                // Existing V8-V16 route remains valid for restored navigation and deep links.
+                // It still uses the audited LED transport, now as one reusable module.
+                composable("led") {
                     LedModuleScreen(bleManager, preferencesRepository, session,
                         onOpenDevices = { navController.navigate(Screen.Devices.route) })
                 }
@@ -198,6 +216,12 @@ fun MainAppNavHost(
                     SettingsScreen(bleManager, preferencesRepository,
                         onOpenHub = { navController.navigate(Screen.Hub.route) },
                         onOpenPrograms = { navController.navigateTopLevel(Screen.Code) })
+                }
+                composable(Screen.Connect.route) {
+                    ConnectionCenterScreen(
+                        bleManager, preferencesRepository, session,
+                        onHardware = { navController.navigateTopLevel(Screen.Hub) }
+                    )
                 }
                 composable(Screen.Devices.route) {
                     DevicesScreen(bleManager, preferencesRepository,

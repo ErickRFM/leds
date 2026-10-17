@@ -24,6 +24,7 @@ import com.rgbcontroller.core.export.ProjectExportEnvelope
 import com.rgbcontroller.core.export.ProjectExportParser
 import com.rgbcontroller.core.wifi.CompiLabSession
 import com.rgbcontroller.core.wifi.LabConnectionState
+import com.rgbcontroller.core.wifi.LabTransport
 import com.rgbcontroller.core.wifi.LocalLabClient
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.coroutines.cancellation.CancellationException
@@ -310,7 +311,8 @@ class ComponentDashboardViewModel(
                 val repository = ComponentStatusRepository(DataStoreComponentStatusStorage(context))
                 val client = LocalLabClient(context)
                 val authorized = {
-                    session != null && LocalLabClient.validKey(session.key) &&
+                    session != null && session.transport == LabTransport.WIFI_LAB &&
+                        session.wifiReady && LocalLabClient.validKey(session.key) &&
                         session.connectionState == LabConnectionState.AUTHORIZED
                 }
                 val deviceId = {
@@ -318,11 +320,30 @@ class ComponentDashboardViewModel(
                         ?: bleManager?.connectedAddress?.value
                         ?: "esp32-lab"
                 }
+                // The same mutex used by RGB operations prevents interleaving
+                // telemetry/status requests with acknowledged hardware commands.
+                // Discard a delayed answer if the control session has changed.
                 val fetch = suspend {
-                    if (authorized()) client.componentStatus(session!!.key).toString() else null
+                    if (!authorized()) null else {
+                        val activeSession = session!!
+                        val key = activeSession.key
+                        val revision = activeSession.revision
+                        val payload = activeSession.serialized {
+                            if (!authorized()) null else client.componentStatus(key).toString()
+                        }
+                        payload?.takeIf { authorized() && activeSession.revision == revision }
+                    }
                 }
                 val fetchTelemetry = suspend {
-                    if (authorized()) client.componentTelemetry(session!!.key).toString() else null
+                    if (!authorized()) null else {
+                        val activeSession = session!!
+                        val key = activeSession.key
+                        val revision = activeSession.revision
+                        val payload = activeSession.serialized {
+                            if (!authorized()) null else client.componentTelemetry(key).toString()
+                        }
+                        payload?.takeIf { authorized() && activeSession.revision == revision }
+                    }
                 }
                 // Hardware automation actions reuse the EXISTING command path:
                 // the authorized Wi-Fi client (with readback) or the BLE queue.
@@ -331,10 +352,15 @@ class ComponentDashboardViewModel(
                     when (action) {
                         is AutomationAction.SetRgb ->
                             if (authorized() && session != null) {
-                                client.setRgbConfirmed(
-                                    session.key, action.red, action.green, action.blue, action.brightness
-                                )
-                                true
+                                session.serialized {
+                                    if (!authorized()) false else {
+                                        client.setRgbConfirmed(
+                                            session.key, action.red, action.green,
+                                            action.blue, action.brightness
+                                        )
+                                        true
+                                    }
+                                }
                             } else {
                                 false
                             }
@@ -351,8 +377,10 @@ class ComponentDashboardViewModel(
                 val writeProjectText: suspend (String, String) -> Boolean = { location, text ->
                     runCatching {
                         context.contentResolver.openOutputStream(android.net.Uri.parse(location), "wt")
-                            ?.use { it.write(text.toByteArray(Charsets.UTF_8)) }
-                        true
+                            ?.use {
+                                it.write(text.toByteArray(Charsets.UTF_8))
+                                true
+                            } ?: false
                     }.getOrDefault(false)
                 }
                 return ComponentDashboardViewModel(
