@@ -4,9 +4,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
@@ -84,9 +85,9 @@ fun HardwareLabScreen(
     var showConfigEditor by remember { mutableStateOf(false) }
     var showSensorDetails by rememberSaveable { mutableStateOf(false) }
     var showPinTemplates by rememberSaveable { mutableStateOf(false) }
-    // Each tab owns a fresh lazy slot table and scroll position. Reusing the
-    // same SubcomposeLayout while replacing all section items may corrupt the
-    // slot table during a concurrent animated scroll (verified on API 30).
+    // Firmware limits the registry to eight modules. Compose every section
+    // normally: this avoids the lazy SubcomposeLayout SlotTable crash reproduced
+    // during late list composition on the API 30 emulator.
     var section by rememberSaveable { mutableStateOf(HardwareSection.STATUS) }
     var syncMessage by remember { mutableStateOf<String?>(null) }
 
@@ -140,24 +141,25 @@ fun HardwareLabScreen(
         }
     ) { padding ->
         key(section) {
-        val listState = rememberLazyListState()
-        LazyColumn(
+        Column(
             modifier = Modifier.fillMaxSize().padding(padding)
-                .padding(horizontal = 16.dp).testTag("component_dashboard_list"),
-            state = listState,
-            contentPadding = PaddingValues(top = 10.dp, bottom = 28.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 28.dp)
+                .testTag("component_dashboard_list"),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            item(key = "hardware_authority") {
+            key("hardware_authority") {
                 AuthorityCard(connected = state.connected, authorized = authorized,
                     error = state.authorityError)
             }
-            item(key = "hardware_tabs") {
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth().testTag("hardware_tabs"),
+            key("hardware_tabs") {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .testTag("hardware_tabs"),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(HardwareSection.entries) { target ->
+                    HardwareSection.entries.forEach { target ->
                         FilterChip(
                             selected = section == target,
                             onClick = {
@@ -172,36 +174,36 @@ fun HardwareLabScreen(
             }
             when (section) {
                 HardwareSection.STATUS -> {
-                    item(key = "hardware_confirmed_header") {
+                    key("hardware_confirmed_header") {
                         Text("Estado confirmado por el firmware",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold)
                     }
                     when {
                         freshness == ComponentStatusFreshness.LIVE && confirmed != null -> {
-                            item(key = "hardware_live_notice") {
+                            key("hardware_live_notice") {
                                 Text("En vivo · actualizado ${formatTime(state.firmwareStatus?.receivedAtMs)}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.testTag("component_live"))
                             }
-                            items(confirmed, key = { "firmware_${it.id}" }) { component ->
+                            confirmed.forEach { component ->
                                 FirmwareComponentCard(component = component, live = true)
                             }
                         }
                         freshness == ComponentStatusFreshness.LAST_KNOWN && lastKnown != null -> {
-                            item(key = "hardware_cached_notice") {
+                            key("hardware_cached_notice") {
                                 Text("Último estado confirmado ${formatTime(state.lastKnownStatus?.confirmedAtMs)} · no es telemetría en vivo",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.tertiary,
                                     modifier = Modifier.testTag("component_last_known"))
                             }
-                            items(lastKnown, key = { "cached_${it.id}" }) { component ->
+                            lastKnown.forEach { component ->
                                 FirmwareComponentCard(component = component, live = false)
                             }
                         }
                         else -> {
-                            item(key = "hardware_no_report") {
+                            key("hardware_no_report") {
                                 Card(Modifier.fillMaxWidth().testTag("component_none")) {
                                     Column(Modifier.fillMaxWidth().padding(16.dp)) {
                                         Text("Sin estado confirmado")
@@ -215,12 +217,12 @@ fun HardwareLabScreen(
                         }
                     }
                     syncMessage?.let { message ->
-                        item(key = "hardware_sync_message") {
+                        key("hardware_sync_message") {
                             Text(message, style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    item(key = "hardware_shortcuts") {
+                    key("hardware_shortcuts") {
                         Card(Modifier.fillMaxWidth().testTag("hardware_quick_actions")) {
                             Column(Modifier.fillMaxWidth().padding(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -238,41 +240,41 @@ fun HardwareLabScreen(
                     }
                 }
                 HardwareSection.SENSORS -> {
-                    item(key = "hardware_sensors_title") {
+                    key("hardware_sensors_title") {
                         Text("Lecturas reales de sensores",
                             style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
-                    item(key = "hardware_dht22") { Dht22TelemetryCard(state = state) }
-                    item(key = "hardware_soil_calibration") {
+                    key("hardware_dht22") { Dht22TelemetryCard(state = state) }
+                    key("hardware_soil_calibration") {
                         SoilCalibrationCard(
                             state = state,
                             onCalibrate = { showSoilWizard = true },
                             onClear = { scope.launch { viewModel.clearSoilCalibration() } }
                         )
                     }
-                    item(key = "hardware_soil_sensor") { SoilTelemetryCard(state = state) }
-                    item(key = "hardware_oled_title") {
+                    key("hardware_soil_sensor") { SoilTelemetryCard(state = state) }
+                    key("hardware_oled_title") {
                         Text("Pantalla OLED",
                             style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
-                    item(key = "hardware_oled_card") { OledStatusCard(state = state) }
-                    item(key = "hardware_sensor_more") {
+                    key("hardware_oled_card") { OledStatusCard(state = state) }
+                    key("hardware_sensor_more") {
                         TextButton(
                             onClick = { showSensorDetails = !showSensorDetails },
                             modifier = Modifier.testTag("component_advanced_toggle")
                         ) { Text(if (showSensorDetails) "Ocultar gráficas e historial" else "Ver gráficas e historial") }
                     }
                     if (showSensorDetails) {
-                        item(key = "hardware_charts") { TelemetryChartsSection(state = state) }
-                        item(key = "hardware_history_header") {
+                        key("hardware_charts") { TelemetryChartsSection(state = state) }
+                        key("hardware_history_header") {
                             Text("Historial de telemetría (local)",
                                 style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         }
-                        item(key = "hardware_history") { TelemetryHistoryCard(state = state) }
+                        key("hardware_history") { TelemetryHistoryCard(state = state) }
                     }
                 }
                 HardwareSection.PINS -> {
-                    item(key = "hardware_pins_header") {
+                    key("hardware_pins_header") {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Conexiones GPIO", style = MaterialTheme.typography.titleMedium,
@@ -289,19 +291,19 @@ fun HardwareLabScreen(
                             }
                         }
                     }
-                    item(key = "hardware_desired_warning") {
+                    key("hardware_desired_warning") {
                         Text("Asignación guardada localmente: el firmware no ha aceptado " +
                             "estos cambios hasta confirmar por una API compatible.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     if (configIssues.isNotEmpty()) {
-                        item(key = "hardware_config_issues") {
+                        key("hardware_config_issues") {
                             ConfigValidationIssues(components = state.desiredConfig.components)
                         }
                     }
                     if (state.desiredConfig.components.isEmpty()) {
-                        item(key = "hardware_config_empty") {
+                        key("hardware_config_empty") {
                             Card(Modifier.fillMaxWidth()) {
                                 Text("Sin conexiones configuradas localmente",
                                     modifier = Modifier.padding(16.dp),
@@ -309,51 +311,51 @@ fun HardwareLabScreen(
                             }
                         }
                     } else {
-                        items(state.desiredConfig.components, key = { "desired_${it.id}" }) { desired ->
+                        state.desiredConfig.components.forEach { desired ->
                             DesiredComponentCard(desired = desired, confirmedCatalogIds = knownIds)
                         }
                     }
-                    item(key = "hardware_templates_toggle") {
+                    key("hardware_templates_toggle") {
                         TextButton(onClick = { showPinTemplates = !showPinTemplates },
                             modifier = Modifier.testTag("component_advanced_toggle")) {
                             Text(if (showPinTemplates) "Ocultar plantillas" else "Ver plantillas no detectadas")
                         }
                     }
                     if (showPinTemplates && missingTemplates.isNotEmpty()) {
-                        items(missingTemplates, key = { "template_${it.id}" }) { descriptor ->
+                        missingTemplates.forEach { descriptor ->
                             DisabledTemplateCard(descriptor = descriptor)
                         }
                     }
                 }
                 HardwareSection.AUTOMATION -> {
-                    item(key = "hardware_alerts_title") {
+                    key("hardware_alerts_title") {
                         Text("Alertas", style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold)
                     }
-                    item(key = "hardware_alerts") {
+                    key("hardware_alerts") {
                         AlertsCard(state = state, onEdit = { showAlertEditor = true })
                     }
-                    item(key = "hardware_automation_title") {
+                    key("hardware_automation_title") {
                         Text("Automatizaciones", style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold)
                     }
-                    item(key = "hardware_automation") {
+                    key("hardware_automation") {
                         AutomationCard(state = state, onEdit = { showAutomationEditor = true })
                     }
                 }
                 HardwareSection.PROJECT -> {
-                    item(key = "hardware_project_title") {
+                    key("hardware_project_title") {
                         Text("Proyecto (importar / exportar)",
                             style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
-                    item(key = "hardware_project_description") {
+                    key("hardware_project_description") {
                         Text("Archivos locales de componentes, alertas, automatizaciones y calibración. " +
                             "Nunca incluyen claves ni tokens.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     state.importError?.let { error ->
-                        item(key = "hardware_project_error") {
+                        key("hardware_project_error") {
                             Card(
                                 Modifier.fillMaxWidth().testTag("project_import_error"),
                                 colors = CardDefaults.cardColors(
@@ -372,7 +374,7 @@ fun HardwareLabScreen(
                             }
                         }
                     }
-                    item(key = "hardware_project_actions") {
+                    key("hardware_project_actions") {
                         Card(Modifier.fillMaxWidth().testTag("project_portable")) {
                             Row(Modifier.fillMaxWidth().padding(16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -392,7 +394,7 @@ fun HardwareLabScreen(
                 }
             }
         }
-        } // Dedicated, independently composed LazyColumn for each section.
+        } // Bounded, non-lazy composition per section.
     }
 
     if (showCatalog) {
