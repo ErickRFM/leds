@@ -19,6 +19,8 @@ class ComponentApplyCasPolicyTest {
     @Test fun activeAssignmentsMustMatchExactSignalCount() {
         assertEquals(listOf(32, 0), ComponentApplyCasPolicy.expected(status(true, listOf(32)), 1))
         assertEquals(listOf(21, 22), ComponentApplyCasPolicy.expected(status(true, listOf(21, 22)), 2))
+        assertEquals(listOf(27, 25, 26),
+            ComponentApplyCasPolicy.expected(status(true, listOf(27, 25, 26)), 3))
         assertThrows(IllegalStateException::class.java) {
             ComponentApplyCasPolicy.expected(status(true, emptyList()), 1)
         }
@@ -40,8 +42,13 @@ class ComponentApplyCasPolicyTest {
         assertThrows(IllegalStateException::class.java) {
             ComponentApplyCasPolicy.expected(JSONObject().put("active", false), 1)
         }
-        assertThrows(IllegalArgumentException::class.java) {
+        assertThrows(IllegalStateException::class.java) {
             ComponentApplyCasPolicy.expected(status(true, listOf(21)), 3)
+        }
+        assertEquals(listOf(0, 0, 0),
+            ComponentApplyCasPolicy.expected(status(false, emptyList()), 3))
+        assertThrows(IllegalArgumentException::class.java) {
+            ComponentApplyCasPolicy.expected(status(true, listOf(21)), 4)
         }
     }
 }
