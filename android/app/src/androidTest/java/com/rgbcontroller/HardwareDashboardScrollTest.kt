@@ -6,7 +6,7 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.rgbcontroller.feature.hardwarelab.HardwareLabScreen
 import org.junit.Rule
@@ -24,11 +24,10 @@ class HardwareDashboardScrollTest {
     @get:Rule val composeRule = createComposeRule()
 
     @Test
-    fun initialDashboardCompositionIsStable() {
+    fun initialDashboardRendersWithoutFirmware() {
         composeRule.setContent { MaterialTheme { HardwareLabScreen() } }
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("hardware_tab_status").assertExists()
-        composeRule.waitForIdle()
     }
 
     @Test
@@ -38,25 +37,39 @@ class HardwareDashboardScrollTest {
             MaterialTheme { HardwareLabScreen() }
         }
         composeRule.waitForIdle()
-        Log.i("COMPI_QA", "initial composition complete")
+        Log.i("COMPI_QA", "INITIAL READY")
 
         // Configuration is intentionally in its own lightweight area.
-        Log.i("COMPI_QA", "opening pins")
-        composeRule.onNodeWithTag("hardware_tab_pins").performScrollTo().performClick()
-        composeRule.onNodeWithTag("component_config_edit").performScrollTo().assertExists()
-        Log.i("COMPI_QA", "pins reached")
+        composeRule.onNodeWithTag("hardware_tabs")
+            .performScrollToNode(hasTestTag("hardware_tab_pins"))
+        composeRule.onNodeWithTag("hardware_tab_pins").performClick()
+        Log.i("COMPI_QA", "PINS OPENED")
+        composeRule.onNodeWithTag("component_dashboard_list")
+            .performScrollToNode(hasTestTag("component_config_edit"))
+        composeRule.onNodeWithTag("component_config_edit").assertExists()
+        Log.i("COMPI_QA", "PINS END REACHED")
 
-        Log.i("COMPI_QA", "opening sensors")
-        composeRule.onNodeWithTag("hardware_tab_sensors").performScrollTo().performClick()
-        composeRule.onNodeWithTag("component_advanced_toggle").performScrollTo().performClick()
-        Log.i("COMPI_QA", "sensor details expanded")
-        composeRule.onNodeWithTag("component_telemetry_history").performScrollTo().assertExists()
-        Log.i("COMPI_QA", "sensor history reached")
+        composeRule.onNodeWithTag("hardware_tabs")
+            .performScrollToNode(hasTestTag("hardware_tab_sensors"))
+        composeRule.onNodeWithTag("hardware_tab_sensors").performClick()
+        Log.i("COMPI_QA", "SENSORS OPENED")
+        composeRule.onNodeWithTag("component_dashboard_list")
+            .performScrollToNode(hasTestTag("component_advanced_toggle"))
+        composeRule.onNodeWithTag("component_advanced_toggle").performClick()
+        Log.i("COMPI_QA", "HISTORY EXPANDED")
+        composeRule.onNodeWithTag("component_dashboard_list")
+            .performScrollToNode(hasTestTag("component_telemetry_history"))
+        composeRule.onNodeWithTag("component_telemetry_history").assertExists()
+        Log.i("COMPI_QA", "HISTORY END REACHED")
 
         // Finally visit project tools at the bottom of the final area.
-        Log.i("COMPI_QA", "opening project")
-        composeRule.onNodeWithTag("hardware_tab_project").performScrollTo().performClick()
-        composeRule.onNodeWithTag("project_portable").performScrollTo().assertExists()
-        Log.i("COMPI_QA", "project end reached")
+        composeRule.onNodeWithTag("hardware_tabs")
+            .performScrollToNode(hasTestTag("hardware_tab_project"))
+        composeRule.onNodeWithTag("hardware_tab_project").performClick()
+        Log.i("COMPI_QA", "PROJECT OPENED")
+        composeRule.onNodeWithTag("component_dashboard_list")
+            .performScrollToNode(hasTestTag("project_portable"))
+        composeRule.onNodeWithTag("project_portable").assertExists()
+        Log.i("COMPI_QA", "PROJECT END REACHED")
     }
 }
