@@ -96,6 +96,14 @@ class OledSsd1306Module final : public IModule {
     dirty_ = false;
   }
 
+  bool configurePins(uint8_t sda, uint8_t scl) {
+    if (ready_ || sda == scl || !PinManager::outputCapable(sda) ||
+        !PinManager::outputCapable(scl) ||
+        PinManager::reservedForRgb(sda) || PinManager::reservedForRgb(scl)) return false;
+    sda_ = sda;
+    scl_ = scl;
+    return true;
+  }
   bool ready() const { return ready_; }
   bool confirmed() const { return confirmed_; }
   bool pending() const { return dirty_; }
@@ -106,8 +114,8 @@ class OledSsd1306Module final : public IModule {
 
  private:
   const uint8_t address_;
-  const uint8_t sda_;
-  const uint8_t scl_;
+  uint8_t sda_;
+  uint8_t scl_;
   InitFn init_;
   PresentFn present_;
   void* const context_;

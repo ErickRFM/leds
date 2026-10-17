@@ -82,6 +82,55 @@ class LocalLabClient(private val context: Context) {
     /** Authoritative firmware runtime status (resolved pins + lifecycle). */
     suspend fun componentStatus(key: String): JSONObject =
         request("GET", "/v2/components/status", key)
+
+    /**
+     * Only acknowledges a runtime GPIO change after an independent firmware
+     * readback. A successful HTTP 200 alone is not proof of a new assignment.
+     * No pins are persisted across ESP32 resets.
+     */
+    suspend fun applyComponentPinsConfirmed(
+        key: String, id: String, target: List<Int>
+    ): JSONObject {
+        val names = mapOf(
+            "dht22" to "sensor.dht22",
+            "soil_moisture" to "sensor.soil_moisture",
+            "ssd1306_oled" to "display.ssd1306"
+        )
+        val firmwareId = names[id] ?: error("Este componente no admite reasignación en caliente.")
+        val count = if (id == "ssd1306_oled") 2 else 1
+        require(target.size == count && target.all { it in 0..39 })
+        val before = componentStatus(key)
+        val components = before.optJSONArray("components") ?: error("No hay estado de componentes.")
+        fun pinsFor(array: org.json.JSONArray): List<Int>? {
+            for (i in 0 until array.length()) {
+                val item = array.optJSONObject(i) ?: continue
+                if (item.optString("id") != firmwareId || !item.optBoolean("active")) continue
+                val pins = item.optJSONArray("pins") ?: continue
+                return (0 until pins.length()).map { pins.optInt(it, -1) }
+            }
+            return null
+        }
+        val original = pinsFor(components) ?: error("Módulo no activo en el firmware.")
+        check(original.size == count) { "El firmware no reporta las señales esperadas." }
+        val expected = original + List(2 - count) { 0 }
+        val next = target + List(2 - count) { 0 }
+        val response = request("POST", "/v2/components/apply", key, mapOf(
+            "id" to id,
+            "from1" to expected[0].toString(),
+            "from2" to expected[1].toString(),
+            "to1" to next[0].toString(),
+            "to2" to next[1].toString()
+        ))
+        check(response.optString("status") == "APPLIED") {
+            "El ESP32 no confirmó la aplicación de pines."
+        }
+        val after = componentStatus(key)
+        val verified = after.optJSONArray("components")?.let(::pinsFor)
+        check(verified == target) {
+            "El firmware respondió, pero el estado GPIO leído no coincide."
+        }
+        return after
+    }
     suspend fun blink(key: String, pin: Int, intervalMs: Int, cycles: Int): JSONObject {
         require(allowedOutput(pin) && pin !in setOf(25,26,27))
         require(intervalMs in 100..2000 && cycles in 1..20)

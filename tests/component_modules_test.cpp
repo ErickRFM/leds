@@ -98,6 +98,46 @@ int main() {
     assert(!SensorTelemetryCodec::encode(nullptr, 0, nullptr, 0));
   }
 
+  // --- Safe stopped-only pin reassignment contract -------------------------
+  {
+    PinManager pins;
+    DhtDouble sensor;
+    Dht22Module dht(32, readDht, &sensor);
+    SoilMoistureModule soil(34, readAdc, nullptr);
+    OledDouble displayDriver;
+    OledSsd1306Module display(0x3C, 21, 22, oledInit, oledPresent, &displayDriver);
+    assert(dht.begin(pins));
+    assert(soil.begin(pins));
+    assert(display.begin(pins));
+    assert(!dht.configurePin(18)); // active module cannot move
+    assert(!soil.configurePin(35));
+    assert(!display.configurePins(18, 19));
+    dht.stop(pins);
+    assert(!dht.configurePin(25)); // RGB reserved even when not leased
+    assert(!dht.configurePin(34)); // input-only DHT rejected
+    assert(dht.configurePin(18));
+    assert(dht.pin() == 18);
+    assert(dht.begin(pins));
+    assert(pins.belongsTo(18, dht.id()));
+    soil.stop(pins);
+    assert(!soil.configurePin(25));
+    assert(!soil.configurePin(19)); // no ADC1 on GPIO19
+    assert(soil.configurePin(35));
+    assert(soil.begin(pins));
+    assert(pins.belongsTo(35, soil.id()));
+    display.stop(pins);
+    assert(!display.configurePins(19, 19));
+    assert(!display.configurePins(25, 23));
+    assert(display.configurePins(22, 23));
+    assert(display.begin(pins));
+    assert(pins.belongsTo(22, display.id()));
+    assert(pins.belongsTo(23, display.id()));
+    dht.stop(pins);
+    soil.stop(pins);
+    display.stop(pins);
+    assert(pins.leasedCount() == 0);
+  }
+
   // --- DHT22 ---------------------------------------------------------------
   {
     PinManager pins;

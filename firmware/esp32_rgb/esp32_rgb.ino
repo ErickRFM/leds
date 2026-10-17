@@ -116,21 +116,22 @@ uint32_t physicalProvisionHoldStarted = 0;
 uint32_t effectStarted = 0;
 
 #if COMPI_ENABLE_DHT22
+uint8_t liveDhtPin = COMPI_DHT22_PIN;
 // Bit-banged AM2302/DHT22 read. Returns ok=false on timeout or checksum error;
 // callers must treat that as "no data", never as a valid 0% reading.
 esp32core::Dht22Module::Reading dht22Read(void*) {
   esp32core::Dht22Module::Reading result{false, 0.0f, 0.0f};
   uint8_t data[5] = {0, 0, 0, 0, 0};
-  pinMode(COMPI_DHT22_PIN, OUTPUT);
-  digitalWrite(COMPI_DHT22_PIN, LOW);
+  pinMode(liveDhtPin, OUTPUT);
+  digitalWrite(liveDhtPin, LOW);
   delay(2);
-  digitalWrite(COMPI_DHT22_PIN, HIGH);
+  digitalWrite(liveDhtPin, HIGH);
   delayMicroseconds(40);
-  pinMode(COMPI_DHT22_PIN, INPUT_PULLUP);
-  if (pulseIn(COMPI_DHT22_PIN, LOW, 1000) == 0) return result;
-  if (pulseIn(COMPI_DHT22_PIN, HIGH, 1000) == 0) return result;
+  pinMode(liveDhtPin, INPUT_PULLUP);
+  if (pulseIn(liveDhtPin, LOW, 1000) == 0) return result;
+  if (pulseIn(liveDhtPin, HIGH, 1000) == 0) return result;
   for (int i = 0; i < 40; ++i) {
-    const unsigned long highDuration = pulseIn(COMPI_DHT22_PIN, HIGH, 1000);
+    const unsigned long highDuration = pulseIn(liveDhtPin, HIGH, 1000);
     if (highDuration == 0) return result;
     data[i / 8] <<= 1;
     if (highDuration > 40) data[i / 8] |= 1;
@@ -585,6 +586,69 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
 }
 
 
+// A single runtime edit is a compare-and-swap transaction. All pin changes
+// occur in the Arduino loop (the HTTP handler), never in BLE ISR/callbacks.
+// If begin() fails after a stopped module changes pins, restore the old lease.
+// Deliberately no NVS persistence: on reboot the audited compile-time profile
+// is authoritative again until an explicit owner-authorized rewire.
+bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
+                        uint8_t to1, uint8_t to2, void*) {
+  if (!catalogId) return false;
+  const auto available = [](uint8_t pin, const char* owner) {
+    const auto* lease = pinManager.lease(pin);
+    const char* system = pinManager.systemOwner(pin);
+    return (!lease || std::strcmp(lease->owner, owner) == 0) &&
+           (!system || std::strcmp(system, owner) == 0);
+  };
+#if COMPI_ENABLE_DHT22
+  if (std::strcmp(catalogId, "dht22") == 0) {
+    if (!dht22Module.ready() || dht22Module.pin() != from1 || from2 != 0 ||
+        to2 != 0 || PinManager::reservedForRgb(to1) ||
+        !PinManager::outputCapable(to1) || !available(to1, dht22Module.id())) return false;
+    if (from1 == to1) return true;
+    dht22Module.stop(pinManager);
+    if (!dht22Module.configurePin(to1)) return false; // preflight ensures this
+    liveDhtPin = to1; // the physical bit-bang driver must use the new GPIO
+    if (dht22Module.begin(pinManager)) return true;
+    dht22Module.configurePin(from1);
+    liveDhtPin = from1;
+    dht22Module.begin(pinManager);
+    return false;
+  }
+#endif
+#if COMPI_ENABLE_SOIL
+  if (std::strcmp(catalogId, "soil_moisture") == 0) {
+    if (!soilModule.ready() || soilModule.pin() != from1 || from2 != 0 ||
+        to2 != 0 || PinManager::reservedForRgb(to1) ||
+        !PinManager::analogInputCapable(to1) || !available(to1, soilModule.id())) return false;
+    if (from1 == to1) return true;
+    soilModule.stop(pinManager);
+    if (!soilModule.configurePin(to1)) return false;
+    if (soilModule.begin(pinManager)) return true;
+    soilModule.configurePin(from1);
+    soilModule.begin(pinManager);
+    return false;
+  }
+#endif
+#if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
+  if (std::strcmp(catalogId, "ssd1306_oled") == 0) {
+    if (!oledModule.ready() || oledModule.sda() != from1 ||
+        oledModule.scl() != from2 || to1 == to2 ||
+        PinManager::reservedForRgb(to1) || PinManager::reservedForRgb(to2) ||
+        !PinManager::outputCapable(to1) || !PinManager::outputCapable(to2) ||
+        !available(to1, oledModule.id()) || !available(to2, oledModule.id())) return false;
+    if (from1 == to1 && from2 == to2) return true;
+    oledModule.stop(pinManager);
+    if (!oledModule.configurePins(to1, to2)) return false;
+    if (oledModule.begin(pinManager)) return true;
+    oledModule.configurePins(from1, from2);
+    oledModule.begin(pinManager);
+    return false;
+  }
+#endif
+  return false;  // Build did not include this optional physical component.
+}
+
 esp32core::LocalWifiControl wifiLab(pinManager, stateString, applyRgbCommand,
     applyRgbRuntimeCommand, []() { return deviceIdentity.value(); });
 
@@ -752,6 +816,7 @@ void setup() {
 
   wifiLab.setComponentTelemetry(collectComponentTelemetry, nullptr);
   wifiLab.setComponentStatus(collectComponentStatus, nullptr);
+  wifiLab.setComponentApply(applyComponentPins, nullptr);
   wifiLab.begin();
 
   BLEDevice::init(DEVICE_NAME);
