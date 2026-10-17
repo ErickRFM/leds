@@ -114,12 +114,7 @@ class LocalLabClient(private val context: Context) {
         val prior = moduleFor(components) ?: error(
             "El firmware no incluye este driver. Actualiza el ESP32."
         )
-        val original = pinsFor(prior) ?: error("El firmware no reporta GPIO.")
-        check(original.size == count) { "El firmware no reporta las señales esperadas." }
-        // Inactive modules have no lease yet; zeros are a reserved CAS sentinel.
-        val expected = if (prior.optBoolean("active")) {
-            original + List(2 - count) { 0 }
-        } else listOf(0, 0)
+        val expected = ComponentApplyCasPolicy.expected(prior, count)
         val next = target + List(2 - count) { 0 }
         // One nonce per user transaction. The firmware caches successful
         // receipts to avoid applying duplicate POST requests twice.
