@@ -39,6 +39,8 @@ import com.rgbcontroller.core.components.widgets.HumidityTemperatureWidget
 import com.rgbcontroller.core.components.widgets.SoilMoistureWidget
 import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.wifi.CompiLabSession
+import com.rgbcontroller.core.wifi.LocalLabClient
+import kotlinx.coroutines.CancellationException
 import com.rgbcontroller.core.wifi.LabConnectionState
 import com.rgbcontroller.core.wifi.LabTransport
 import com.rgbcontroller.feature.hardwarelab.ComponentDashboardViewModel
@@ -74,6 +76,9 @@ fun ModuleWorkspaceScreen(
     var showLibrary by rememberSaveable { mutableStateOf(false) }
     var openedId by rememberSaveable { mutableStateOf<String?>(null) }
     var editingId by remember { mutableStateOf<String?>(null) }
+    var applyMessage by remember { mutableStateOf<String?>(null) }
+    var applying by remember { mutableStateOf(false) }
+    val labClient = remember(context) { LocalLabClient(context.applicationContext) }
 
     LaunchedEffect(Unit) {
         vm.loadPersisted()
@@ -340,10 +345,43 @@ fun ModuleWorkspaceScreen(
         }
         ModulePinWizard(
             componentId = id,
+            canApply = wifiAuthorized && currentlyVerified && current?.active == true &&
+                id in setOf("dht22", "soil_moisture", "ssd1306_oled"),
+            applying = applying,
+            applyMessage = applyMessage,
+            onApply = { pins ->
+                scope.launch {
+                    applying = true
+                    applyMessage = null
+                    try {
+                        check(wifiAuthorized) { "Se perdió la autorización Wi-Fi." }
+                        val revision = session.revision
+                        val key = session.key
+                        session.serialized {
+                            check(wifiAuthorized && session.revision == revision) {
+                                "La sesión cambió antes de aplicar GPIO."
+                            }
+                            labClient.applyComponentPinsConfirmed(key, id, pins)
+                        }
+                        check(wifiAuthorized && session.revision == revision) {
+                            "Sesión cambiada: vuelve a verificar los GPIO del firmware."
+                        }
+                        vm.refresh()
+                        applyMessage = "Pines confirmados por el firmware. Solo vigentes hasta reiniciar el ESP32."
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (failure: Exception) {
+                        applyMessage = "No aplicado: ${failure.message ?: "verifica el ESP32 y sus conexiones"}"
+                        vm.refresh()
+                    } finally {
+                        applying = false
+                    }
+                }
+            },
             initial = effectiveDraft,
             otherLocal = state.desiredConfig.components,
             reported = state.authoritative.orEmpty(),
-            onDismiss = { editingId = null },
+            onDismiss = { if (!applying) { editingId = null; applyMessage = null } },
             onSave = { pins ->
                 val desc = ComponentCatalog.get(id)
                 if (desc != null) {
@@ -352,6 +390,7 @@ fun ModuleWorkspaceScreen(
                     scope.launch { vm.setLocalDesired(LocalDesiredConfig(next)) }
                 }
                 editingId = null
+                applyMessage = null
                 showLibrary = false
             },
             onRemove = if (draft == null) null else {
@@ -423,6 +462,10 @@ private fun ModulePinWizard(
     initial: LocalDesiredComponent?,
     otherLocal: List<LocalDesiredComponent>,
     reported: List<ComponentRuntimeStatus>,
+    canApply: Boolean,
+    applying: Boolean,
+    applyMessage: String?,
+    onApply: (List<Int>) -> Unit,
     onDismiss: () -> Unit,
     onSave: (List<Int>) -> Unit,
     onRemove: (() -> Unit)?
@@ -449,7 +492,7 @@ private fun ModulePinWizard(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("Indica a qué pin conectaste cada señal. No se modifica el firmware.",
+                Text("Selecciona las señales. Guardar conserva el borrador; aplicar requiere ESP32 autorizado y módulo activo.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 for ((index, signal) in profile.signals.withIndex()) {
@@ -480,6 +523,13 @@ private fun ModulePinWizard(
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.testTag("module_pin_warning"))
                 }
+                if (applyMessage != null) {
+                    Text(applyMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (applyMessage.startsWith("No aplicado")) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.testTag("module_apply_result"))
+                }
                 if (onRemove != null) {
                     TextButton(onClick = onRemove, modifier = Modifier.testTag("module_pin_remove")) {
                         Text("Quitar configuración local")
@@ -488,11 +538,20 @@ private fun ModulePinWizard(
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = { onSave(pins) },
-                enabled = issues.isEmpty(),
-                modifier = Modifier.testTag("module_pin_save")
-            ) { Text("Guardar borrador") }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(
+                    onClick = { onSave(pins) },
+                    enabled = issues.isEmpty() && !applying,
+                    modifier = Modifier.testTag("module_pin_save")
+                ) { Text("Guardar borrador") }
+                if (canApply) {
+                    Button(
+                        onClick = { onApply(pins) },
+                        enabled = issues.isEmpty() && !applying,
+                        modifier = Modifier.testTag("module_pin_apply")
+                    ) { Text(if (applying) "Aplicando…" else "Aplicar al ESP32") }
+                }
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
     )
