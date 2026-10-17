@@ -89,6 +89,13 @@ class Dht22Module final : public IModule {
 
   bool ready() const { return ready_; }
   uint8_t pin() const { return pin_; }
+  // Only while stopped. The transaction manager owns stop/restart/rollback.
+  bool setPin(uint8_t next) {
+    if (ready_ || !PinManager::outputCapable(next) ||
+        PinManager::reservedForRgb(next)) return false;
+    pin_ = next;
+    return true;
+  }
   uint16_t consecutiveFailures() const { return consecutiveFailures_; }
   MeasurementStatus status() const { return humidity_.status; }
   const Measurement& humidityReading() const { return humidity_; }
@@ -103,7 +110,7 @@ class Dht22Module final : public IModule {
   static constexpr float kMaxTemperature = 85.0f;
 
  private:
-  const uint8_t pin_;
+  uint8_t pin_;
   const ReadFn read_;
   void* const context_;
   const uint32_t minIntervalMs_;
