@@ -114,21 +114,7 @@ class LocalLabClient(private val context: Context) {
         val prior = moduleFor(components) ?: error(
             "El firmware no incluye este driver. Actualiza el ESP32."
         )
-        val original = pinsFor(prior) ?: error("El firmware no reporta GPIO.")
-        // An inactive driver has no owned lease: the firmware intentionally
-        // reports pins=[] until first begin(). It is a supported activation,
-        // not a truncated active report. CAS uses from=(0,0) in this case.
-        val active = prior.optBoolean("active")
-        if (active) {
-            check(original.size == count) { "El firmware no reporta las señales activas esperadas." }
-        } else {
-            check(original.isEmpty()) {
-                "El firmware reportó pines sin una reserva activa; actualiza el estado antes de aplicar."
-            }
-        }
-        val expected = if (active) {
-            original + List(2 - count) { 0 }
-        } else listOf(0, 0)
+        val expected = ComponentApplyCasPolicy.expected(prior, count)
         val next = target + List(2 - count) { 0 }
         // One nonce per user transaction. The firmware caches successful
         // receipts to avoid applying duplicate POST requests twice.
