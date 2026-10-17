@@ -360,6 +360,53 @@ int main() {
     assert(!ok.ready());
   }
 
+  // --- Safe boot: optional OLED absent, essential service remains operational ---
+  {
+    PinManager pins;
+    DhtDouble sensor;
+    Dht22Module essential(32, readDht, &sensor);
+    OledDouble absent;
+    absent.initOk = false;
+    OledSsd1306Module optionalDisplay(0x3C, 21, 22, oledInit, oledPresent, &absent);
+    ModuleRegistry registry;
+    assert(registry.add(essential));
+    assert(registry.add(optionalDisplay));
+    assert(registry.startRequiredAndOptional(pins, 1));
+    assert(registry.started());
+    assert(registry.unavailableAtBoot() == 1);
+    assert(essential.ready());
+    assert(!optionalDisplay.ready());
+    assert(pins.belongsTo(32, essential.id()));
+    assert(!pins.lease(21) && !pins.lease(22));
+    registry.tickAll(1000);
+    assert(sensor.calls == 1);  // required module stays operational
+    // Plug in the OLED later: the same registered driver can start and tick.
+    absent.initOk = true;
+    assert(optionalDisplay.begin(pins));
+    assert(optionalDisplay.ready());
+    assert(pins.belongsTo(21, optionalDisplay.id()));
+    registry.stopAll(pins);
+    assert(!registry.started());
+    assert(pins.leasedCount() == 0);
+  }
+
+  // A failed REQUIRED first module must still abort, not silently expose
+  // healthy control services with the RGB core missing.
+  {
+    PinManager pins;
+    OledDouble absent;
+    absent.initOk = false;
+    OledSsd1306Module required(0x3C, 21, 22, oledInit, oledPresent, &absent);
+    DhtDouble sensor;
+    Dht22Module optional(32, readDht, &sensor);
+    ModuleRegistry registry;
+    assert(registry.add(required));
+    assert(registry.add(optional));
+    assert(!registry.startRequiredAndOptional(pins, 1));
+    assert(!registry.started());
+    assert(pins.leasedCount() == 0);
+  }
+
   std::cout << "component library host tests: ALL OK\n";
   return 0;
 }
