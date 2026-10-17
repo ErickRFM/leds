@@ -1,4 +1,4 @@
-# Contrato Bluetooth Low Energy GATT — RGB Controller v1
+# Contrato Bluetooth Low Energy GATT — Compi (estado V18, laboratorio)
 
 Nombre anunciado: `RGB-ESP32` (ESP32 clásico con Bluetooth LE).
 
@@ -10,7 +10,7 @@ Nombre anunciado: `RGB-ESP32` (ESP32 clásico con Bluetooth LE).
 | Identidad pública V4 (opcional) | `4b9d0004-7a5e-4d4c-ae88-c8c70d3ab211` | READ únicamente; 16 caracteres ASCII hexadecimales, NO es secreto |
 | GPIO V9 (opcional) | `4b9d0005-7a5e-4d4c-ae88-c8c70d3ab211` | READ únicamente. Mapa de reservas en firmware: no escribe ni autoriza GPIO |
 
-Todos los comandos se escriben como texto ASCII/UTF-8, sin nueva línea, hasta 48 bytes.
+Los comandos RGB clásicos se escriben como ASCII/UTF-8, sin nueva línea, hasta 48 bytes. Las tramas de enrolamiento V16 son más largas y se procesan por separado en el firmware.
 
 ## Comandos
 - `SET,255,120,0,200` asigna R,G,B,brillo (0..255), enciende y detiene efecto.
@@ -21,7 +21,10 @@ Todos los comandos se escriben como texto ASCII/UTF-8, sin nueva línea, hasta 4
 - `FX,BREATHE,120`: respiración; velocidad 10..1000.
 - `FX,FADE,120`: fundido de colores; velocidad 10..1000.
 - `FX,STOP`: detiene cualquier efecto y vuelve a color estático.
-- `AUTH <clave>`: presenta la clave de propietario de 16 caracteres (impresa solo por consola serie física) para autorizar la sesión. Solo se acepta sobre un enlace ya cifrado/emparejado; si la clave no coincide o el enlace no está cifrado, se rechaza sin otorgar control. Los comandos RGB siguen rechazándose mientras la sesión no esté autorizada; la desconexión revoca la autorización de inmediato.
+- `PAIR <codigo> <ownerId> <ownerPubKeyHex>`: enrolamiento dentro de una ventana física abierta con BOOT; el código temporal se entrega exclusivamente por consola serie local.
+- `BEGIN <clientNonceHex>`: inicia reto de sesión.
+- `CHALLENGE <deviceNonceHex> <devicePubKeyHex>`: respuesta del ESP32 (notificación STATE).
+- `AUTH <clientNonceHex> <counter> <proofHex>`: demuestra posesión de clave con contador monotónico. **No equivale al antiguo `AUTH <clave>`.**
 
 ## Respuesta READ / NOTIFY
 `STATE,r,g,b,brillo,power,mode,speed`, donde power es 0 ó 1 y mode es NONE,RAINBOW,BREATHE,FADE.
@@ -35,11 +38,11 @@ El resultado de `AUTH` se notifica transitoriamente como `AUTH,OK` o `AUTH,ERR` 
 Android habilita notificaciones mediante CCCD y espera confirmación; después lee STATE. En V4 lee opcionalmente la característica de identidad pública antes de READY. En firmware anterior, que no la anuncia, mantiene compatibilidad RGB; nunca interpreta el ID como prueba de propiedad. Solo al finalizar lectura y validación del estado declara GATT Ready. Todas las operaciones GATT deben serializarse y el estado de la UI debe distinguir cambios locales de valores confirmados.
 
 ## Seguridad y limitaciones
-Firmware **experimental de laboratorio**. V15.1 añade autorización de propietario real sobre BLE: el firmware exige bonding+enlace cifrado y la clave física de propietario (`AUTH`) antes de aceptar comandos protegidos; el estado no autorizado se rechaza de forma *fail-closed* y la desconexión revoca la autorización. El emparejamiento por sí solo (just-works, sin MITM) **no** autoriza ni otorga control, y no proporciona resistencia MITM; este transporte sigue siendo solo para banco de pruebas local. La autorización de propietario **no** está validada físicamente (PENDING_HARDWARE_VALIDATION).
+Firmware **experimental de laboratorio**. El firmware implementa PAIR/BEGIN/CHALLENGE/AUTH y deniega comandos privilegiados sin sesión de propietario. **Integración pendiente P0:** `BleManager.kt` aún usa `RgbDeviceCommand.auth(ownerKey)` y no integra el cliente criptográfico `OwnerEnrollmentClient`; por tanto, la APK actual no completa el enrolamiento V16. Un enlace *Just Works* no proporciona protección MITM y no equivale a autorización de propietario. No se ha validado físicamente la autorización (PENDING_HARDWARE_VALIDATION).
 
-Antes de distribución fuera de laboratorio: sustituir el bonding just-works por enrolamiento con MITM/anti-replay, añadir TLS en los canales locales y no asumir que la cercanía protege el dispositivo.
+Antes de distribución fuera de laboratorio: integrar el cliente V16 en Android, proteger cada comando con integridad y contador de sesión, verificar recuperación y revocación, y mejorar seguridad Wi-Fi/HTTP; no asumir que la cercanía protege el dispositivo.
 
-El ESP32 ejecuta efectos autónomamente, aunque Android salga de primer plano. No hay nube ni servidor HTTP.
+El ESP32 ejecuta efectos autónomamente, aunque Android salga de primer plano. No hay nube; **sí existe un servidor HTTP local** del SoftAP de laboratorio (`LocalWifiControl.h`, puerto 80).
 
 ## Estado GPIO BLE V9 (informativo y opcional)
 

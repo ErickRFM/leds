@@ -55,6 +55,18 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/compi_arbiter_test.cpp -o /tmp/compi_arbiter_test
           /tmp/compi_arbiter_test
+      - name: Capability negotiation host tests
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/compi_capabilities_test.cpp -o /tmp/compi_capabilities_test
+          /tmp/compi_capabilities_test
+      - name: OTA preflight host tests (no OTA flashing)
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/compi_ota_preflight_test.cpp -o /tmp/compi_ota_preflight_test
+          /tmp/compi_ota_preflight_test
+      - name: RGB automation clock host tests
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/rgb_automation_clock_test.cpp -o /tmp/rgb_automation_clock_test
+          /tmp/rgb_automation_clock_test
       - name: BLE security policy host tests
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/ble_security_policy_test.cpp -o /tmp/ble_security_policy_test
