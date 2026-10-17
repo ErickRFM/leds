@@ -45,6 +45,7 @@ class HomeNavigationTest {
 
     @Test
     fun homeReturnsFromLedWithoutConnectingToEsp32() {
+        composeRule.onNodeWithTag("home_active_module").assertExists()
         composeRule.onNodeWithTag("open_led").performClick()
         composeRule.onNodeWithTag("module_workspace_list").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
