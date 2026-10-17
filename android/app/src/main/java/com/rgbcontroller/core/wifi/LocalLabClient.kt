@@ -82,6 +82,40 @@ class LocalLabClient(private val context: Context) {
     /** Authoritative firmware runtime status (resolved pins + lifecycle). */
     suspend fun componentStatus(key: String): JSONObject =
         request("GET", "/v2/components/status", key)
+    /** Capabilities returned by this specific firmware, never guessed from catalog. */
+    suspend fun componentWiringCapabilities(key: String): JSONObject =
+        request("GET", "/v2/components/wiring", key)
+
+    /**
+     * Requires a versioned receipt AND an independent authoritative readback.
+     * The firmware may accept a GPIO lease without proving that a sensor is
+     * physically attached. Changes revert to compile-time defaults on reboot.
+     */
+    suspend fun applyComponentWiringConfirmed(
+        key: String, componentId: String, expectedPin: Int, pin: Int, requestId: String
+    ): JSONObject {
+        require(componentId in ComponentWiringProtocol.mutableComponents)
+        require(expectedPin in 0..39 && pin in 0..39)
+        require(Regex("[a-fA-F0-9]{16}").matches(requestId))
+        val capabilities = componentWiringCapabilities(key)
+        check(ComponentWiringProtocol.supported(capabilities, componentId)) {
+            "Este firmware no permite reasignar este componente en caliente."
+        }
+        val receipt = request("POST", "/v2/components/wiring/apply", key, mapOf(
+            "componentId" to componentId,
+            "expectedPin" to expectedPin.toString(),
+            "pin" to pin.toString(),
+            "requestId" to requestId
+        ))
+        check(ComponentWiringProtocol.receiptMatches(receipt, componentId, pin, requestId)) {
+            "Respuesta GPIO sin acuse válido. Relee el firmware antes de reintentar."
+        }
+        val authoritative = componentStatus(key)
+        check(ComponentWiringProtocol.confirmedByFirmware(authoritative, componentId, pin)) {
+            "El ESP32 respondió, pero no confirmó el nuevo GPIO activo."
+        }
+        return authoritative
+    }
     suspend fun blink(key: String, pin: Int, intervalMs: Int, cycles: Int): JSONObject {
         require(allowedOutput(pin) && pin !in setOf(25,26,27))
         require(intervalMs in 100..2000 && cycles in 1..20)
