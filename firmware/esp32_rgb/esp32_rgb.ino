@@ -851,12 +851,19 @@ void setup() {
 #if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
   moduleRegistry.add(oledModule);
 #endif
-  if (!moduleRegistry.startAll(pinManager)) {
-    Serial.println("ERROR: module start failed; control services disabled");
+  // RGB is the single required module. A missing optional OLED or sensor
+  // must not suppress SoftAP/BLE or trap the board in an unrecoverable loop.
+  if (!moduleRegistry.startRequiredAndOptional(pinManager, 1)) {
+    Serial.println("ERROR: required RGB module start failed; control services disabled");
     while (true) delay(1000);
   }
+  if (moduleRegistry.unavailableAtBoot() > 0) {
+    Serial.print("WARN: optional modules inactive at boot: ");
+    Serial.println(moduleRegistry.unavailableAtBoot());
+    Serial.println("Control services continue; check wiring via component status.");
+  }
 
-  Serial.println("BOOT: firmware modules started");
+  Serial.println("BOOT: required modules started; optional components reported individually");
   wifiLab.setComponentTelemetry(collectComponentTelemetry, nullptr);
   wifiLab.setComponentStatus(collectComponentStatus, nullptr);
   wifiLab.setComponentApply(applyComponentPins, nullptr);
