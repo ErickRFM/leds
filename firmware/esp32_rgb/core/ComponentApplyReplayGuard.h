@@ -18,6 +18,7 @@ class ComponentApplyReplayGuard final {
     const char* requestId;  // Exactly 16 hexadecimal ASCII characters
     const char* componentId;
     uint8_t from1, from2, to1, to2;
+    uint8_t from3 = 0, to3 = 0;  // RGB third PWM signal; legacy requests default to zero.
   };
 
   static bool validRequestId(const char* requestId) {
@@ -55,6 +56,8 @@ class ComponentApplyReplayGuard final {
     record.from2 = input.from2;
     record.to1 = input.to1;
     record.to2 = input.to2;
+    record.from3 = input.from3;
+    record.to3 = input.to3;
     next_ = (next_ + 1) % kCapacity;
     return true;
   }
@@ -64,7 +67,7 @@ class ComponentApplyReplayGuard final {
     // Precisely the three module IDs accepted by the runtime apply API.
     return id != nullptr &&
        (equal(id, "dht22") || equal(id, "soil_moisture") ||
-        equal(id, "ssd1306_oled"));
+        equal(id, "ssd1306_oled") || equal(id, "led_rgb"));
   }
   static constexpr bool equal(const char* a, const char* b) {
     if (!a || !b) return false;
@@ -79,11 +82,13 @@ class ComponentApplyReplayGuard final {
     char requestId[17] = {};
     char componentId[20] = {};
     uint8_t from1 = 0, from2 = 0, to1 = 0, to2 = 0;
+    uint8_t from3 = 0, to3 = 0;
 
     bool sameAs(const Request& request) const {
       return std::strcmp(componentId, request.componentId) == 0 &&
              from1 == request.from1 && from2 == request.from2 &&
-             to1 == request.to1 && to2 == request.to2;
+             to1 == request.to1 && to2 == request.to2 &&
+             from3 == request.from3 && to3 == request.to3;
     }
   };
   Record records_[kCapacity] = {};
