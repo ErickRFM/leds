@@ -50,15 +50,21 @@ class PinAssignmentPolicyTest {
     }
 
     @Test fun realActiveFirmwareLeaseBlocksDraftButInactiveDoesNot() {
-        val runtime = ComponentRuntimeStatus(
-            "led.rgb", "lighting", "pwm", "active", true, listOf(27, 25, 26)
+        val activeSensor = ComponentRuntimeStatus(
+            "sensor.soil_moisture", "sensor", "adc", "active", true, listOf(32)
+        )
+        assertFalse(PinAssignmentPolicy.validate("dht22", listOf(32),
+            reported = listOf(activeSensor)).isEmpty())
+        assertTrue(PinAssignmentPolicy.validate("dht22", listOf(32),
+            reported = listOf(activeSensor.copy(active = false))).isEmpty())
+        // RGB owns these pins at boot, whether or not its runtime lease is active.
+        val inactiveRgb = ComponentRuntimeStatus(
+            "led.rgb", "lighting", "pwm", "configured", false, listOf(27, 25, 26)
         )
         assertFalse(PinAssignmentPolicy.validate("dht22", listOf(27),
-            reported = listOf(runtime)).isEmpty())
+            reported = listOf(inactiveRgb)).isEmpty())
         assertTrue(PinAssignmentPolicy.validate("led_rgb", listOf(27, 25, 26),
-            reported = listOf(runtime)).isEmpty())
-        assertTrue(PinAssignmentPolicy.validate("dht22", listOf(27),
-            reported = listOf(runtime.copy(active = false))).isEmpty())
+            reported = listOf(inactiveRgb)).isEmpty())
     }
 
     @Test fun protectsReservedPinsAndUnknownProfiles() {
