@@ -2,8 +2,10 @@ package com.rgbcontroller
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.assertTextContains
@@ -45,6 +47,7 @@ class HomeNavigationTest {
 
     @Test
     fun homeReturnsFromLedWithoutConnectingToEsp32() {
+        composeRule.onNodeWithTag("home_active_module").assertExists()
         composeRule.onNodeWithTag("open_led").performClick()
         composeRule.onNodeWithTag("module_workspace_list").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
@@ -68,9 +71,12 @@ class HomeNavigationTest {
 
     @Test
     fun hardwareSectionsAreReachableWithoutADevice() {
-        composeRule.onNodeWithTag("open_hardware").performClick()
+        composeRule.onNodeWithTag("open_hardware").performScrollTo().performClick()
         composeRule.onNodeWithText("Hardware Lab").assertExists()
 
+        composeRule.waitUntil(10_000) {
+            composeRule.onAllNodesWithTag("hardware_tab_sensors").fetchSemanticsNodes().isNotEmpty()
+        }
         composeRule.onNodeWithTag("hardware_tab_sensors").performClick()
         composeRule.onNodeWithTag("component_telemetry_dht22").assertExists()
 
@@ -95,7 +101,10 @@ class HomeNavigationTest {
 
     @Test
     fun studioKeepsIndependentGpioAndRgbDrafts() {
-        composeRule.onNodeWithTag("open_code").performClick()
+        composeRule.onNodeWithTag("open_code").performScrollTo().performClick()
+        composeRule.waitUntil(10_000) {
+            composeRule.onAllNodesWithTag("studio_source").fetchSemanticsNodes().isNotEmpty()
+        }
         composeRule.onNodeWithTag("studio_source").performTextInput("GPIO 19 HIGH\\nWAIT 500\\nSTOP".replace("\\n", "\n"))
         composeRule.onNodeWithTag("studio_engine_rgb").performClick()
         composeRule.onNodeWithTag("studio_source").performTextInput("RGB 255 0 0")
@@ -105,7 +114,7 @@ class HomeNavigationTest {
         composeRule.onNodeWithTag("studio_source").assertTextContains("RGB 255 0 0", substring = true)
         composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
-        composeRule.onNodeWithTag("open_code").performClick()
+        composeRule.onNodeWithTag("open_code").performScrollTo().performClick()
         composeRule.onNodeWithTag("studio_source").assertTextContains("RGB 255 0 0", substring = true)
     }
 
@@ -152,7 +161,7 @@ class HomeNavigationTest {
 
     @Test
     fun homeReturnsFromOtherPrimaryModules() {
-        composeRule.onNodeWithTag("open_code").performClick()
+        composeRule.onNodeWithTag("open_code").performScrollTo().performClick()
         composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
 
@@ -160,7 +169,7 @@ class HomeNavigationTest {
         composeRule.onNodeWithTag("nav_back").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
 
-        composeRule.onNodeWithTag("open_hardware").performClick()
+        composeRule.onNodeWithTag("open_hardware").performScrollTo().performClick()
         composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
     }
