@@ -231,11 +231,22 @@ fun ModuleWorkspaceScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                Text("Módulos", style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold)
-                Text("Tu espacio se adapta a los componentes conectados.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Módulos", style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold)
+                        Text("Tus componentes, conexiones y lecturas en un lugar.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Surface(color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(12.dp)) {
+                        Text("${configured.size} módulos",
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    }
+                }
             }
             item {
                 Card(
@@ -389,10 +400,18 @@ fun ModuleWorkspaceScreen(
                                     bleReady && id == "led_rgb" -> "BLE RGB listo · GPIO sin confirmar"
                                     else -> "Pendiente de aplicar"
                                 }
-                                Text(evidenceLabel,
-                                    style = MaterialTheme.typography.labelSmall,
+                                Surface(
                                     color = if (sensorConfirmed && currentlyVerified)
-                                        Color(0xFF54D8A3) else MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Color(0xFF225440) else MaterialTheme.colorScheme.surfaceVariant,
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(evidenceLabel,
+                                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (sensorConfirmed && currentlyVerified)
+                                            Color(0xFFA6F1D2)
+                                        else MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
                             }
                             IconButton(onClick = {
                                 editingId = if (id == ModuleWorkspaceGrouping.ENVIRONMENT) "dht22" else id
@@ -522,24 +541,43 @@ private fun ModuleVisualIcon(id: String) {
 
 @Composable
 private fun ModuleRuntimeCard(id: String, runtime: ComponentRuntimeStatus?, live: Boolean) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Text("Conexiones y estado", style = MaterialTheme.typography.titleMedium)
+    val verified = runtime?.active == true && live
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ModuleVisualIcon(id)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(ComponentCatalog.get(id)?.name ?: id,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold)
+                    Text(if (verified) "Activo · confirmado por ESP32"
+                         else if (runtime != null) "Último estado registrado · no en vivo"
+                         else "Configuración local · por verificar",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (verified) Icon(Icons.Default.CheckCircle, contentDescription = "Confirmado",
+                    tint = Color(0xFF54D8A3))
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Text(
                 when {
-                    runtime == null -> "Sin confirmación del firmware para ${id}."
+                    runtime == null -> "El ESP32 aún no ha confirmado este componente."
                     !runtime.active && runtime.state == "catalog" ->
-                        "Driver disponible. Sin activar, no se ha detectado el sensor."
-                    live -> "Estado confirmado: ${runtime.state}"
-                    else -> "Último estado confirmado (sin conexión en vivo): ${runtime.state}"
+                        "Driver disponible, pero sensor no activado ni detectado."
+                    runtime.active -> "Estado del firmware: ${runtime.state}"
+                    else -> "El firmware informa: ${runtime.state}"
                 },
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodySmall
             )
             Text(
-                if (runtime?.active == true) "GPIO asignados: ${runtime.pins.joinToString()}"
-                else "GPIO sin asignación activa en el firmware",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (runtime?.active == true) "GPIO en firmware: ${runtime.pins.joinToString()}"
+                else "GPIO sin asignación activa confirmada",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -605,7 +643,7 @@ private fun ModulePinWizard(
         title = { Text("Conexiones · ${ComponentCatalog.get(componentId)?.name ?: componentId}") },
         text = {
             Column(
-                Modifier.fillMaxWidth().heightIn(max = 410.dp)
+                Modifier.fillMaxWidth().heightIn(max = 310.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -656,19 +694,20 @@ private fun ModulePinWizard(
             }
         },
         confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(
-                    onClick = { onSave(pins) },
-                    enabled = issues.isEmpty() && !applying,
-                    modifier = Modifier.testTag("module_pin_save")
-                ) { Text("Guardar borrador") }
+            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (canApply) {
                     Button(
                         onClick = { onApply(pins) },
                         enabled = issues.isEmpty() && !applying,
-                        modifier = Modifier.testTag("module_pin_apply")
-                    ) { Text(if (applying) "Aplicando…" else "Activar / aplicar en ESP32") }
+                        modifier = Modifier.fillMaxWidth().testTag("module_pin_apply")
+                    ) { Text(if (applying) "Aplicando…" else "Aplicar y verificar en ESP32") }
                 }
+                OutlinedButton(
+                    onClick = { onSave(pins) },
+                    enabled = issues.isEmpty() && !applying,
+                    modifier = Modifier.fillMaxWidth().testTag("module_pin_save")
+                ) { Text("Guardar borrador local") }
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
