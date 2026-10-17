@@ -99,6 +99,10 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/component_modules_test.cpp -o /tmp/component_modules_test
           /tmp/component_modules_test
+      - name: V17 transactional GPIO reconfiguration and rollback host tests
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/component_wiring_transaction_test.cpp -o /tmp/component_wiring_transaction_test
+          /tmp/component_wiring_transaction_test
       - name: Component GPIO status authority host tests
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/component_status_test.cpp -o /tmp/component_status_test
