@@ -1,17 +1,18 @@
-# Walkthrough - Compi V15.1 Sync, Integration Audit & APK Build
+# Walkthrough - Compi V16.0 Synchronization & APK Build
 
-This walkthrough presents the repository synchronization, integrated feature audit, test execution, Android lint verification, and distribution APK generation for **Compi V15.1**.
+This walkthrough presents the repository synchronization, unit testing, Android lint verification, and distribution APK generation for **Compi V16.0**.
 
-## Changes & Synchronization Summary
+## Synchronization & Integration Summary
 
 ### 1. Repository Synchronization (`ErickRFM/leds`)
-- **Main Branch Baseline:** Fast-forward merged `feat/f08-editors-core` onto `main`, bringing HEAD to `692d541` (`feat(v15.1): validated editor core for Hardware Lab forms (F08.1)`).
-- **Pushed to Remote:** `origin/main` is synchronized at commit `692d541`.
+- **Main Branch HEAD:** `830c52e` (`feat(seg1b2c): Android owner-enrollment client and device pubkey in CHALLENGE (#115)`).
+- **Status:** Local `main` is synchronized with `origin/main`.
 
 ### 2. Integrated Feature Set Audit
-- **SEG1 Owner Enrollment Protocol & Crypto (PR #108–#111):** `OwnerEnrollment.kt`, `OwnerEnrollmentTest.kt`, `MbedTlsSessionCrypto.h`, `OwnerEnrollmentFrames.h`.
-- **F09 Cross-Board Compatibility Engine (PR #105–#107):** `BoardCompatibility.kt`, `ProjectPortableFormat.kt`, SAF import/export with rollback.
-- **F08 Hardware Lab Editors & Dashboards (PR #101–#106, #108):** `HardwareLabEditors.kt`, `HardwareLabEditorsTest.kt`, `ComponentDashboardViewModel.kt`.
+- **SEG1 Owner Enrollment Client & Protocol (PRs #108–#111, #114, #115):** `OwnerEnrollment.kt`, `OwnerEnrollmentClientTest.kt`, `Hex.kt`.
+- **SEG2 Command Authorization:** `RgbDeviceCommand.kt`, `RgbDeviceCommandTest.kt`.
+- **F09 Cross-Board Compatibility Engine (PRs #105–#107):** `BoardCompatibility.kt`, `ProjectPortableFormat.kt`.
+- **F08 Hardware Lab Editors & Dashboards (PRs #101–#106, #108):** `HardwareLabEditors.kt`, `HardwareLabEditorsTest.kt`.
 
 ### 3. Build & Test Verification
 - **Unit Tests (`testDebugUnitTest`):** **Exitosas (PASSED)** — 100% pass rate across all Kotlin test suites.
@@ -20,16 +21,16 @@ This walkthrough presents the repository synchronization, integrated feature aud
 
 ### 4. Distribution Artifact
 - **APK Source Location:** `android/app/build/outputs/apk/debug/app-debug.apk`
-- **Distribution Location:** `C:\Users\erik5\OneDrive\Escritorio\ESP32\leds\dist\compi-v15.1-debug.apk`
-- **File Size:** `17,271,665` bytes (17.27 MB)
-- **SHA-256 Checksum:** `01D8F84C219EC0C01E526B1114DCCEFBEB20A0B8A11DADF64E91800B661D639F`
+- **Distribution Location:** `C:\Users\erik5\OneDrive\Escritorio\ESP32\leds\dist\compi-debug.apk`
+- **File Size:** `28,838,634` bytes (28.83 MB)
+- **SHA-256 Checksum:** `FB3EC7709BBFF8AF1F70D5DE562C721310DAAA1BB036A883E1A3E9A2C7D9B29C`
 
 ## Verification Results
 
 ### Automated Tests & Local Build
 - **Unit Tests:** PASSED
 - **Lint Analysis:** PASSED
-- **APK Compilation & Hashing:** PASSED (`dist/compi-v15.1-debug.apk` created and hashed)
+- **APK Compilation & Hashing:** PASSED (`dist/compi-debug.apk` created and hashed)
 
 ### Physical Device / Hardware Status
 > [!NOTE]
