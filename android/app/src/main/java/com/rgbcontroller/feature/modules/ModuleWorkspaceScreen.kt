@@ -14,10 +14,19 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Thermostat
+import androidx.compose.material.icons.filled.WaterDrop
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.DesktopWindows
+import androidx.compose.material.icons.filled.Eco
+import androidx.compose.material.icons.filled.DeviceHub
+import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -289,6 +298,8 @@ fun ModuleWorkspaceScreen(
                     Card(onClick = { editingId = descriptor.id },
                         modifier = Modifier.fillMaxWidth().testTag("module_catalog_${descriptor.id}")) {
                         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            ModuleVisualIcon(descriptor.id)
+                            Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(descriptor.name, style = MaterialTheme.typography.titleSmall)
                                 Text(descriptor.description, style = MaterialTheme.typography.bodySmall,
@@ -340,6 +351,8 @@ fun ModuleWorkspaceScreen(
                     ) {
                         Row(Modifier.fillMaxWidth().padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically) {
+                            ModuleVisualIcon(id)
+                            Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(if (id == ModuleWorkspaceGrouping.ENVIRONMENT)
                                         "Sensor ambiental" else descriptor?.name ?: id,
@@ -366,6 +379,19 @@ fun ModuleWorkspaceScreen(
                                     else "GPIO ${(physical?.pins ?: local?.pins).orEmpty().joinToString().ifBlank { "sin asignar" }}",
                                     style = MaterialTheme.typography.labelMedium
                                 )
+                                val sensorConfirmed = if (id == ModuleWorkspaceGrouping.ENVIRONMENT) {
+                                    group.components.all { runtime(it)?.active == true }
+                                } else physical?.active == true
+                                val evidenceLabel = when {
+                                    sensorConfirmed && currentlyVerified -> "Confirmado por firmware"
+                                    physical != null -> "Estado guardado · no en vivo"
+                                    bleReady && id == "led_rgb" -> "BLE RGB listo · GPIO sin confirmar"
+                                    else -> "Pendiente de aplicar"
+                                }
+                                Text(evidenceLabel,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (sensorConfirmed && currentlyVerified)
+                                        Color(0xFF54D8A3) else MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             IconButton(onClick = {
                                 editingId = if (id == ModuleWorkspaceGrouping.ENVIRONMENT) "dht22" else id
@@ -455,6 +481,31 @@ fun ModuleWorkspaceScreen(
                 }
             }
         )
+    }
+}
+
+
+/** Reusable identity tile. Component IDs, not screenshots, choose the icon. */
+@Composable
+private fun ModuleVisualIcon(id: String) {
+    val (icon, accent) = when (id) {
+        ModuleWorkspaceGrouping.ENVIRONMENT -> Icons.Default.Eco to Color(0xFFA980F4)
+        "dht22" -> Icons.Default.Thermostat to Color(0xFFEC7797)
+        "soil_moisture" -> Icons.Default.WaterDrop to Color(0xFF46C6EF)
+        "led_rgb" -> Icons.Default.Lightbulb to Color(0xFFFAB862)
+        "ssd1306_oled" -> Icons.Default.DesktopWindows to Color(0xFFFFA45B)
+        "analog_sensor", "digital_sensor" -> Icons.Default.DeviceHub to Color(0xFF78A8F7)
+        else -> Icons.Default.Widgets to Color(0xFFA980F4)
+    }
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = accent.copy(alpha = 0.16f),
+        modifier = Modifier.size(52.dp).testTag("module_symbol_$id")
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = null, tint = accent,
+                modifier = Modifier.size(28.dp))
+        }
     }
 }
 
