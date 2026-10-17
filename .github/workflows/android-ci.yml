@@ -211,6 +211,25 @@ jobs:
             --build-property "compiler.cpp.extra_flags=-DCOMPI_ENABLE_DHT22=1 -DCOMPI_ENABLE_SOIL=1" \
             --output-dir build/v17-sensors-probe firmware/esp32_rgb
           python3 scripts/check-firmware-budget.py build/v17-sensors-probe
+      - name: Prepare sensor-enabled bench image manifest
+        run: |
+          (
+            echo "ESP32 classic 4 MB: V17 DHT22 on GPIO32 and Soil ADC1 on GPIO34."
+            echo "Only flash after wiring sensors at 3.3 V with power OFF."
+            echo "No real hardware validation; hot GPIO changes revert on reboot."
+            echo "Git commit: $GITHUB_SHA"
+          ) > build/v17-sensors-probe/README-BENCH.txt
+          cd build/v17-sensors-probe
+          sha256sum ./*.bin > SHA256SUMS.txt
+      - name: Upload optional DHT22 + soil firmware (hardware QA only)
+        uses: actions/upload-artifact@v4
+        with:
+          name: compi-esp32-dht22-soil-bench
+          if-no-files-found: error
+          path: |
+            build/v17-sensors-probe/*.bin
+            build/v17-sensors-probe/README-BENCH.txt
+            build/v17-sensors-probe/SHA256SUMS.txt
       - name: V4 WiFiProv Security2 compile-only feasibility probe
         run: |
           . ./config/esp32-board.env
