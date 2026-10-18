@@ -147,6 +147,7 @@ fun MainAppNavHost(
                             Screen.Devices.route -> "Dispositivos"
                             Screen.Connect.route -> "Conexiones"
                             Screen.LabTools.route -> "Laboratorio avanzado"
+                            "led" -> "Módulo LED RGB"
                             else -> "Ajustes"
                         }) },
                         navigationIcon = {
@@ -182,7 +183,7 @@ fun MainAppNavHost(
                             ),
                             selected = route == screen.route ||
                                 (screen == Screen.Hub && route == Screen.LabTools.route) ||
-                                (screen == Screen.Home && nested && route != Screen.LabTools.route),
+                                (screen == Screen.Modules && route == "led"),
                             onClick = { navController.navigateTopLevel(screen) }
                         )
                     }

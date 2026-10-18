@@ -62,10 +62,8 @@ class HardwareDashboardScrollTest {
         composeRule.onNodeWithTag("component_telemetry_history").assertExists()
         Log.i("COMPI_QA", "HISTORY END REACHED")
 
-        // After scrolling to the bottom, the horizontal section bar itself is
-        // off-screen. Bring it back via the vertical list before scrolling it.
-        composeRule.onNodeWithTag("component_dashboard_list")
-            .performScrollToNode(hasTestTag("hardware_tabs"))
+        // The section selector stays visible while the dashboard scrolls.
+        composeRule.onNodeWithTag("hardware_tabs").assertExists()
         // Finally visit project tools at the bottom of the final area.
         composeRule.onNodeWithTag("hardware_tabs")
             .performScrollToNode(hasTestTag("hardware_tab_project"))

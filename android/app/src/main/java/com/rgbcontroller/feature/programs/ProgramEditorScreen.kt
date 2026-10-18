@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.*
 import com.rgbcontroller.core.ui.CompiInlineMessage
 import androidx.compose.runtime.*
@@ -350,7 +351,10 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
         }
 
         Text("Tipo de proyecto", style = MaterialTheme.typography.titleSmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             FilterChip(selected = language == ProgramLanguage.LAB_SCRIPT,
                 onClick = { chooseLanguage(ProgramLanguage.LAB_SCRIPT) },
                 label = { Text("Laboratorio") })
@@ -361,7 +365,10 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
 
         if (language == ProgramLanguage.LAB_SCRIPT) {
             Text("Motor de ejecución", style = MaterialTheme.typography.titleSmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 FilterChip(
                     selected = laboratoryMode == "GPIO",
                     onClick = { chooseEngine("GPIO") },
