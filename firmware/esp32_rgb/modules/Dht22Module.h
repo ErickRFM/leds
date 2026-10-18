@@ -25,11 +25,11 @@ class Dht22Module final : public IModule {
   using ReadFn = Reading (*)(void* context);
 
   Dht22Module(uint8_t dataPin, ReadFn read, void* context,
-              uint32_t minIntervalMs = 2000)
-      : pin_(dataPin), read_(read), context_(context),
+              uint32_t minIntervalMs = 2000, const char* moduleId = "sensor.dht22")
+      : pin_(dataPin), moduleId_(moduleId), read_(read), context_(context),
         minIntervalMs_(minIntervalMs) {}
 
-  const char* id() const override { return "sensor.dht22"; }
+  const char* id() const override { return moduleId_; }
   uint16_t version() const override { return 1; }
 
   bool begin(PinManager& manager) override {
@@ -111,6 +111,7 @@ class Dht22Module final : public IModule {
 
  private:
   uint8_t pin_;
+  const char* const moduleId_;
   const ReadFn read_;
   void* const context_;
   const uint32_t minIntervalMs_;

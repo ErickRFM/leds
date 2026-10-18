@@ -8,12 +8,17 @@ object ModuleWorkspaceGrouping {
 
     fun group(ids: List<String>): List<WorkspaceGroup> {
         val distinct = ids.distinct()
-        val joined = "dht22" in distinct && "soil_moisture" in distinct
+        val environmentModel = when {
+            "dht11" in distinct -> "dht11"
+            "dht22" in distinct -> "dht22"
+            else -> null
+        }
+        val joined = environmentModel != null && "soil_moisture" in distinct
         val grouped = distinct.filterNot {
-            joined && (it == "dht22" || it == "soil_moisture")
+            joined && (it == environmentModel || it == "soil_moisture")
         }.map { WorkspaceGroup(it, listOf(it)) }
         return if (joined) {
-            listOf(WorkspaceGroup(ENVIRONMENT, listOf("dht22", "soil_moisture"))) + grouped
+            listOf(WorkspaceGroup(ENVIRONMENT, listOf(environmentModel!!, "soil_moisture"))) + grouped
         } else grouped
     }
 }

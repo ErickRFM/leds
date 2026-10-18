@@ -40,6 +40,7 @@ object PinAssignmentPolicy {
             signal("Verde · G", pwmOutputs, 25),
             signal("Azul · B", pwmOutputs, 26)
         )),
+        ModuleWiringProfile("dht11", listOf(signal("Datos · DATA", generalOutputs, 16))),
         ModuleWiringProfile("dht22", listOf(signal("Datos · DATA", generalOutputs, 32))),
         ModuleWiringProfile("soil_moisture", listOf(signal("Salida analógica · ADC1", adc1Inputs, 34))),
         ModuleWiringProfile("ssd1306_oled", listOf(
@@ -75,14 +76,20 @@ object PinAssignmentPolicy {
                 problems += "${profile.signals[index].label}: GPIO ${pin} no está permitido en este perfil."
             }
         }
-        val used = otherLocal.filter { it.id != id }.flatMap { other ->
+        val family = setOf("dht11", "dht22")
+        // A model change replaces the current DHT lease atomically in firmware;
+        // the sibling DHT model must not block intentional GPIO transfers.
+        val used = otherLocal.filter {
+            it.id != id && !(id in family && it.id in family)
+        }.flatMap { other ->
             other.pins.map { it to other.id }
         }
         for ((pin, owner) in used) {
             if (pin in pins) problems += "GPIO ${pin} ya reservado localmente por ${owner}."
         }
         for (component in reported) {
-            if (ComponentCatalog.catalogIdForFirmwareId(component.id) != id &&
+            val otherId = ComponentCatalog.catalogIdForFirmwareId(component.id)
+            if (otherId != id && !(id in family && otherId in family) &&
                 component.active && component.pins.any { it in pins }
             ) {
                 problems += "El firmware usa GPIO ${component.pins.filter { it in pins }.joinToString()} en ${component.id}."

@@ -12,6 +12,7 @@
 #include "../firmware/esp32_rgb/core/SensorTelemetry.h"
 #include "../firmware/esp32_rgb/core/SensorTelemetryCodec.h"
 #include "../firmware/esp32_rgb/modules/Dht22Module.h"
+#include "../firmware/esp32_rgb/core/DhtFrameCodec.h"
 #include "../firmware/esp32_rgb/modules/OledSsd1306Module.h"
 #include "../firmware/esp32_rgb/modules/SoilMoistureModule.h"
 
@@ -145,6 +146,33 @@ int main() {
     soil.stop(pins);
     display.stop(pins);
     assert(pins.leasedCount() == 0);
+  }
+
+  // DHT11 and DHT22 are NOT interchangeable. Test real wire payloads.
+  {
+    const uint8_t dht11[5] = {55, 0, 24, 0, 79};
+    const auto r11 = decodeDhtFrame(dht11, DhtModel::DHT11);
+    assert(r11.ok && r11.humidity == 55.0f && r11.temperature == 24.0f);
+    assert(!decodeDhtFrame(dht11, DhtModel::DHT22).ok);
+    const uint8_t dht22[5] = {0x02, 0x2b, 0x00, 0xef, 0x1c};
+    const auto r22 = decodeDhtFrame(dht22, DhtModel::DHT22);
+    assert(r22.ok && r22.humidity == 55.5f && r22.temperature == 23.9f);
+    assert(!decodeDhtFrame(dht22, DhtModel::DHT11).ok);
+    const uint8_t negative[5] = {0x01, 0xf4, 0x80, 0x7b, 0xf0};
+    const auto minus = decodeDhtFrame(negative, DhtModel::DHT22);
+    assert(minus.ok && minus.temperature == -12.3f);
+    uint8_t bad[5] = {55, 0, 24, 0, 78};
+    assert(!decodeDhtFrame(bad, DhtModel::DHT11).ok);
+    (void)bad;
+    PinManager gpio;
+    DhtDouble sensor;
+    Dht22Module module11(16, readDht, &sensor, 2000, "sensor.dht11");
+    assert(module11.begin(gpio));
+    assert(gpio.belongsTo(16, "sensor.dht11"));
+    module11.tick(1000);
+    assert(module11.humidityReading().valid);
+    module11.stop(gpio);
+    assert(gpio.lease(16) == nullptr);
   }
 
   // --- DHT22 ---------------------------------------------------------------

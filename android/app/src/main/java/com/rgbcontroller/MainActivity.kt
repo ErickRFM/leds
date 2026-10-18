@@ -85,8 +85,9 @@ private sealed class Screen(
 
 /**
  * Home is always the root destination, never a restored copy of a nested screen.
- * Other tabs keep their navigation state; Bluetooth/Wi-Fi transport lives outside
- * the navigation stack and must not be disconnected when changing screens.
+ * Module/Hardware tab changes must not revive old nested screens. Studio keeps
+ * its local unsaved editor buffers while switching tabs. Transport state lives
+ * outside the navigation stack and is never disconnected by navigation.
  */
 private fun NavHostController.navigateTopLevel(screen: Screen) {
     if (currentDestination?.route == screen.route) return
@@ -101,11 +102,19 @@ private fun NavHostController.navigateTopLevel(screen: Screen) {
         }
     } else {
         navigate(screen.route) {
+            // Save transient Studio drafts before leaving; restore only Studio.
+            // Other tabs always enter at their root (no saved nested LED/GPIO).
             popUpTo(graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
-            restoreState = true
+            restoreState = screen == Screen.Code
         }
     }
+}
+
+/** Nested destinations should never stack duplicate copies on repeated taps. */
+private fun NavHostController.navigateNested(route: String) {
+    if (currentDestination?.route == route) return
+    navigate(route) { launchSingleTop = true }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -128,7 +137,7 @@ fun MainAppNavHost(
         val entry by navController.currentBackStackEntryAsState()
         val route = entry?.destination?.route
         val nested = route == Screen.Devices.route || route == Screen.Settings.route ||
-            route == Screen.Connect.route || route == Screen.LabTools.route
+            route == Screen.Connect.route || route == Screen.LabTools.route || route == "led"
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
@@ -190,9 +199,9 @@ fun MainAppNavHost(
                         bleManager = bleManager,
                         onLed = { navController.navigateTopLevel(Screen.Modules) },
                         onCode = { navController.navigateTopLevel(Screen.Code) },
-                        onDevices = { navController.navigate(Screen.Connect.route) },
+                        onDevices = { navController.navigateNested(Screen.Connect.route) },
                         onHardware = { navController.navigateTopLevel(Screen.Hub) },
-                        onSettings = { navController.navigate(Screen.Settings.route) },
+                        onSettings = { navController.navigateNested(Screen.Settings.route) },
                         session = session
                     )
                 }
@@ -212,12 +221,12 @@ fun MainAppNavHost(
                 // It still uses the audited LED transport, now as one reusable module.
                 composable("led") {
                     LedModuleScreen(bleManager, preferencesRepository, session,
-                        onOpenDevices = { navController.navigate(Screen.Devices.route) })
+                        onOpenDevices = { navController.navigateNested(Screen.Devices.route) })
                 }
                 composable(Screen.Code.route) { ProgramEditorScreen(session, bleManager) }
                 composable(Screen.Settings.route) {
                     SettingsScreen(bleManager, preferencesRepository,
-                        onOpenHub = { navController.navigate(Screen.Hub.route) },
+                        onOpenHub = { navController.navigateTopLevel(Screen.Hub) },
                         onOpenPrograms = { navController.navigateTopLevel(Screen.Code) })
                 }
                 composable(Screen.Connect.route) {
@@ -234,7 +243,7 @@ fun MainAppNavHost(
                     HardwareLabScreen(
                         session = session,
                         bleManager = bleManager,
-                        onOpenLabTools = { navController.navigate(Screen.LabTools.route) }
+                        onOpenLabTools = { navController.navigateNested(Screen.LabTools.route) }
                     )
                 }
                 // Preserve the existing diagnostics/GPIO/experiment engine instead

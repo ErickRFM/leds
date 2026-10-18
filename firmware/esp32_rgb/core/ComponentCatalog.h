@@ -27,6 +27,8 @@ struct ComponentCatalogEntry {
 };
 
 inline constexpr ComponentCatalogEntry kCatalog[] = {
+    {"dht11", "DHT11", ComponentType::Sensor, HardwareInterface::Digital, 16,
+     kCapHumidity | kCapTemperature, true},
     {"dht22", "DHT22", ComponentType::Sensor, HardwareInterface::Digital, 32,
      kCapHumidity | kCapTemperature, true},
     {"soil_moisture", "Soil moisture", ComponentType::Sensor, HardwareInterface::Adc, 34,
