@@ -573,6 +573,7 @@ private fun ModuleRuntimeCard(id: String, runtime: ComponentRuntimeStatus?, live
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold)
                     Text(if (verified) "Activo · confirmado por ESP32"
+                         else if (runtime != null && live) "Reportado por ESP32 · no activo"
                          else if (runtime != null) "Último estado registrado · no en vivo"
                          else "Configuración local · por verificar",
                         style = MaterialTheme.typography.bodySmall,
