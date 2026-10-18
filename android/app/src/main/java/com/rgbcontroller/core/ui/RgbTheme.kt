@@ -27,6 +27,10 @@ private val DarkPalette = darkColorScheme(
     surfaceVariant = Color(0xFF222638),
     onSurfaceVariant = Color(0xFFB1B5CF),
     outline = Color(0xFF444862),
+    outlineVariant = Color(0xFF35394F),
+    surfaceContainerLow = Color(0xFF171B27),
+    surfaceContainer = Color(0xFF1D2230),
+    surfaceContainerHigh = Color(0xFF252A3A),
     error = Color(0xFFFFB4AB)
 )
 private val LightPalette = lightColorScheme(
@@ -40,7 +44,11 @@ private val LightPalette = lightColorScheme(
     onSurface = Color(0xFF201F26),
     surfaceVariant = Color(0xFFF0EDF5),
     onSurfaceVariant = Color(0xFF55515F),
-    outline = Color(0xFF817A89)
+    outline = Color(0xFF817A89),
+    outlineVariant = Color(0xFFD9D3DF),
+    surfaceContainerLow = Color(0xFFFCFAFF),
+    surfaceContainer = Color(0xFFF3F0F7),
+    surfaceContainerHigh = Color(0xFFEBE6F1)
 )
 
 /** Shared minimal matte theme; respects the system unless overridden in Settings. */
