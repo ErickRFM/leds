@@ -1000,6 +1000,15 @@ void setup() {
   Serial.println("BOOT: owner NVS ready");
   pinMode(kBootButtonPin, INPUT_PULLUP);
 
+  // GPIO16/17 can be occupied internally by PSRAM on ESP32-WROVER modules.
+  // Protect board-internal IO from accidental DHT reassignment.
+  if (psramFound()) {
+    pinManager.registerSystemPin(16, "board.psram");
+    pinManager.registerSystemPin(17, "board.psram");
+    Serial.println("GPIO16/17 reservado: esta placa detecto PSRAM. Usa GPIO32/33.");
+  } else {
+    Serial.println("GPIO16 disponible en perfil sin PSRAM; requiere prueba electrica real.");
+  }
   pinManager.registerSystemPin(LED_R, "led.rgb");
   pinManager.registerSystemPin(LED_G, "led.rgb");
   pinManager.registerSystemPin(LED_B, "led.rgb");
