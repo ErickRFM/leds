@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
+import com.rgbcontroller.core.ble.BleSecurityState
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.model.RgbControlLink
@@ -44,6 +45,8 @@ fun LedModuleScreen(
     val wifiClient = remember(context) { LocalLabClient(context.applicationContext) }
     val scope = rememberCoroutineScope()
     val bleConnection by bleManager.connectionState.collectAsState()
+    val bleSecurity by bleManager.securityState.collectAsState()
+    val authorizationMessage by bleManager.authorizationMessage.collectAsState()
     val bleState by bleManager.rgbState.collectAsState()
     val bleRevision by bleManager.stateRevision.collectAsState()
     val mode = labSession.transport
@@ -116,10 +119,12 @@ fun LedModuleScreen(
 
     val isWifi = mode == LabTransport.WIFI_LAB
     val connected = if (isWifi) wifiReady else bleConnection == BleConnectionState.Ready
+    val controlReady = if (isWifi) wifiReady else
+        connected && bleSecurity == BleSecurityState.Authorized
     val state = if (isWifi) wifiState else bleState
     val link = RgbControlLink(
         transport = if (isWifi) "WIFI_LAB" else "BLUETOOTH",
-        ready = connected,
+        ready = controlReady,
         state = state,
         stateRevision = if (isWifi) labSession.stateRevision else bleRevision,
         sendCommand = { command ->
@@ -127,7 +132,7 @@ fun LedModuleScreen(
                 if (wifiReady && !wifiCommands.trySend(command).isSuccess) {
                     labSession.invalidate("Demasiados comandos pendientes; vuelve a sincronizar Wi-Fi.")
                 }
-            } else if (bleConnection == BleConnectionState.Ready) {
+            } else if (controlReady) {
                 bleManager.writeCommand(command)
             }
         }
@@ -146,7 +151,7 @@ fun LedModuleScreen(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text("LED RGB", style = MaterialTheme.typography.headlineMedium)
-            IconButton(onClick = { /* Settings action */ }) {
+            IconButton(onClick = onOpenDevices) {
                 Icon(
                     imageVector = androidx.compose.material.icons.Icons.Default.Settings,
                     contentDescription = "Ajustes"
@@ -213,7 +218,8 @@ fun LedModuleScreen(
                                 color = if (connected) Color(0xFF22C55E) else Color(0xFFEF4444)
                             ) {}
                             Text(
-                                if (connected) "ESP32 conectado" else "ESP32 sin conectar",
+                                if (connected && !isWifi && !controlReady) "ESP32 conectado · sin autorización"
+                                else if (connected) "ESP32 conectado" else "ESP32 sin conectar",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
                             )
@@ -285,6 +291,16 @@ fun LedModuleScreen(
         // Key by transport mode to avoid stale commands
         key(mode) {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (!isWifi && connected && !controlReady) {
+                    Text(
+                        authorizationMessage ?: "El enlace BLE está conectado, pero aún no se autorizó al propietario. Abre Conexiones para autorizar el control.",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedButton(onClick = onOpenDevices) {
+                        Text("Autorizar Bluetooth")
+                    }
+                }
                 // 1. Control de color (Wheel + Sliders)
                 ControlScreen(bleManager, link, embedded = true)
 
