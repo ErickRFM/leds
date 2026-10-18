@@ -14,6 +14,12 @@ struct Fake {
   bool stuckLow = false;
   uint32_t tick = 0;
   bool started = false;
+  bool maskSupported = true;
+  bool masked = false;
+  bool injectPause = false;
+  bool pauseInjected = false;
+  void beginCapture() { masked = maskSupported; }
+  void endCapture() { masked = false; }
   bool level() const {
     if (stuckLow) return false;
     if (!started) return true;
@@ -25,7 +31,14 @@ struct Fake {
     return true;
   }
   uint32_t micros() const { return tick; }
-  void spin() { ++tick; }
+  void spin() {
+    ++tick;
+    // Model a 200us pre-emption during bit capture on a busy ESP32 core.
+    if (injectPause && !masked && !pauseInjected && tick > 710) {
+      tick += 200;
+      pauseInjected = true;
+    }
+  }
   void driveLowMs(uint16_t) { /* time origin begins after release */ }
   void release() { started = true; }
 };
@@ -51,6 +64,21 @@ int main() {
   assert(c.edges == 82 && c.humidity == 55.0f && c.temperature == 24.0f);
   assert(c.data[0] == 55 && c.data[4] == 79);
   assert(c.responseLowUs == 80 && c.responseHighUs == 80);
+  // Exactly the 5 bytes measured on the user's DHT11 GPIO16 probe.
+  const uint8_t physical[5] = {0x3B, 0x00, 0x15, 0x02, 0x52};
+  Fake actual = waveform(physical);
+  const auto verified = compi_probe::sample(actual);
+  assert(verified.verdict == Verdict::Ok);
+  assert(verified.humidity == 59.0f && verified.temperature == 21.2f);
+  Fake withMask = waveform(physical);
+  withMask.injectPause = true;
+  assert(compi_probe::sample(withMask).verdict == Verdict::Ok);
+  Fake withoutMask = waveform(physical);
+  withoutMask.maskSupported = false;
+  withoutMask.injectPause = true;
+  assert(compi_probe::sample(withoutMask).verdict != Verdict::Ok);
+  assert(withoutMask.pauseInjected);
+  assert(!withMask.masked && !withoutMask.masked);
   Fake idle;
   assert(compi_probe::sample(idle).verdict == Verdict::NoResponse);
   Fake low;
@@ -65,5 +93,5 @@ int main() {
   Fake corrupt = waveform(ok);
   corrupt.waveform[4].us = 200;
   assert(compi_probe::sample(corrupt).verdict == Verdict::FrameIncomplete);
-  std::cout << "dht11_probe_test: passed 6 isolated waveform cases\n";
+  std::cout << "dht11_probe_test: passed 10 isolated waveform cases including bounded interrupt guard\n";
 }
