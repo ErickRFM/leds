@@ -76,7 +76,7 @@ fun SensorDashboard(
                         fault == "line_low" ->
                             "DATA permanece en nivel bajo en GPIO${diagnostic?.pins?.firstOrNull() ?: "?"}. Revisa cortocircuito, GND y orden de pines."
                         fault == "no_response" ->
-                            "GPIO no recibió el pulso de respuesta del DHT11. Revisa DATA, alimentación, pull-up y continuidad."
+                            "GPIO no recibió el pulso de respuesta del ${id.uppercase()}. Revisa DATA, alimentación, pull-up y continuidad."
                         fault == "response_timeout" ->
                             "El sensor comenzó a responder pero no completó el pulso de sincronización."
                         fault == "bit_timeout" ->
