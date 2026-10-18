@@ -124,6 +124,25 @@ void testTruncationReturnsFalseNotPartialJson() {
   assert(!encodeComponentStatus(&entry, 1, tooSmall, 8));
 }
 
+void testDhtDiagnosticNeverClaimsPhysicalPresence() {
+  ComponentStatusEntry entry{};
+  entry.id = "sensor.dht11";
+  entry.type = ComponentType::Sensor;
+  entry.interfaceType = HardwareInterface::OneWire;
+  entry.state = ComponentState::Active;
+  entry.active = true;
+  entry.pins[0] = 16;
+  entry.pinCount = 1;
+  entry.diagnostic = "no_response";
+  entry.failures = 37;
+  char output[320] = {};
+  assert(encodeComponentStatus(&entry, 1, output, sizeof(output)));
+  const std::string json(output);
+  assert(json.find("\"diagnostic\":\"no_response\"") != std::string::npos);
+  assert(json.find("\"failures\":37") != std::string::npos);
+  assert(json.find("\"pins\":[16]") != std::string::npos);
+}
+
 void testFirmwareIsFinalGpioAuthority() {
   PinManager pins;
   // A second owner cannot steal a leased pin.
@@ -153,6 +172,7 @@ int main() {
   testPinCountIsClampedToThree();
   testTruncationReturnsFalseNotPartialJson();
   testFirmwareIsFinalGpioAuthority();
+  testDhtDiagnosticNeverClaimsPhysicalPresence();
 
   std::cout << "component_status_test: all tests passed" << std::endl;
   return 0;

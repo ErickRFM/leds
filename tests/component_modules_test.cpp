@@ -13,6 +13,7 @@
 #include "../firmware/esp32_rgb/core/SensorTelemetryCodec.h"
 #include "../firmware/esp32_rgb/modules/Dht22Module.h"
 #include "../firmware/esp32_rgb/core/DhtFrameCodec.h"
+#include "../firmware/esp32_rgb/core/DhtWireDiagnostics.h"
 #include "../firmware/esp32_rgb/modules/OledSsd1306Module.h"
 #include "../firmware/esp32_rgb/modules/SoilMoistureModule.h"
 
@@ -146,6 +147,18 @@ int main() {
     soil.stop(pins);
     display.stop(pins);
     assert(pins.leasedCount() == 0);
+  }
+
+  // Read high-pulse width accurately; never silently decode noise as data.
+  {
+    bool bit = false;
+    assert(dhtDecodeHighPulse(27, bit) && !bit);
+    assert(dhtDecodeHighPulse(69, bit) && bit);
+    assert(!dhtDecodeHighPulse(0, bit));
+    assert(!dhtDecodeHighPulse(200, bit));
+    assert(std::strcmp(dhtWireFaultName(DhtWireFault::LineHeldLow), "line_low") == 0);
+    assert(std::strcmp(dhtWireFaultName(DhtWireFault::NoResponse), "no_response") == 0);
+    assert(std::strcmp(dhtWireFaultName(DhtWireFault::BadChecksum), "bad_checksum") == 0);
   }
 
   // DHT11 and DHT22 are NOT interchangeable. Test real wire payloads.
