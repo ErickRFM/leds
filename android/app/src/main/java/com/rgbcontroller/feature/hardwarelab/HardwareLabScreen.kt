@@ -121,6 +121,7 @@ fun HardwareLabScreen(
 
     Scaffold(
         topBar = {
+            Column {
             TopAppBar(
                 title = { Text("Hardware Lab") },
                 actions = {
@@ -134,6 +135,24 @@ fun HardwareLabScreen(
                     ) { Icon(Icons.Default.Refresh, contentDescription = "Actualizar estado") }
                 }
             )
+            LazyRow(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).testTag("hardware_tabs"),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(HardwareSection.entries) { target ->
+                    FilterChip(
+                        selected = section == target,
+                        onClick = {
+                            section = target
+                            scope.launch { listState.scrollToItem(0) }
+                        },
+                        label = { Text(target.label) },
+                        modifier = Modifier.testTag("hardware_tab_${target.name.lowercase()}")
+                    )
+                }
+            }
+            HorizontalDivider()
+            }
         }
     ) { padding ->
         LazyColumn(
@@ -146,24 +165,6 @@ fun HardwareLabScreen(
             item(key = "hardware_authority") {
                 AuthorityCard(connected = state.connected, authorized = authorized,
                     error = state.authorityError)
-            }
-            item(key = "hardware_tabs") {
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth().testTag("hardware_tabs"),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(HardwareSection.entries) { target ->
-                        FilterChip(
-                            selected = section == target,
-                            onClick = {
-                                section = target
-                                scope.launch { listState.scrollToItem(0) }
-                            },
-                            label = { Text(target.label) },
-                            modifier = Modifier.testTag("hardware_tab_${target.name.lowercase()}")
-                        )
-                    }
-                }
             }
             when (section) {
                 HardwareSection.STATUS -> {
