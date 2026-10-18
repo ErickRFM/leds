@@ -91,6 +91,12 @@ class BleManager(private val context: Context) {
     private var ownerClient: OwnerEnrollmentClient? = null
     private enum class EnrollmentPhase { IDLE, PAIRING, CHALLENGE, PROOF, RESET }
     private var enrollmentPhase = EnrollmentPhase.IDLE
+    private val ownerReplyTimeout = Runnable {
+        if (enrollmentPhase != EnrollmentPhase.IDLE &&
+            _connectionState.value == BleConnectionState.Ready) {
+            failAuthorization("El ESP32 no respondió al intercambio seguro en 12 s.")
+        }
+    }
     private val _authorizationMessage = MutableStateFlow("Conecta el ESP32 para autorizar propietario.")
     val authorizationMessage: StateFlow<String> = _authorizationMessage.asStateFlow()
     private var bondDeadlineMs = 0L
@@ -562,6 +568,7 @@ class BleManager(private val context: Context) {
     }
 
     private fun failAuthorization(message: String) {
+        handler.removeCallbacks(ownerReplyTimeout)
         enrollmentPhase = EnrollmentPhase.IDLE
         ownerClient?.reset()
         _securityState.value = BleSecurityState.AuthorizationFailed
@@ -575,6 +582,8 @@ class BleManager(private val context: Context) {
             if (pending.size >= 16) pending.removeFirst()
             pending.addLast(frame)
         }
+        handler.removeCallbacks(ownerReplyTimeout)
+        handler.postDelayed(ownerReplyTimeout, 12_000L)
         drainQueue()
     }
 
@@ -611,6 +620,7 @@ class BleManager(private val context: Context) {
                 }
                 EnrollmentPhase.PROOF -> {
                     require(reply is EnrollmentReply.Ok) { "AUTH: respuesta inesperada" }
+                    handler.removeCallbacks(ownerReplyTimeout)
                     ownerClient?.onAuthenticated()
                     enrollmentPhase = EnrollmentPhase.IDLE
                     _securityState.value = BleSecurityState.Authorized
@@ -619,6 +629,7 @@ class BleManager(private val context: Context) {
                 }
                 EnrollmentPhase.RESET -> {
                     require(reply is EnrollmentReply.Ok) { "RESET: respuesta inesperada" }
+                    handler.removeCallbacks(ownerReplyTimeout)
                     val id = _publicDeviceId.value ?: error("identidad perdida")
                     ownerStore.clear(id)
                     ownerClient = null
@@ -812,6 +823,7 @@ class BleManager(private val context: Context) {
         _connectedAddress.value = null
         // Closing the link revokes authorization; the firmware does the same.
         _securityState.value = BleSecurityState.Disconnected
+        handler.removeCallbacks(ownerReplyTimeout)
         enrollmentPhase = EnrollmentPhase.IDLE
         ownerClient?.reset()
         ownerClient = null
