@@ -17,6 +17,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
@@ -38,6 +39,8 @@ fun DevicesScreen(
 ) {
     val connection by bleManager.connectionState.collectAsState()
     val security by bleManager.securityState.collectAsState()
+    val authorizationMessage by bleManager.authorizationMessage.collectAsState()
+    var enrollmentCode by remember { mutableStateOf("") }
     val devices by bleManager.discoveredDevices.collectAsState()
     val scanStats by bleManager.scanStatistics.collectAsState()
     val publicId by bleManager.publicDeviceId.collectAsState()
@@ -128,6 +131,65 @@ fun DevicesScreen(
                         Text("Último ESP32: …${lastMac!!.takeLast(5)}",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+        if (ready && !authorized) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth().testTag("ble_owner_enrollment"),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text("Autorización del propietario", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Conectado no significa autorizado. Para el primer registro, mantén BOOT " +
+                                "del ESP32 durante 3 segundos y lee el código temporal en el " +
+                                "Monitor Serie USB (115200). No desconectes la placa.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (security == BleSecurityState.Authorizing ||
+                            security == BleSecurityState.Pairing) {
+                            LinearProgressIndicator(Modifier.fillMaxWidth())
+                        }
+                        authorizationMessage?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.testTag("ble_owner_status"))
+                        }
+                        OutlinedTextField(
+                            value = enrollmentCode,
+                            onValueChange = { value ->
+                                enrollmentCode = value.filter { it.isDigit() ||
+                                    it.lowercaseChar() in 'a'..'f' }.take(8).uppercase()
+                            },
+                            label = { Text("Código BOOT de 8 caracteres") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth().testTag("ble_owner_code")
+                        )
+                        Button(
+                            onClick = {
+                                bleManager.beginOwnerEnrollment(enrollmentCode)
+                                enrollmentCode = ""
+                            },
+                            enabled = enrollmentCode.length == 8 &&
+                                security != BleSecurityState.Authorizing &&
+                                security != BleSecurityState.Pairing,
+                            modifier = Modifier.fillMaxWidth().testTag("ble_owner_authorize")
+                        ) { Text("Registrar y autorizar ESP32") }
+                        Text(
+                            "Si este ESP32 ya tiene otro propietario, usa la recuperación " +
+                                "física documentada. La app nunca omite esta autorización.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
