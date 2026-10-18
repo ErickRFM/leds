@@ -697,9 +697,9 @@ class BleManager(private val context: Context) {
 
     fun writeCommand(text: String) {
         // Reject malformed/unknown operations before they enter the GATT queue.
-        if (!RgbDeviceCommand.allowed(text) ||
-            _connectionState.value != BleConnectionState.Ready ||
-            (text != "GET" && _securityState.value != BleSecurityState.Authorized)) return
+        if (!BleRgbPermission.permits(
+                _connectionState.value == BleConnectionState.Ready, _securityState.value, text
+            )) return
         synchronized(pending) {
             if (text.startsWith("SET,")) pending.removeAll { it.startsWith("SET,") }
             if (pending.size >= 16) pending.removeFirst()
