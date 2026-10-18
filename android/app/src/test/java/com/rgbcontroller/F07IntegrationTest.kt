@@ -23,6 +23,10 @@ class F07IntegrationTest {
            {"type":"temperature","status":"fresh","valid":true,"value":$v,"unit":"C","timestampMs":$ts}]}"""
     }
 
+    private val activeDht22 = """{"version":1,"gpioAuthority":"firmware","components":[
+            {"id":"sensor.dht22","type":"sensor","interface":"one_wire",
+             "state":"active","active":true,"pins":[32]}]}"""
+
     private val invalidTemp =
         """{"version":1,"measurements":[
            {"type":"temperature","status":"invalid","valid":false,"value":0,"unit":"C","timestampMs":10}]}"""
@@ -30,6 +34,7 @@ class F07IntegrationTest {
     @Test fun invalidReadingEntersHistoryAsUnplottableAndNeverAlerts() = runBlocking {
         val repo = ComponentStatusRepository(FakeComponentStatusStorage(), clock = { 10L })
         repo.setDevice("device-a")
+        repo.ingest(activeDht22)
         assertTrue(repo.ingestTelemetry(invalidTemp))
         val sample = repo.state.value.series("dht22", "temperature").single()
         assertFalse(sample.isPlottable)
@@ -40,6 +45,7 @@ class F07IntegrationTest {
     @Test fun switchingDeviceClearsCrossDeviceAlertAndAutomationState() = runBlocking {
         val repo = ComponentStatusRepository(FakeComponentStatusStorage(), clock = { 100L })
         repo.setDevice("device-a")
+        repo.ingest(activeDht22)
         repo.ingestTelemetry(temp(60.0, 100))
         assertTrue(repo.state.value.activeAlerts.isNotEmpty())
 
@@ -88,6 +94,7 @@ class F07IntegrationTest {
         val storage = FakeComponentStatusStorage()
         val repo = ComponentStatusRepository(storage, clock = { 100L })
         repo.setDevice("device-a")
+        repo.ingest(activeDht22)
         repo.ingestTelemetry(temp(25.0, 100))
         repo.setSoilCalibration(dryRaw = 50, wetRaw = 1300)
 
