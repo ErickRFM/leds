@@ -1,5 +1,6 @@
 package com.rgbcontroller.feature.modules
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -81,7 +82,10 @@ fun ModuleWorkspaceScreen(
     val state by vm.uiState.collectAsState()
     val scope = rememberCoroutineScope()
     val bleConnection by bleManager.connectionState.collectAsState()
+    val bleSecurity by bleManager.securityState.collectAsState()
     val bleReady = bleConnection == BleConnectionState.Ready
+    val bleAuthorized = bleReady &&
+        bleSecurity == com.rgbcontroller.core.ble.BleSecurityState.Authorized
     val wifiAuthorized = session.transport == LabTransport.WIFI_LAB &&
         session.connectionState == LabConnectionState.AUTHORIZED && session.wifiReady
     var showLibrary by rememberSaveable { mutableStateOf(false) }
@@ -89,6 +93,11 @@ fun ModuleWorkspaceScreen(
     var editingId by remember { mutableStateOf<String?>(null) }
     var applyMessage by remember { mutableStateOf<String?>(null) }
     var applying by remember { mutableStateOf(false) }
+    // Nested module details and the pin editor aren't NavHost routes.
+    // Physical Back must close the inner view before leaving the tab.
+    BackHandler(enabled = editingId != null || openedId != null) {
+        if (editingId != null) editingId = null else openedId = null
+    }
     val labClient = remember(context) { LocalLabClient(context.applicationContext) }
 
     LaunchedEffect(Unit) {
@@ -375,7 +384,8 @@ fun ModuleWorkspaceScreen(
                                         physical != null && currentlyVerified ->
                                             "Firmware: ${physical.state} · ${if (physical.active) "activo" else "no activo"}"
                                         physical != null -> "Última confirmación del firmware · no en vivo"
-                                        bleReady && id == "led_rgb" -> "Control BLE RGB disponible · GPIO sin confirmar"
+                                        bleAuthorized && id == "led_rgb" -> "Control BLE RGB autorizado · GPIO sin confirmar"
+                                         bleReady && id == "led_rgb" -> "BLE conectado · autorización RGB pendiente"
                                         else -> "Borrador local · sin confirmar"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
@@ -393,7 +403,8 @@ fun ModuleWorkspaceScreen(
                                 val evidenceLabel = when {
                                     sensorConfirmed && currentlyVerified -> "Confirmado por firmware"
                                     physical != null -> "Estado guardado · no en vivo"
-                                    bleReady && id == "led_rgb" -> "BLE RGB listo · GPIO sin confirmar"
+                                    bleAuthorized && id == "led_rgb" -> "BLE RGB autorizado · GPIO sin confirmar"
+                                     bleReady && id == "led_rgb" -> "BLE conectado · control no autorizado"
                                     else -> "Pendiente de aplicar"
                                 }
                                 Surface(
