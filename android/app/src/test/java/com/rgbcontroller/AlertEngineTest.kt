@@ -93,6 +93,10 @@ class AlertEngineTest {
         val storage = FakeComponentStatusStorage()
         val repo = ComponentStatusRepository(storage, clock = { 1000L })
         repo.setDevice("device-a")
+        // The alert must be attributed to a firmware-confirmed physical model.
+        repo.ingest("""{"version":1,"gpioAuthority":"firmware","components":[
+            {"id":"sensor.dht22","type":"sensor","interface":"one_wire",
+             "state":"active","active":true,"pins":[32]}]}""")
         repo.ingestTelemetry(
             """{"version":1,"measurements":[
                {"type":"temperature","status":"fresh","valid":true,"value":40.0,"unit":"C","timestampMs":1000}]}"""

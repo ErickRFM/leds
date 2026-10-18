@@ -63,6 +63,21 @@ class TelemetryHistoryTest {
         assertEquals("dht22", sample.componentId)
     }
 
+    @Test fun dht11HistoryIsNotMislabelledAsDht22() {
+        val data = listOf(ComponentMeasurement("temperature", "fresh", true, 21.8f, "C", 50L))
+        val dht11 = TelemetryHistory.samplesFromMeasurements(
+            data, "device-a", 1000L, TelemetryProvenance.FIRMWARE,
+            dhtComponentId = "dht11"
+        )
+        assertEquals("dht11", dht11.single().componentId)
+        assertTrue(TelemetryHistory.samplesForSeries(dht11, "dht22", "temperature").isEmpty())
+        val unknown = TelemetryHistory.samplesFromMeasurements(
+            data, "device-a", 1000L, TelemetryProvenance.FIRMWARE,
+            dhtComponentId = "unattributed"
+        )
+        assertEquals("unattributed", unknown.single().componentId)
+    }
+
     @Test fun deviceIsolationNeverLeaksAnotherDeviceHistory() {
         val history = listOf(sample(deviceId = "device-a"), sample(deviceId = "device-b"))
         assertEquals(1, TelemetryHistory.samplesForDevice(history, "device-a").size)
@@ -107,7 +122,8 @@ class TelemetryHistoryTest {
         val history = repo.state.value.history
         assertEquals(1, history.size)
         assertEquals(TelemetryProvenance.LAST_KNOWN, history[0].provenance)
-        assertEquals("dht22", history[0].componentId)
+        // Persisted sensor data without a model-confirming status is ambiguous.
+        assertEquals("unattributed", history[0].componentId)
         assertEquals(1, storage.saveHistoryCount)
     }
 

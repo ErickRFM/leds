@@ -101,6 +101,20 @@ class ComponentDashboardViewModelTest {
         assertNotNull(state.authorityError)
     }
 
+    @Test fun dht11HistoryUsesRuntimeFirmwareModel() = runBlocking {
+        val h = Harness().apply {
+            response = """{"version":1,"gpioAuthority":"firmware","components":[
+               {"id":"sensor.dht11","type":"sensor","interface":"one_wire",
+                "state":"active","active":true,"pins":[16]}]}"""
+            telemetryResponse = validTelemetry
+        }
+        h.viewModel.refresh()
+        val history = h.viewModel.uiState.value.deviceHistory
+        assertEquals(2, history.size)
+        assertTrue(history.all { it.componentId == "dht11" })
+        assertTrue(h.viewModel.uiState.value.series("dht22", "temperature").isEmpty())
+    }
+
     @Test fun authorizedFetchIngestsRealTelemetry() = runBlocking {
         val h = Harness().apply { response = validPayload; telemetryResponse = validTelemetry }
         h.viewModel.refresh()
