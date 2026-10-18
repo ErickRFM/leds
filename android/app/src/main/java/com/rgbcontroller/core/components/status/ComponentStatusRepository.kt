@@ -58,7 +58,10 @@ class ComponentStatusRepository(
                 existing = emptyList(),
                 incoming = TelemetryHistory.samplesFromMeasurements(
                     telemetry.measurements, telemetry.deviceId,
-                    telemetry.confirmedAtMs, TelemetryProvenance.LAST_KNOWN
+                    telemetry.confirmedAtMs, TelemetryProvenance.LAST_KNOWN,
+                    dhtComponentId = TelemetryHistory.activeDhtId(
+                        lastKnown?.takeIf { it.deviceId == telemetry.deviceId }?.components
+                    ) ?: "unattributed"
                 ),
                 limits = historyLimits,
                 nowMs = telemetry.confirmedAtMs
@@ -250,7 +253,9 @@ class ComponentStatusRepository(
         val lastKnown = LastKnownTelemetry(current, measurements, now)
         storage.saveTelemetry(lastKnown)
         val samples = TelemetryHistory.samplesFromMeasurements(
-            measurements, current, now, TelemetryProvenance.FIRMWARE
+            measurements, current, now, TelemetryProvenance.FIRMWARE,
+            dhtComponentId = TelemetryHistory.activeDhtId(_state.value.authoritative)
+                ?: "unattributed"
         )
         val history = TelemetryHistory.append(
             existing = _state.value.history,

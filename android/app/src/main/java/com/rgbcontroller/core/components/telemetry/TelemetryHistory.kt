@@ -1,6 +1,7 @@
 package com.rgbcontroller.core.components.telemetry
 
 import com.rgbcontroller.core.components.model.ComponentMeasurement
+import com.rgbcontroller.core.components.model.ComponentRuntimeStatus
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -92,11 +93,12 @@ object TelemetryHistory {
         measurements: List<ComponentMeasurement>,
         deviceId: String,
         recordedAtMs: Long,
-        provenance: TelemetryProvenance
+        provenance: TelemetryProvenance,
+        dhtComponentId: String = "dht22"
     ): List<TelemetrySample> = measurements.map { measurement ->
         TelemetrySample(
             deviceId = deviceId,
-            componentId = componentIdForMeasurementType(measurement.type),
+            componentId = componentIdForMeasurementType(measurement.type, dhtComponentId),
             measurementType = measurement.type,
             // An invalid reading keeps no numeric value: a chart or consumer can
             // never mistake a stale/invalid sample for a real measurement.
@@ -110,9 +112,26 @@ object TelemetryHistory {
         )
     }
 
-    /** Catalog component a firmware measurement type belongs to; never guesses. */
-    fun componentIdForMeasurementType(type: String): String = when (type) {
-        "humidity", "temperature" -> "dht22"
+    /**
+     * Sensor packets share humidity/temperature keys. Firmware status is the
+     * only evidence of DHT11 vs DHT22; refuse ambiguous attribution.
+     */
+    fun activeDhtId(components: List<ComponentRuntimeStatus>?): String? {
+        val candidates = components.orEmpty().filter { it.active }.mapNotNull {
+            when (it.id) {
+                "sensor.dht11" -> "dht11"
+                "sensor.dht22" -> "dht22"
+                else -> null
+            }
+        }.distinct()
+        return candidates.singleOrNull()
+    }
+
+    fun componentIdForMeasurementType(
+        type: String, dhtComponentId: String = "dht22"
+    ): String = when (type) {
+        "humidity", "temperature" ->
+            dhtComponentId.takeIf { it == "dht11" || it == "dht22" } ?: "unattributed"
         "soil_moisture", "adc_raw" -> "soil_moisture"
         "rgb_state" -> "led_rgb"
         else -> "unknown"
