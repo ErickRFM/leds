@@ -85,15 +85,16 @@ private sealed class Screen(
 
 /**
  * Home is always the root destination, never a restored copy of a nested screen.
- * Primary destinations always start from their own root instead of reviving a
- * previously saved nested stack. BLE/Wi-Fi sessions live outside NavHost.
+ * Module/Hardware tab changes must not revive old nested screens. Studio keeps
+ * its local unsaved editor buffers while switching tabs. Transport state lives
+ * outside the navigation stack and is never disconnected by navigation.
  */
 private fun NavHostController.navigateTopLevel(screen: Screen) {
     if (currentDestination?.route == screen.route) return
     if (screen == Screen.Home) {
         // Pop the actual root rather than navigating to another Home instance with
         // restoreState=true, which can revive the screen the user just left.
-        if (!popBackStack(Screen.Home.route, inclusive = false, saveState = false)) {
+        if (!popBackStack(Screen.Home.route, inclusive = false, saveState = true)) {
             navigate(Screen.Home.route) {
                 popUpTo(graph.findStartDestination().id) { inclusive = true }
                 launchSingleTop = true
@@ -101,9 +102,11 @@ private fun NavHostController.navigateTopLevel(screen: Screen) {
         }
     } else {
         navigate(screen.route) {
-            popUpTo(graph.findStartDestination().id) { saveState = false }
+            // Save transient Studio drafts before leaving; restore only Studio.
+            // Other tabs always enter at their root (no saved nested LED/GPIO).
+            popUpTo(graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
-            restoreState = false
+            restoreState = screen == Screen.Code
         }
     }
 }
