@@ -122,7 +122,8 @@ class TelemetryHistoryTest {
         val history = repo.state.value.history
         assertEquals(1, history.size)
         assertEquals(TelemetryProvenance.LAST_KNOWN, history[0].provenance)
-        assertEquals("dht22", history[0].componentId)
+        // Persisted sensor data without a model-confirming status is ambiguous.
+        assertEquals("unattributed", history[0].componentId)
         assertEquals(1, storage.saveHistoryCount)
     }
 
