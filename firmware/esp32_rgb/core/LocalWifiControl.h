@@ -186,7 +186,9 @@ class LocalWifiControl final {
 
     server_.on("/v2/components/status", HTTP_GET, [this]() {
       if (!authorized()) return;
-      char body[640];
+      // Include per-sensor read diagnostics without truncating the JSON
+      // when RGB, DHT11, DHT22, soil and OLED drivers are all compiled.
+      char body[1024];
       if (status_ == nullptr || !status_(body, sizeof(body), statusContext_)) {
         jsonError(503, "status_unavailable");
         return;

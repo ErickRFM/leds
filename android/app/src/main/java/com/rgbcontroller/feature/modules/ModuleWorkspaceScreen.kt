@@ -388,6 +388,8 @@ fun ModuleWorkspaceScreen(
                                             if (group.components.all { runtime(it)?.active == true } &&
                                                 currentlyVerified) "${environmentSensor.uppercase()} + suelo · drivers activos"
                                             else "${environmentSensor.uppercase()} + suelo · estado parcial o último conocido"
+                                        id == "led_rgb" && physical != null && currentlyVerified ->
+                                            "PWM configurado · conexión física no verificable"
                                         physical != null && currentlyVerified ->
                                             "Firmware: ${physical.state} · ${if (physical.active) "activo" else "no activo"}"
                                         physical != null -> "Última confirmación del firmware · no en vivo"
@@ -413,13 +415,18 @@ fun ModuleWorkspaceScreen(
                                             state.authoritativeTelemetry.orEmpty(), type
                                         )?.let { it.valid && it.status == "fresh" } == true
                                     }
-                                val sensorConfirmed = if (climateModel) {
+                                val sensorConfirmed = if (id == "led_rgb") {
+                                    // PWM leases do not provide physical LED detection.
+                                    false
+                                } else if (climateModel) {
                                     sensorHasValidReadings && currentlyVerified &&
                                         (if (id == ModuleWorkspaceGrouping.ENVIRONMENT)
                                             group.components.any { runtime(it)?.active == true }
                                         else physical?.active == true)
                                 } else physical?.active == true
                                 val evidenceLabel = when {
+                                    id == "led_rgb" && physical?.active == true ->
+                                        "PWM configurado · LED no detectable"
                                     sensorConfirmed && currentlyVerified -> "Confirmado por firmware"
                                     climateModel && physical?.active == true ->
                                         "Driver GPIO activo · esperando temperatura y humedad válidas"
@@ -579,7 +586,9 @@ private fun ModuleRuntimeCard(id: String, runtime: ComponentRuntimeStatus?, live
                     Text(ComponentCatalog.get(id)?.name ?: id,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold)
-                    Text(if (verified && id in setOf("dht11", "dht22"))
+                    Text(if (verified && id == "led_rgb")
+                             "PWM preparado · LED físico no verificado"
+                         else if (verified && id in setOf("dht11", "dht22"))
                              "GPIO activo · sin asegurar lectura física"
                          else if (verified) "Activo · confirmado por ESP32"
                          else if (runtime != null && live) "Reportado por ESP32 · no activo"
@@ -588,7 +597,8 @@ private fun ModuleRuntimeCard(id: String, runtime: ComponentRuntimeStatus?, live
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                if (verified) Icon(Icons.Default.CheckCircle, contentDescription = "Confirmado",
+                if (verified && id !in setOf("led_rgb", "dht11", "dht22"))
+                    Icon(Icons.Default.CheckCircle, contentDescription = "Confirmado",
                     tint = Color(0xFF54D8A3))
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -599,6 +609,8 @@ private fun ModuleRuntimeCard(id: String, runtime: ComponentRuntimeStatus?, live
                         "Driver disponible, pero sensor no activado ni detectado."
                     runtime.active && id in setOf("dht11", "dht22") ->
                         "Driver ${id.uppercase()} activo en firmware; la lectura física se verifica abajo."
+                    runtime.active && id == "led_rgb" ->
+                        "Salidas PWM preparadas. El ESP32 no dispone de sensor de corriente ni retorno para detectar si hay un LED conectado."
                     runtime.active -> "Estado del firmware: ${runtime.state}"
                     else -> "El firmware informa: ${runtime.state}"
                 },

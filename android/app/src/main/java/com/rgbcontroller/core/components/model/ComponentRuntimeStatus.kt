@@ -16,7 +16,11 @@ data class ComponentRuntimeStatus(
     val interfaceType: String,
     val state: String,
     val active: Boolean,
-    val pins: List<Int>
+    val pins: List<Int>,
+    // GPIO readback is separate from physical validation. Only DHT firmware
+    // reports these optional diagnostic fields (older firmware omits them).
+    val diagnostic: String? = null,
+    val failures: Int = 0
 )
 
 /**
@@ -59,7 +63,13 @@ object ComponentStatusCodec {
                 interfaceType = entry.optString("interface", "unknown"),
                 state = entry.optString("state", "error"),
                 active = entry.optBoolean("active", false),
-                pins = pins
+                pins = pins,
+                diagnostic = entry.optString("diagnostic", "").takeIf {
+                    it in setOf("not_attempted", "ok", "line_low", "no_response",
+                        "response_timeout", "bit_timeout", "bad_checksum",
+                        "invalid_payload")
+                },
+                failures = entry.optInt("failures", 0).coerceIn(0, 65535)
             )
         }
         return out
@@ -76,6 +86,10 @@ object ComponentStatusCodec {
             entry.put("state", component.state)
             entry.put("active", component.active)
             entry.put("pins", JSONArray(component.pins))
+            component.diagnostic?.let {
+                entry.put("diagnostic", it)
+                entry.put("failures", component.failures)
+            }
             array.put(entry)
         }
         return array

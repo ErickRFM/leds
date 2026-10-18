@@ -32,6 +32,7 @@
 #include "core/SensorTelemetryCodec.h"
 #include "modules/Dht22Module.h"
 #include "core/DhtFrameCodec.h"
+#include "core/DhtWireDiagnostics.h"
 #include "modules/SoilMoistureModule.h"
 #include "modules/OledSsd1306Module.h"
 
@@ -144,43 +145,93 @@ uint32_t physicalProvisionHoldStarted = 0;
 uint32_t effectStarted = 0;
 
 #if COMPI_BUILD_DHT11 || COMPI_BUILD_DHT22
-// Models share the pulse transport, but DHT11 requires >=18 ms start-low
-// versus AM2302/DHT22 (~2 ms). Poll no faster than every 2 seconds.
-// No reading is published if a response pulse or checksum is missing.
-bool readDhtBits(uint8_t pin, uint16_t startLowMs, uint8_t (&data)[5]) {
+// Read GPIO edges directly; pulseIn(pin, LOW) can SKIP the initial
+// 80-us response when it starts while the line is already low.
+// Every request is open-drain electrically: after the start-low pulse,
+// switch to INPUT_PULLUP rather than actively driving HIGH into a sensor
+// that may already be pulling the wire down.
+bool dhtWaitLevel(uint8_t pin, int level, uint32_t timeoutUs) {
+  const uint32_t started = micros();
+  while (digitalRead(pin) != level) {
+    if (static_cast<uint32_t>(micros() - started) >= timeoutUs) return false;
+  }
+  return true;
+}
+
+bool readDhtBits(uint8_t pin, uint16_t startLowMs, uint8_t (&data)[5],
+                 esp32core::DhtWireFault& fault) {
+  fault = esp32core::DhtWireFault::NotAttempted;
+  pinMode(pin, INPUT_PULLUP);
+  delayMicroseconds(40);
+  if (digitalRead(pin) == LOW) {
+    fault = esp32core::DhtWireFault::LineHeldLow;
+    return false;
+  }
   pinMode(pin, OUTPUT);
   digitalWrite(pin, LOW);
   delay(startLowMs);
-  digitalWrite(pin, HIGH);
-  delayMicroseconds(40);
-  pinMode(pin, INPUT_PULLUP);
-  if (pulseIn(pin, LOW, 1000) == 0) return false;
-  if (pulseIn(pin, HIGH, 1000) == 0) return false;
-  for (int i = 0; i < 40; ++i) {
-    const unsigned long duration = pulseIn(pin, HIGH, 1000);
-    if (duration == 0) return false;
-    data[i / 8] = static_cast<uint8_t>((data[i / 8] << 1) | (duration > 40 ? 1 : 0));
+  pinMode(pin, INPUT_PULLUP); // release the line, never push it HIGH
+  delayMicroseconds(4);
+  if (!dhtWaitLevel(pin, LOW, 180)) {
+    fault = esp32core::DhtWireFault::NoResponse;
+    return false;
   }
+  if (!dhtWaitLevel(pin, HIGH, 180) || !dhtWaitLevel(pin, LOW, 180)) {
+    fault = esp32core::DhtWireFault::ResponseTimeout;
+    return false;
+  }
+  for (uint8_t i = 0; i < 40; ++i) {
+    if (!dhtWaitLevel(pin, HIGH, 140)) {
+      fault = esp32core::DhtWireFault::BitTimeout;
+      return false;
+    }
+    const uint32_t highStarted = micros();
+    if (!dhtWaitLevel(pin, LOW, 140)) {
+      fault = esp32core::DhtWireFault::BitTimeout;
+      return false;
+    }
+    bool bit = false;
+    if (!esp32core::dhtDecodeHighPulse(
+            static_cast<uint32_t>(micros() - highStarted), bit)) {
+      fault = esp32core::DhtWireFault::BitTimeout;
+      return false;
+    }
+    data[i / 8] = static_cast<uint8_t>((data[i / 8] << 1) | (bit ? 1 : 0));
+  }
+  fault = esp32core::DhtWireFault::Ok;
   return true;
+}
+
+esp32core::DhtWireFault dhtDecodeReading(uint8_t pin, uint16_t startLowMs,
+    esp32core::DhtModel model, esp32core::Dht22Module::Reading& output) {
+  uint8_t data[5] = {};
+  esp32core::DhtWireFault fault = esp32core::DhtWireFault::NotAttempted;
+  if (!readDhtBits(pin, startLowMs, data, fault)) return fault;
+  if (static_cast<uint8_t>(data[0] + data[1] + data[2] + data[3]) != data[4])
+    return esp32core::DhtWireFault::BadChecksum;
+  const auto decoded = esp32core::decodeDhtFrame(data, model);
+  if (!decoded.ok) return esp32core::DhtWireFault::InvalidPayload;
+  output = {true, decoded.humidity, decoded.temperature};
+  return esp32core::DhtWireFault::Ok;
 }
 #endif
 
 #if COMPI_BUILD_DHT11
 uint8_t liveDht11Pin = COMPI_DHT11_PIN;
+esp32core::DhtWireFault dht11LastFault = esp32core::DhtWireFault::NotAttempted;
 esp32core::Dht22Module::Reading dht11Read(void*) {
-  uint8_t data[5] = {};
-  if (!readDhtBits(liveDht11Pin, 20, data)) return {false, 0.0f, 0.0f};
-  const auto reading = esp32core::decodeDhtFrame(data, esp32core::DhtModel::DHT11);
-  return {reading.ok, reading.humidity, reading.temperature};
+  esp32core::Dht22Module::Reading reading{false, 0.0f, 0.0f};
+  dht11LastFault = dhtDecodeReading(liveDht11Pin, 20, esp32core::DhtModel::DHT11, reading);
+  return reading;
 }
 #endif
 #if COMPI_BUILD_DHT22
 uint8_t liveDhtPin = COMPI_DHT22_PIN;
+esp32core::DhtWireFault dht22LastFault = esp32core::DhtWireFault::NotAttempted;
 esp32core::Dht22Module::Reading dht22Read(void*) {
-  uint8_t data[5] = {};
-  if (!readDhtBits(liveDhtPin, 2, data)) return {false, 0.0f, 0.0f};
-  const auto reading = esp32core::decodeDhtFrame(data, esp32core::DhtModel::DHT22);
-  return {reading.ok, reading.humidity, reading.temperature};
+  esp32core::Dht22Module::Reading reading{false, 0.0f, 0.0f};
+  dht22LastFault = dhtDecodeReading(liveDhtPin, 2, esp32core::DhtModel::DHT22, reading);
+  return reading;
 }
 #endif
 
@@ -596,6 +647,8 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
     entry.pinCount = entry.active ? 1 : 0;
     entry.state = entry.active ? esp32core::ComponentState::Active
                                : esp32core::ComponentState::Catalog;
+    entry.diagnostic = esp32core::dhtWireFaultName(dht11LastFault);
+    entry.failures = dht11Module.consecutiveFailures();
   }
 #endif
 #if COMPI_BUILD_DHT22
@@ -610,6 +663,8 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
     entry.pinCount = entry.active ? 1 : 0;
     entry.state = entry.active ? esp32core::ComponentState::Active
                                : esp32core::ComponentState::Catalog;
+    entry.diagnostic = esp32core::dhtWireFaultName(dht22LastFault);
+    entry.failures = dht22Module.consecutiveFailures();
   }
 #endif
 #if COMPI_BUILD_SOIL
@@ -945,6 +1000,15 @@ void setup() {
   Serial.println("BOOT: owner NVS ready");
   pinMode(kBootButtonPin, INPUT_PULLUP);
 
+  // GPIO16/17 can be occupied internally by PSRAM on ESP32-WROVER modules.
+  // Protect board-internal IO from accidental DHT reassignment.
+  if (psramFound()) {
+    pinManager.registerSystemPin(16, "board.psram");
+    pinManager.registerSystemPin(17, "board.psram");
+    Serial.println("GPIO16/17 reservado: esta placa detecto PSRAM. Usa GPIO32/33.");
+  } else {
+    Serial.println("GPIO16 disponible en perfil sin PSRAM; requiere prueba electrica real.");
+  }
   pinManager.registerSystemPin(LED_R, "led.rgb");
   pinManager.registerSystemPin(LED_G, "led.rgb");
   pinManager.registerSystemPin(LED_B, "led.rgb");
@@ -1087,6 +1151,19 @@ void loop() {
     oledModule.tick(now);
 #endif
   persistRgbIfDue(now);
+  // Read-only electrical/protocol evidence on the USB serial monitor (115200).
+  // Do not toggle GPIO16/17 to "test" while a sensor is attached.
+#if COMPI_BUILD_DHT11
+  static uint32_t lastDhtDiagAt = 0;
+  if (dht11Module.ready() && static_cast<uint32_t>(now - lastDhtDiagAt) >= 15000U) {
+    lastDhtDiagAt = now;
+    Serial.printf("DHT11 DATA GPIO%u: %s, consecutiveFailures=%u, valid=%u\n",
+      static_cast<unsigned>(dht11Module.pin()),
+      esp32core::dhtWireFaultName(dht11LastFault),
+      static_cast<unsigned>(dht11Module.consecutiveFailures()),
+      dht11Module.humidityReading().valid ? 1U : 0U);
+  }
+#endif
 
   if (now - lastGpioBleUpdateMs >= 1000) {
     lastGpioBleUpdateMs = now;

@@ -24,6 +24,22 @@ class ComponentStatusCodecTest {
         assertEquals(ComponentState.ACTIVE, ComponentStatusCodec.stateFor(rgb))
     }
 
+    @Test fun gpio16DiagnosticRoundtripAndNoPhysicalPresenceInference() {
+        val payload = """{"version":1,"gpioAuthority":"firmware","components":[
+            {"id":"sensor.dht11","type":"sensor","interface":"one_wire",
+             "state":"active","active":true,"pins":[16],
+             "diagnostic":"no_response","failures":37}]}"""
+        val reading = ComponentStatusCodec.decode(payload)!!.single()
+        assertTrue(reading.active) // GPIO lease only
+        assertEquals("no_response", reading.diagnostic)
+        assertEquals(37, reading.failures)
+        assertEquals(listOf(16), reading.pins)
+        val encoded = ComponentStatusCodec.encodeComponents(listOf(reading))
+        val restored = ComponentStatusCodec.parseComponents(encoded).single()
+        assertEquals(reading, restored)
+        assertNull(ComponentStatusCodec.decode(validPayload)!!.first().diagnostic)
+    }
+
     @Test fun rejectsStatusThatIsNotFirmwareAuthoritative() {
         assertNull(ComponentStatusCodec.decode(null))
         assertNull(ComponentStatusCodec.decode(""))
