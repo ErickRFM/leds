@@ -146,8 +146,14 @@ fun ConnectionCenterScreen(
         }
 
         when (tab) {
-            ConnectTab.BLUETOOTH -> Box(Modifier.weight(1f)) {
-                DevicesScreen(bleManager, preferencesRepository, onInspectSecurity = onHardware)
+            ConnectTab.BLUETOOTH -> Column(Modifier.weight(1f)) {
+                Text("1 · Busca y selecciona tu ESP32  ·  2 · Vincula y autoriza el propietario",
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Box(Modifier.weight(1f)) {
+                    DevicesScreen(bleManager, preferencesRepository, onInspectSecurity = onHardware)
+                }
             }
             ConnectTab.WIFI -> Column(
                 Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
@@ -156,7 +162,9 @@ fun ConnectionCenterScreen(
             ) {
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("ESP32 · Wi-Fi local", style = MaterialTheme.typography.titleMedium)
+                        Text("1 · Conéctate al punto de acceso",
+                            style = MaterialTheme.typography.titleMedium)
+                        Text("ESP32 · Wi-Fi local", style = MaterialTheme.typography.bodySmall)
                         Text("Red: ESP32-Control-Lab · La clave aparece por serial (115200).",
                             style = MaterialTheme.typography.bodySmall)
                         OutlinedButton(onClick = {
@@ -164,6 +172,8 @@ fun ConnectionCenterScreen(
                         }) { Text("Abrir ajustes Wi-Fi") }
                     }
                 }
+                Text("2 · Localiza la red en el teléfono",
+                    style = MaterialTheme.typography.titleSmall)
                 Card(Modifier.fillMaxWidth().testTag("wifi_network_results")) {
                     Column(Modifier.fillMaxWidth().padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -221,6 +231,8 @@ fun ConnectionCenterScreen(
                         )
                     }
                 }
+                Text("3 · Verifica la identidad y autorización del firmware",
+                    style = MaterialTheme.typography.titleSmall)
                 if (debug) {
                     OutlinedTextField(
                         value = session.key,
