@@ -31,6 +31,7 @@
 #include "core/SensorTelemetry.h"
 #include "core/SensorTelemetryCodec.h"
 #include "modules/Dht22Module.h"
+#include "core/DhtFrameCodec.h"
 #include "modules/SoilMoistureModule.h"
 #include "modules/OledSsd1306Module.h"
 
@@ -44,6 +45,17 @@
 // ---------------------------------------------------------------------------
 // Drivers may be built without taking pins. COMPI_ENABLE_* continues to
 // mean "start at boot" for backward compatibility with opt-in firmware.
+#ifndef COMPI_BUILD_DHT11
+#define COMPI_BUILD_DHT11 1
+#endif
+#ifndef COMPI_ENABLE_DHT11
+// The user's ESP32 sensor on GPIO16 starts on boot. An absent sensor
+// reports invalid telemetry rather than inventing temperature or humidity.
+#define COMPI_ENABLE_DHT11 1
+#endif
+#ifndef COMPI_DHT11_PIN
+#define COMPI_DHT11_PIN 16
+#endif
 #ifndef COMPI_BUILD_DHT22
 #define COMPI_BUILD_DHT22 1
 #endif
@@ -131,38 +143,46 @@ bool connectedPreviously = false;
 uint32_t physicalProvisionHoldStarted = 0;
 uint32_t effectStarted = 0;
 
+#if COMPI_BUILD_DHT11 || COMPI_BUILD_DHT22
+// Models share the pulse transport, but DHT11 requires >=18 ms start-low
+// versus AM2302/DHT22 (~2 ms). Poll no faster than every 2 seconds.
+// No reading is published if a response pulse or checksum is missing.
+bool readDhtBits(uint8_t pin, uint16_t startLowMs, uint8_t (&data)[5]) {
+  pinMode(pin, OUTPUT);
+  digitalWrite(pin, LOW);
+  delay(startLowMs);
+  digitalWrite(pin, HIGH);
+  delayMicroseconds(40);
+  pinMode(pin, INPUT_PULLUP);
+  if (pulseIn(pin, LOW, 1000) == 0) return false;
+  if (pulseIn(pin, HIGH, 1000) == 0) return false;
+  for (int i = 0; i < 40; ++i) {
+    const unsigned long duration = pulseIn(pin, HIGH, 1000);
+    if (duration == 0) return false;
+    data[i / 8] = static_cast<uint8_t>((data[i / 8] << 1) | (duration > 40 ? 1 : 0));
+  }
+  return true;
+}
+#endif
+
+#if COMPI_BUILD_DHT11
+uint8_t liveDht11Pin = COMPI_DHT11_PIN;
+esp32core::Dht22Module::Reading dht11Read(void*) {
+  uint8_t data[5] = {};
+  if (!readDhtBits(liveDht11Pin, 20, data)) return {false, 0.0f, 0.0f};
+  const auto reading = esp32core::decodeDhtFrame(data, esp32core::DhtModel::DHT11);
+  return {reading.ok, reading.humidity, reading.temperature};
+}
+#endif
 #if COMPI_BUILD_DHT22
 uint8_t liveDhtPin = COMPI_DHT22_PIN;
-// Bit-banged AM2302/DHT22 read. Returns ok=false on timeout or checksum error;
-// callers must treat that as "no data", never as a valid 0% reading.
 esp32core::Dht22Module::Reading dht22Read(void*) {
-  esp32core::Dht22Module::Reading result{false, 0.0f, 0.0f};
-  uint8_t data[5] = {0, 0, 0, 0, 0};
-  pinMode(liveDhtPin, OUTPUT);
-  digitalWrite(liveDhtPin, LOW);
-  delay(2);
-  digitalWrite(liveDhtPin, HIGH);
-  delayMicroseconds(40);
-  pinMode(liveDhtPin, INPUT_PULLUP);
-  if (pulseIn(liveDhtPin, LOW, 1000) == 0) return result;
-  if (pulseIn(liveDhtPin, HIGH, 1000) == 0) return result;
-  for (int i = 0; i < 40; ++i) {
-    const unsigned long highDuration = pulseIn(liveDhtPin, HIGH, 1000);
-    if (highDuration == 0) return result;
-    data[i / 8] <<= 1;
-    if (highDuration > 40) data[i / 8] |= 1;
-  }
-  const uint8_t checksum = static_cast<uint8_t>(data[0] + data[1] + data[2] + data[3]);
-  if (checksum != data[4]) return result;
-  const uint16_t rawHumidity = (static_cast<uint16_t>(data[0]) << 8) | data[1];
-  int16_t rawTemperature = ((static_cast<uint16_t>(data[2] & 0x7F) << 8) | data[3]);
-  if (data[2] & 0x80) rawTemperature = -rawTemperature;
-  result.humidityPercent = static_cast<float>(rawHumidity) / 10.0f;
-  result.temperatureC = static_cast<float>(rawTemperature) / 10.0f;
-  result.ok = true;
-  return result;
+  uint8_t data[5] = {};
+  if (!readDhtBits(liveDhtPin, 2, data)) return {false, 0.0f, 0.0f};
+  const auto reading = esp32core::decodeDhtFrame(data, esp32core::DhtModel::DHT22);
+  return {reading.ok, reading.humidity, reading.temperature};
 }
-#endif  // COMPI_ENABLE_DHT22
+#endif
 
 #if COMPI_BUILD_SOIL
 int soilAdcRead(uint8_t pin, void*) { return analogRead(pin); }
@@ -501,6 +521,9 @@ esp32core::LedRgbModule rgbModule(
     renderStatic, renderEffect,
     []() { return rgb.mode != Mode::NONE; });
 
+#if COMPI_BUILD_DHT11
+esp32core::Dht22Module dht11Module(COMPI_DHT11_PIN, dht11Read, nullptr, 2000, "sensor.dht11");
+#endif
 #if COMPI_BUILD_DHT22
 esp32core::Dht22Module dht22Module(COMPI_DHT22_PIN, dht22Read, nullptr, 2000);
 #endif
@@ -518,6 +541,12 @@ esp32core::OledSsd1306Module oledModule(COMPI_OLED_ADDRESS, COMPI_OLED_SDA,
 bool collectComponentTelemetry(char* output, size_t capacity, void*) {
   esp32core::Measurement entries[8];
   size_t count = 0;
+#if COMPI_BUILD_DHT11
+  if (dht11Module.ready()) {
+    entries[count++] = dht11Module.humidityReading();
+    entries[count++] = dht11Module.temperatureReading();
+  }
+#endif
 #if COMPI_BUILD_DHT22
   if (dht22Module.ready()) {
     entries[count++] = dht22Module.humidityReading();
@@ -555,6 +584,20 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
                                : esp32core::ComponentState::Error;
   }
 
+#if COMPI_BUILD_DHT11
+  {
+    esp32core::ComponentStatusEntry& entry = entries[count++];
+    entry = {};
+    entry.id = dht11Module.id();
+    entry.type = esp32core::ComponentType::Sensor;
+    entry.interfaceType = esp32core::HardwareInterface::OneWire;
+    entry.pins[0] = dht11Module.pin();
+    entry.active = dht11Module.ready();
+    entry.pinCount = entry.active ? 1 : 0;
+    entry.state = entry.active ? esp32core::ComponentState::Active
+                               : esp32core::ComponentState::Catalog;
+  }
+#endif
 #if COMPI_BUILD_DHT22
   {
     esp32core::ComponentStatusEntry& entry = entries[count++];
@@ -642,31 +685,82 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
     rgbModule.begin(pinManager);
     return false;
   }
+#if COMPI_BUILD_DHT11 && COMPI_BUILD_DHT22
+  // DHT11 and DHT22 use the same telemetry fields. Allow ONE active model.
+  // Switch atomically with GPIO lease rollback to avoid ghost owners/data.
+  if (std::strcmp(catalogId, "dht11") == 0 ||
+      std::strcmp(catalogId, "dht22") == 0) {
+    const bool is11 = std::strcmp(catalogId, "dht11") == 0;
+    esp32core::Dht22Module& target = is11 ? dht11Module : dht22Module;
+    esp32core::Dht22Module& other = is11 ? dht22Module : dht11Module;
+    uint8_t& activePin = is11 ? liveDht11Pin : liveDhtPin;
+    const bool wasReady = target.ready(), otherReady = other.ready();
+    const uint8_t oldPin = target.pin(), otherPin = other.pin();
+    if (from2 != 0 || to2 != 0 || from3 != 0 || to3 != 0 ||
+        esp32core::PinManager::reservedForRgb(to1) ||
+        !esp32core::PinManager::outputCapable(to1) ||
+        (wasReady ? from1 != oldPin : from1 != 0)) return false;
+    const auto* lease = pinManager.lease(to1);
+    if (lease && std::strcmp(lease->owner, target.id()) != 0 &&
+        std::strcmp(lease->owner, other.id()) != 0) return false;
+    const char* system = pinManager.systemOwner(to1);
+    if (system && std::strcmp(system, target.id()) != 0 &&
+        std::strcmp(system, other.id()) != 0) return false;
+    if (wasReady && oldPin == to1 && !otherReady) return true;
+    if (wasReady) target.stop(pinManager);
+    if (otherReady) other.stop(pinManager);
+    if (target.configurePin(to1)) {
+      activePin = to1;
+      if (target.begin(pinManager)) return true;
+    }
+    // A failed transfer restores both the former pin and the owner lease.
+    target.configurePin(oldPin);
+    activePin = oldPin;
+    if (wasReady) target.begin(pinManager);
+    if (otherReady) other.begin(pinManager);
+    return false;
+  }
+#else
+#if COMPI_BUILD_DHT11
+  if (std::strcmp(catalogId, "dht11") == 0) {
+    if (from2 != 0 || to2 != 0 || esp32core::PinManager::reservedForRgb(to1) ||
+        !esp32core::PinManager::outputCapable(to1) ||
+        !available(to1, dht11Module.id()) ||
+        (dht11Module.ready() ? from1 != dht11Module.pin() : from1 != 0)) return false;
+    if (dht11Module.ready() && from1 == to1) return true;
+    const bool wasReady = dht11Module.ready();
+    const uint8_t oldPin = dht11Module.pin();
+    if (wasReady) dht11Module.stop(pinManager);
+    if (dht11Module.configurePin(to1)) {
+      liveDht11Pin = to1;
+      if (dht11Module.begin(pinManager)) return true;
+    }
+    dht11Module.configurePin(oldPin);
+    liveDht11Pin = oldPin;
+    if (wasReady) dht11Module.begin(pinManager);
+    return false;
+  }
+#endif
 #if COMPI_BUILD_DHT22
   if (std::strcmp(catalogId, "dht22") == 0) {
     if (from2 != 0 || to2 != 0 || esp32core::PinManager::reservedForRgb(to1) ||
-        !esp32core::PinManager::outputCapable(to1) || !available(to1, dht22Module.id())) return false;
-    if (!dht22Module.ready()) {
-      if (from1 != 0) return false;
-      const uint8_t original = dht22Module.pin();
-      if (!dht22Module.configurePin(to1)) return false;
+        !esp32core::PinManager::outputCapable(to1) ||
+        !available(to1, dht22Module.id()) ||
+        (dht22Module.ready() ? from1 != dht22Module.pin() : from1 != 0)) return false;
+    if (dht22Module.ready() && from1 == to1) return true;
+    const bool wasReady = dht22Module.ready();
+    const uint8_t oldPin = dht22Module.pin();
+    if (wasReady) dht22Module.stop(pinManager);
+    if (dht22Module.configurePin(to1)) {
       liveDhtPin = to1;
       if (dht22Module.begin(pinManager)) return true;
-      dht22Module.configurePin(original);
-      liveDhtPin = original;
-      return false;
     }
-    if (dht22Module.pin() != from1) return false;
-    if (from1 == to1) return true;
-    dht22Module.stop(pinManager);
-    if (!dht22Module.configurePin(to1)) return false; // preflight ensures this
-    liveDhtPin = to1; // the physical bit-bang driver must use the new GPIO
-    if (dht22Module.begin(pinManager)) return true;
-    dht22Module.configurePin(from1);
-    liveDhtPin = from1;
-    dht22Module.begin(pinManager);
+    dht22Module.configurePin(oldPin);
+    liveDhtPin = oldPin;
+    if (wasReady) dht22Module.begin(pinManager);
     return false;
   }
+#endif
 #endif
 #if COMPI_BUILD_SOIL
   if (std::strcmp(catalogId, "soil_moisture") == 0) {
@@ -871,6 +965,9 @@ void setup() {
     Serial.println("ERROR: RGB module failed to reserve/attach PWM");
     while (true) delay(1000);
   }
+#if COMPI_ENABLE_DHT11 && COMPI_BUILD_DHT11
+  moduleRegistry.add(dht11Module);
+#endif
 #if COMPI_ENABLE_DHT22
   moduleRegistry.add(dht22Module);
 #endif
@@ -973,6 +1070,10 @@ void loop() {
   moduleRegistry.tickAll(millis());
   // Modules activated at runtime are not in the boot-time registry; tick them
   // explicitly, only when their leases are active, from this same loop thread.
+#if COMPI_BUILD_DHT11
+  if (dht11Module.ready() && moduleRegistry.find(dht11Module.id()) == nullptr)
+    dht11Module.tick(now);
+#endif
 #if COMPI_BUILD_DHT22
   if (dht22Module.ready() && moduleRegistry.find(dht22Module.id()) == nullptr)
     dht22Module.tick(now);

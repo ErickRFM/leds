@@ -201,7 +201,7 @@ class LocalWifiControl final {
         jsonError(409, "component_apply_unavailable_or_busy"); return;
       }
       const String componentId = server_.arg("id");
-      if (componentId != "dht22" && componentId != "soil_moisture" &&
+      if (componentId != "dht11" && componentId != "dht22" && componentId != "soil_moisture" &&
           componentId != "ssd1306_oled" && componentId != "led_rgb") {
         jsonError(400, "unsupported_component"); return;
       }
