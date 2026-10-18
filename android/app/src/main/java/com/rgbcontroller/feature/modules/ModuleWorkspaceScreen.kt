@@ -373,8 +373,8 @@ fun ModuleWorkspaceScreen(
                                     when {
                                         id == ModuleWorkspaceGrouping.ENVIRONMENT ->
                                             if (group.components.all { runtime(it)?.active == true } &&
-                                                currentlyVerified) "DHT22 + suelo · confirmados"
-                                            else "DHT22 + suelo · estado parcial o último conocido"
+                                                currentlyVerified) "${environmentSensor.uppercase()} + suelo · drivers activos"
+                                            else "${environmentSensor.uppercase()} + suelo · estado parcial o último conocido"
                                         physical != null && currentlyVerified ->
                                             "Firmware: ${physical.state} · ${if (physical.active) "activo" else "no activo"}"
                                         physical != null -> "Última confirmación del firmware · no en vivo"
@@ -386,15 +386,30 @@ fun ModuleWorkspaceScreen(
                                 )
                                 Text(
                                     if (id == ModuleWorkspaceGrouping.ENVIRONMENT)
-                                        "DHT22 y ADC1 · dos conexiones independientes"
+                                        "${environmentSensor.uppercase()} y ADC1 · conexiones independientes"
                                     else "GPIO ${(physical?.pins ?: local?.pins).orEmpty().joinToString().ifBlank { "sin asignar" }}",
                                     style = MaterialTheme.typography.labelMedium
                                 )
-                                val sensorConfirmed = if (id == ModuleWorkspaceGrouping.ENVIRONMENT) {
-                                    group.components.all { runtime(it)?.active == true }
+                                val climateModel = id == "dht11" || id == "dht22" ||
+                                    id == ModuleWorkspaceGrouping.ENVIRONMENT
+                                val sensorHasValidReadings = state.telemetryFreshness ==
+                                    ComponentStatusFreshness.LIVE && state.connected &&
+                                    state.authorityError == null &&
+                                    listOf("humidity", "temperature").all { type ->
+                                        ComponentTelemetryCodec.find(
+                                            state.authoritativeTelemetry.orEmpty(), type
+                                        )?.let { it.valid && it.status == "fresh" } == true
+                                    }
+                                val sensorConfirmed = if (climateModel) {
+                                    sensorHasValidReadings && currentlyVerified &&
+                                        (if (id == ModuleWorkspaceGrouping.ENVIRONMENT)
+                                            group.components.any { runtime(it)?.active == true }
+                                        else physical?.active == true)
                                 } else physical?.active == true
                                 val evidenceLabel = when {
                                     sensorConfirmed && currentlyVerified -> "Confirmado por firmware"
+                                    climateModel && physical?.active == true ->
+                                        "Driver GPIO activo · esperando temperatura y humedad válidas"
                                     physical != null -> "Estado guardado · no en vivo"
                                     bleReady && id == "led_rgb" -> "BLE RGB listo · GPIO sin confirmar"
                                     else -> "Pendiente de aplicar"
@@ -413,7 +428,7 @@ fun ModuleWorkspaceScreen(
                                 }
                             }
                             IconButton(onClick = {
-                                editingId = if (id == ModuleWorkspaceGrouping.ENVIRONMENT) "dht22" else id
+                                editingId = if (id == ModuleWorkspaceGrouping.ENVIRONMENT) environmentSensor else id
                             },
                                 modifier = Modifier.testTag("module_config_$id")) {
                                 Icon(Icons.Default.Tune, contentDescription = "Editar GPIO de $id")
@@ -566,6 +581,8 @@ private fun ModuleRuntimeCard(id: String, runtime: ComponentRuntimeStatus?, live
                     runtime == null -> "El ESP32 aún no ha confirmado este componente."
                     !runtime.active && runtime.state == "catalog" ->
                         "Driver disponible, pero sensor no activado ni detectado."
+                    runtime.active && id in setOf("dht11", "dht22") ->
+                        "Driver ${id.uppercase()} activo en firmware; la lectura física se verifica abajo."
                     runtime.active -> "Estado del firmware: ${runtime.state}"
                     else -> "El firmware informa: ${runtime.state}"
                 },
