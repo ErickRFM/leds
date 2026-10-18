@@ -25,6 +25,9 @@ import com.rgbcontroller.core.model.RgbDeviceCommand
 import com.rgbcontroller.core.model.BleGpioPin
 import com.rgbcontroller.core.model.BleGpioSnapshot
 import com.rgbcontroller.core.model.DeviceIdCodec
+import com.rgbcontroller.core.ble.enrollment.BleOwnerStore
+import com.rgbcontroller.core.ble.enrollment.EnrollmentReply
+import com.rgbcontroller.core.ble.enrollment.OwnerEnrollmentClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -80,7 +83,17 @@ class BleManager(private val context: Context) {
     private val _securityState = MutableStateFlow(BleSecurityState.Disconnected)
     /** Firmware-confirmed owner authorization; bonding alone is never Authorized. */
     val securityState: StateFlow<BleSecurityState> = _securityState.asStateFlow()
-    private var ownerKey: String? = null
+    private val ownerStore = BleOwnerStore(context)
+    private var ownerClient: OwnerEnrollmentClient? = null
+    private enum class OwnerStep { IDLE, PAIR, CHALLENGE, AUTH }
+    private var ownerStep = OwnerStep.IDLE
+    private val _authorizationMessage = MutableStateFlow<String?>(null)
+    val authorizationMessage: StateFlow<String?> = _authorizationMessage.asStateFlow()
+    private val ownerReplyTimeout = Runnable {
+        if (ownerStep != OwnerStep.IDLE && _connectionState.value == BleConnectionState.Ready) {
+            failOwner("El ESP32 no respondió al protocolo de propietario. Comprueba firmware y enlace.")
+        }
+    }
     private var bondDeadlineMs = 0L
     private val bondPoll = object : Runnable {
         override fun run() {
@@ -483,15 +496,113 @@ class BleManager(private val context: Context) {
         retries = 0
         _connectedAddress.value = activeDevice?.address
         _connectionState.value = BleConnectionState.Ready
+        // GATT Ready means readable transport, never permission to change hardware.
+        ownerClient = try {
+            activeDevice?.address?.let { ownerStore.load(it) }
+        } catch (_: Exception) {
+            _authorizationMessage.value = "Identidad BLE protegida inaccesible. Se requiere recuperación física."
+            null
+        }
         handler.removeCallbacks(gpioPoll)
         handler.postDelayed(gpioPoll, 600)
         startBondWatch()
         drainQueue()
     }
 
-    /** Configure the provisioned owner key; null disables automatic authorization. */
-    fun setOwnerKey(key: String?) {
-        ownerKey = key?.trim()?.takeIf { it.isNotEmpty() }
+    /**
+     * The old AUTH <key> protocol no longer exists in the ESP32 firmware.
+     * Retain the method for source compatibility but NEVER downgrade authorization.
+     */
+    @Deprecated("Use owner pairing and the X25519 challenge-response handshake")
+    fun setOwnerKey(@Suppress("UNUSED_PARAMETER") key: String?) {
+        _authorizationMessage.value = "La autorización por clave antigua ya no está disponible."
+    }
+
+    /** Called by the owner of the phone after opening the physical BOOT pairing window. */
+    fun beginOwnerEnrollment(oneTimeCode: String) {
+        if (!oneTimeCode.matches(Regex("[0-9a-fA-F]{8}"))) {
+            _authorizationMessage.value = "Introduce el código hexadecimal de 8 caracteres."
+            return
+        }
+        if (_connectionState.value != BleConnectionState.Ready ||
+            activeDevice?.bondState != BluetoothDevice.BOND_BONDED) {
+            _authorizationMessage.value = "Conecta y vincula Bluetooth antes de registrar propietario."
+            return
+        }
+        if (ownerStep != OwnerStep.IDLE) return
+        val address = activeDevice?.address ?: return
+        try {
+            val client = ownerClient ?: ownerStore.load(address) ?: ownerStore.create(address)
+            ownerClient = client
+            ownerStep = OwnerStep.PAIR
+            _securityState.value = BleSecurityState.Authorizing
+            _authorizationMessage.value = "Registrando propietario en el ESP32…"
+            sendOwnerFrame(client.pairLine(oneTimeCode))
+        } catch (_: Exception) {
+            failOwner("No se pudo guardar o recuperar la identidad BLE segura.")
+        }
+    }
+
+    private fun sendOwnerFrame(frame: String) {
+        // Frames are bounded by the firmware's 128-byte enrolment inbox and the
+        // negotiated 128-byte MTU. Never expose a general GATT write bypass.
+        if (frame.toByteArray(Charsets.UTF_8).size > 125 ||
+            _connectionState.value != BleConnectionState.Ready) {
+            failOwner("Trama de propietario inválida o enlace desconectado.")
+            return
+        }
+        synchronized(pending) { pending.addFirst(frame) }
+        handler.removeCallbacks(ownerReplyTimeout)
+        handler.postDelayed(ownerReplyTimeout, 12_000)
+        drainQueue()
+    }
+
+    private fun failOwner(message: String) {
+        handler.removeCallbacks(ownerReplyTimeout)
+        ownerStep = OwnerStep.IDLE
+        ownerClient?.reset()
+        _securityState.value = BleSecurityState.AuthorizationFailed
+        _authorizationMessage.value = message
+    }
+
+    private fun handleOwnerReply(reply: EnrollmentReply) {
+        val client = ownerClient ?: return
+        try {
+            when (reply) {
+                is EnrollmentReply.Err -> {
+                    if (ownerStep != OwnerStep.IDLE) {
+                        failOwner("El firmware rechazó la autorización: " + reply.reason)
+                    }
+                }
+                is EnrollmentReply.Ok -> when (ownerStep) {
+                    OwnerStep.PAIR -> {
+                        ownerStep = OwnerStep.CHALLENGE
+                        sendOwnerFrame(client.beginLine())
+                    }
+                    OwnerStep.AUTH -> {
+                        handler.removeCallbacks(ownerReplyTimeout)
+                        client.onAuthenticated()
+                        ownerStep = OwnerStep.IDLE
+                        _securityState.value = BleSecurityState.Authorized
+                        _authorizationMessage.value = null
+                    }
+                    else -> Unit
+                }
+                is EnrollmentReply.Challenge -> {
+                    if (ownerStep != OwnerStep.CHALLENGE) return
+                    val auth = client.authLine(reply)
+                    val address = activeDevice?.address ?: error("Dispositivo desconectado")
+                    // Reservation is durable before transmission: no replay on app crash.
+                    val next = client.lastCounter + 1
+                    ownerStore.reserveCounter(address, next)
+                    client.lastCounter = next
+                    ownerStep = OwnerStep.AUTH
+                    sendOwnerFrame(auth)
+                }
+            }
+        } catch (_: Exception) {
+            failOwner("Falló el intercambio seguro BLE; comprueba las versiones de APK y firmware.")
+        }
     }
 
     /**
@@ -525,18 +636,22 @@ class BleManager(private val context: Context) {
     }
 
     private fun requestAuthorization() {
-        val key = ownerKey
-        if (key == null) {
+        val client = ownerClient
+        if (client == null) {
             _securityState.value = BleSecurityState.Unauthorized
+            if (_authorizationMessage.value == null) {
+                _authorizationMessage.value = "Sin propietario registrado: abre la ventana BOOT para autorizar."
+            }
             return
         }
-        val frame = RgbDeviceCommand.auth(key)
-        if (frame == null) {
-            _securityState.value = BleSecurityState.Unauthorized
-            return
-        }
+        ownerStep = OwnerStep.CHALLENGE
         _securityState.value = BleSecurityState.Authorizing
-        writeCommand(frame)
+        _authorizationMessage.value = "Validando propietario con el ESP32…"
+        try {
+            sendOwnerFrame(client.beginLine())
+        } catch (_: Exception) {
+            failOwner("No se pudo iniciar el protocolo seguro del ESP32.")
+        }
     }
 
     private fun completeInitialRead(bytes: ByteArray?) {
@@ -561,16 +676,17 @@ class BleManager(private val context: Context) {
 
     private fun acceptState(bytes: ByteArray?) {
         val text = bytes?.toString(Charsets.UTF_8) ?: return
-        when (text) {
-            // Firmware-confirmed owner authorization over the encrypted link.
-            "AUTH,OK" -> {
-                _securityState.value = BleSecurityState.Authorized
-                return
-            }
-            "AUTH,ERR" -> {
-                _securityState.value = BleSecurityState.AuthorizationFailed
-                return
-            }
+        // Only the new authenticated owner-session handshake authorizes writes.
+        // Legacy AUTH,OK must never unlock commands on V16+ firmware.
+        if (text == "AUTH,OK" || text == "AUTH,ERR") return
+        val reply = EnrollmentReply.parse(text)
+        if (reply != null) {
+            handler.post { handleOwnerReply(reply) }
+            return
+        }
+        if (text.startsWith("ERR,") && ownerStep != OwnerStep.IDLE) {
+            handler.post { failOwner("Comando BLE rechazado por el ESP32.") }
+            return
         }
         _deviceState.value = text
         RgbDeviceState.parse(text)?.let {
@@ -582,7 +698,8 @@ class BleManager(private val context: Context) {
     fun writeCommand(text: String) {
         // Reject malformed/unknown operations before they enter the GATT queue.
         if (!RgbDeviceCommand.allowed(text) ||
-            _connectionState.value != BleConnectionState.Ready) return
+            _connectionState.value != BleConnectionState.Ready ||
+            (text != "GET" && _securityState.value != BleSecurityState.Authorized)) return
         synchronized(pending) {
             if (text.startsWith("SET,")) pending.removeAll { it.startsWith("SET,") }
             if (pending.size >= 16) pending.removeFirst()
@@ -648,6 +765,11 @@ class BleManager(private val context: Context) {
         handler.removeCallbacks(gpioPoll)
         handler.removeCallbacks(gpioReadTimeout)
         handler.removeCallbacks(bondPoll)
+        handler.removeCallbacks(ownerReplyTimeout)
+        ownerStep = OwnerStep.IDLE
+        ownerClient?.reset()
+        ownerClient = null
+        _authorizationMessage.value = null
         gpioReadInFlight = false
         gpioPollingDisabled = false
         _gpioPins.value = null
