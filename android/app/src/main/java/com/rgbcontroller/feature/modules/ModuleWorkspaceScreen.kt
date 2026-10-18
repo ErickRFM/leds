@@ -670,7 +670,9 @@ private fun ModulePinWizard(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("Selecciona las señales. Guardar conserva el borrador; aplicar requiere ESP32 autorizado y módulo activo.",
+                Text("1 · Asigna los GPIO de cada señal",
+                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text("Guardar prepara la configuración local; no modifica el ESP32. Aplicar requiere Wi-Fi autorizado y estado vigente del firmware.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 for ((index, signal) in profile.signals.withIndex()) {
@@ -694,8 +696,18 @@ private fun ModulePinWizard(
                         }
                     }
                 }
+                Text("2 · Revisa el cableado", style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold)
                 ModuleWiringDiagram(profile, pins, firmwareConfirmed = false,
                     modifier = Modifier.testTag("module_pin_preview"))
+                Text("El diagrama muestra una propuesta, no una conexión física detectada.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (issues.isEmpty()) "Sin conflictos de GPIO detectados"
+                     else "Corrige los conflictos antes de guardar o aplicar",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (issues.isEmpty()) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.error)
                 for (issue in issues) {
                     Text(issue, color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
@@ -719,6 +731,13 @@ private fun ModulePinWizard(
         confirmButton = {
             Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("3 · Guarda o aplica", style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold)
+                if (!canApply) {
+                    Text("Aplicar en ESP32 no está disponible: verifica conexión Wi-Fi, autorización y estado vigente. Puedes guardar el borrador.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 if (canApply) {
                     Button(
                         onClick = { onApply(pins) },
