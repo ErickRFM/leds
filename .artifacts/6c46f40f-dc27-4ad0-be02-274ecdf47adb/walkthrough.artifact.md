@@ -1,18 +1,18 @@
-# Walkthrough - Compi V16.0 Synchronization & APK Build
+# Walkthrough - Compi Synchronization, Integration & APK Build
 
-This walkthrough presents the repository synchronization, unit testing, Android lint verification, and distribution APK generation for **Compi V16.0**.
+This walkthrough details the repository synchronization, integrated feature audit, test execution, Android lint verification, and distribution APK generation for **Compi**.
 
 ## Synchronization & Integration Summary
 
 ### 1. Repository Synchronization (`ErickRFM/leds`)
-- **Main Branch HEAD:** `830c52e` (`feat(seg1b2c): Android owner-enrollment client and device pubkey in CHALLENGE (#115)`).
+- **Main Branch HEAD:** `c0cc954` (`fix(wifi): stabilize ESP32 laboratory SoftAP initialization (#157)`).
 - **Status:** Local `main` is synchronized with `origin/main`.
 
 ### 2. Integrated Feature Set Audit
-- **SEG1 Owner Enrollment Client & Protocol (PRs #108–#111, #114, #115):** `OwnerEnrollment.kt`, `OwnerEnrollmentClientTest.kt`, `Hex.kt`.
-- **SEG2 Command Authorization:** `RgbDeviceCommand.kt`, `RgbDeviceCommandTest.kt`.
-- **F09 Cross-Board Compatibility Engine (PRs #105–#107):** `BoardCompatibility.kt`, `ProjectPortableFormat.kt`.
-- **F08 Hardware Lab Editors & Dashboards (PRs #101–#106, #108):** `HardwareLabEditors.kt`, `HardwareLabEditorsTest.kt`.
+- **SoftAP & Credential Hardening (PRs #150, #157):** `LocalWifiControl.h`, `ConnectionCenterScreen.kt`.
+- **BLE Discovery & Connection UX (PR #152):** `BleManager.kt`, `DevicesScreen.kt`.
+- **Verified Runtime RGB GPIO Reassignment & Rollback (PR #155):** `LedRgbModule.h`, `HardwareLabScreen.kt`.
+- **Inactive Firmware Component Lease Cleanup (PR #156):** `ModuleRegistry.h`, `ComponentStatus.h`.
 
 ### 3. Build & Test Verification
 - **Unit Tests (`testDebugUnitTest`):** **Exitosas (PASSED)** — 100% pass rate across all Kotlin test suites.
@@ -22,8 +22,8 @@ This walkthrough presents the repository synchronization, unit testing, Android 
 ### 4. Distribution Artifact
 - **APK Source Location:** `android/app/build/outputs/apk/debug/app-debug.apk`
 - **Distribution Location:** `C:\Users\erik5\OneDrive\Escritorio\ESP32\leds\dist\compi-debug.apk`
-- **File Size:** `28,838,634` bytes (28.83 MB)
-- **SHA-256 Checksum:** `FB3EC7709BBFF8AF1F70D5DE562C721310DAAA1BB036A883E1A3E9A2C7D9B29C`
+- **File Size:** `20,631,092` bytes (20.63 MB)
+- **SHA-256 Checksum:** `EAE1B4923388FB37083FED12BC15DD53C83D199536FE099F4D0B18494565CE15`
 
 ## Verification Results
 
