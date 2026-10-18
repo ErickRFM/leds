@@ -697,7 +697,10 @@ class BleManager(private val context: Context) {
 
     fun writeCommand(text: String) {
         // Reject malformed/unknown operations before they enter the GATT queue.
-        if (!BleRgbPermission.permits(
+        // Keep syntax validation explicit for transport contracts, then require
+        // firmware-confirmed owner permission for every RGB mutation.
+        if (!RgbDeviceCommand.allowed(text) ||
+            !BleRgbPermission.permits(
                 _connectionState.value == BleConnectionState.Ready, _securityState.value, text
             )) return
         synchronized(pending) {
