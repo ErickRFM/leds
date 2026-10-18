@@ -127,6 +127,10 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/component_status_test.cpp -o /tmp/component_status_test
           /tmp/component_status_test
+      - name: Isolated DHT11 waveform timing regression (no ESP32 required)
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/dht11_probe_test.cpp -o /tmp/dht11_probe_test
+          /tmp/dht11_probe_test
 
       - name: Read-only diagnostics security contract
         run: python3 scripts/check-diagnostics-contract.py
@@ -224,6 +228,29 @@ jobs:
         run: |
           . ./config/esp32-board.env
           arduino-cli compile --fqbn "$ARDUINO_FQBN" --output-dir build/firmware firmware/esp32_rgb
+      - name: Compile standalone DHT11 diagnostic (no Wi-Fi/BLE/app)
+        run: |
+          . ./config/esp32-board.env
+          arduino-cli compile --fqbn "$ARDUINO_FQBN" --output-dir build/dht11-probe tools/dht11_probe
+      - name: Package standalone DHT11 diagnostic
+        run: |
+          mkdir -p build/dht11-probe-package/dht11_probe
+          cp tools/dht11_probe/dht11_probe.ino tools/dht11_probe/DhtProbeCore.h build/dht11-probe-package/dht11_probe/
+          cp tools/dht11_probe/README.md build/dht11-probe-package/
+          (cd build/dht11-probe-package && zip -qr ../dht11-probe-source.zip .)
+          (cd build/dht11-probe && sha256sum ./*.bin > SHA256SUMS.txt)
+          echo "Git commit: $GITHUB_SHA" > build/dht11-probe/build-info.txt
+          echo "Isolated diagnostic only — reflashing replaces Compi temporarily" >> build/dht11-probe/build-info.txt
+      - name: Upload isolated DHT11 probe and source
+        uses: actions/upload-artifact@v4
+        with:
+          name: dht11-standalone-diagnostic
+          if-no-files-found: error
+          path: |
+            build/dht11-probe/*.bin
+            build/dht11-probe/SHA256SUMS.txt
+            build/dht11-probe/build-info.txt
+            build/dht11-probe-source.zip
       - name: V4 WiFiProv Security2 compile-only feasibility probe
         run: |
           . ./config/esp32-board.env
