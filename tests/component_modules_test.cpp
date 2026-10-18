@@ -166,12 +166,12 @@ int main() {
     (void)bad;
     PinManager gpio;
     DhtDouble sensor;
-    Dht22Module dht11(16, readDht, &sensor, 2000, "sensor.dht11");
-    assert(dht11.begin(gpio));
+    Dht22Module module11(16, readDht, &sensor, 2000, "sensor.dht11");
+    assert(module11.begin(gpio));
     assert(gpio.belongsTo(16, "sensor.dht11"));
-    dht11.tick(1000);
-    assert(dht11.humidityReading().valid);
-    dht11.stop(gpio);
+    module11.tick(1000);
+    assert(module11.humidityReading().valid);
+    module11.stop(gpio);
     assert(gpio.lease(16) == nullptr);
   }
 
