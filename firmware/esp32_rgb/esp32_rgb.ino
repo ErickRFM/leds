@@ -33,6 +33,7 @@
 #include "modules/Dht22Module.h"
 #include "core/DhtFrameCodec.h"
 #include "core/DhtWireDiagnostics.h"
+#include "core/DhtProbeCore.h"
 #include "modules/SoilMoistureModule.h"
 #include "modules/OledSsd1306Module.h"
 
@@ -219,10 +220,54 @@ esp32core::DhtWireFault dhtDecodeReading(uint8_t pin, uint16_t startLowMs,
 #if COMPI_BUILD_DHT11
 uint8_t liveDht11Pin = COMPI_DHT11_PIN;
 esp32core::DhtWireFault dht11LastFault = esp32core::DhtWireFault::NotAttempted;
+uint8_t dht11CapturedEdges = 0;
+// This is the same core used by the successful isolated probe. Only the
+// platform-specific read IO differs. No Wi-Fi/BLE work occurs mid-capture.
+struct CompiDht11Io {
+  uint8_t pin;
+  bool level() const { return digitalRead(pin) == HIGH; }
+  uint32_t micros() const { return ::micros(); }
+  void spin() const { delayMicroseconds(1); }
+  void driveLowMs(uint16_t duration) const {
+    digitalWrite(pin, LOW);
+    pinMode(pin, OUTPUT);
+    delay(duration);
+  }
+  void release() const { pinMode(pin, INPUT_PULLUP); }
+  // Keep interrupts enabled for the 20ms START. Mask only the DHT11 frame
+  // (~4ms once per 2s) on this CPU to avoid scheduler-induced missed edges.
+  // A scoped guard in DhtProbeCore always restores interrupts on every exit.
+  void beginCapture() const { noInterrupts(); }
+  void endCapture() const { interrupts(); }
+};
 esp32core::Dht22Module::Reading dht11Read(void*) {
-  esp32core::Dht22Module::Reading reading{false, 0.0f, 0.0f};
-  dht11LastFault = dhtDecodeReading(liveDht11Pin, 20, esp32core::DhtModel::DHT11, reading);
-  return reading;
+  CompiDht11Io io{liveDht11Pin};
+  const compi_probe::Capture capture = compi_probe::sample(io);
+  dht11CapturedEdges = capture.edges;
+  switch (capture.verdict) {
+    case compi_probe::Verdict::Ok:
+      dht11LastFault = esp32core::DhtWireFault::Ok;
+      return {true, capture.humidity, capture.temperature};
+    case compi_probe::Verdict::LineLow:
+      dht11LastFault = esp32core::DhtWireFault::LineHeldLow;
+      break;
+    case compi_probe::Verdict::NoResponse:
+      dht11LastFault = esp32core::DhtWireFault::NoResponse;
+      break;
+    case compi_probe::Verdict::SyncIncomplete:
+      dht11LastFault = esp32core::DhtWireFault::ResponseTimeout;
+      break;
+    case compi_probe::Verdict::FrameIncomplete:
+      dht11LastFault = esp32core::DhtWireFault::BitTimeout;
+      break;
+    case compi_probe::Verdict::Checksum:
+      dht11LastFault = esp32core::DhtWireFault::BadChecksum;
+      break;
+    case compi_probe::Verdict::Payload:
+      dht11LastFault = esp32core::DhtWireFault::InvalidPayload;
+      break;
+  }
+  return {false, 0.0f, 0.0f};
 }
 #endif
 #if COMPI_BUILD_DHT22
@@ -1157,9 +1202,10 @@ void loop() {
   static uint32_t lastDhtDiagAt = 0;
   if (dht11Module.ready() && static_cast<uint32_t>(now - lastDhtDiagAt) >= 15000U) {
     lastDhtDiagAt = now;
-    Serial.printf("DHT11 DATA GPIO%u: %s, consecutiveFailures=%u, valid=%u\n",
+    Serial.printf("DHT11 DATA GPIO%u: %s, edges=%u/82, consecutiveFailures=%u, valid=%u\n",
       static_cast<unsigned>(dht11Module.pin()),
       esp32core::dhtWireFaultName(dht11LastFault),
+      static_cast<unsigned>(dht11CapturedEdges),
       static_cast<unsigned>(dht11Module.consecutiveFailures()),
       dht11Module.humidityReading().valid ? 1U : 0U);
   }

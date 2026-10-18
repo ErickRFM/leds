@@ -12,6 +12,10 @@ struct ProbeIo {
   bool level() const { return digitalRead(DHT_PIN) == HIGH; }
   uint32_t micros() const { return ::micros(); }
   void spin() const { delayMicroseconds(1); }
+  // The isolated probe is intentionally unmasked: it already works on the
+  // physical sensor. Compi production enables the short capture guard.
+  void beginCapture() const {}
+  void endCapture() const {}
   void release() const { pinMode(DHT_PIN, INPUT_PULLUP); }
   void driveLowMs(uint16_t milliseconds) const {
     digitalWrite(DHT_PIN, LOW);

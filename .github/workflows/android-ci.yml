@@ -127,8 +127,9 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/component_status_test.cpp -o /tmp/component_status_test
           /tmp/component_status_test
-      - name: Isolated DHT11 waveform timing regression (no ESP32 required)
+      - name: Shared DHT11 production/probe core and interrupt regression
         run: |
+          cmp firmware/esp32_rgb/core/DhtProbeCore.h tools/dht11_probe/DhtProbeCore.h
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/dht11_probe_test.cpp -o /tmp/dht11_probe_test
           /tmp/dht11_probe_test
 

@@ -2,7 +2,9 @@
 #include <cstdint>
 
 // Standalone timing core used by both the Arduino-only probe and host tests.
-// IO interface: level(), micros(), spin(), driveLowMs(ms), release().
+// IO interface: level(), micros(), spin(), driveLowMs(ms), release(),
+// beginCapture(), endCapture(). Optional interrupt protection is supplied by
+// the platform and covers ONLY the ~4ms response, not the 20ms start pulse.
 namespace compi_probe {
 enum class Verdict : uint8_t {
   Ok, LineLow, NoResponse, SyncIncomplete, FrameIncomplete, Checksum, Payload
@@ -70,7 +72,15 @@ Capture sample(IO& io) {
     c.verdict = Verdict::LineLow;
     return c;
   }
-  io.driveLowMs(20); // DHT11 needs >=18ms
+  io.driveLowMs(20); // DHT11 needs >=18ms, interrupts stay enabled.
+  // Scope guard always restores interrupts, including timeout/early return.
+  // Firmware IO masks interrupts on the calling ESP32 core for the ~4ms
+  // pulse train; standalone-probe IO deliberately does not.
+  io.beginCapture();
+  struct CaptureGuard {
+    IO& io;
+    ~CaptureGuard() { io.endCapture(); }
+  } guard{io};
   io.release();       // open-drain: never drive HIGH against sensor
   if (!until(io, false, 180)) {
     c.verdict = Verdict::NoResponse;
