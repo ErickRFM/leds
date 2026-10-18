@@ -47,7 +47,9 @@ import com.rgbcontroller.core.components.status.ComponentDashboardState
 import com.rgbcontroller.core.components.status.ComponentStatusFreshness
 import com.rgbcontroller.core.components.status.LocalDesiredComponent
 import com.rgbcontroller.core.components.status.LocalDesiredConfig
-import com.rgbcontroller.core.components.widgets.HumidityTemperatureWidget
+import com.rgbcontroller.core.components.widgets.SensorDashboard
+import com.rgbcontroller.core.components.widgets.TelemetryChartCard
+import com.rgbcontroller.core.components.telemetry.TelemetryChart
 import com.rgbcontroller.core.components.widgets.SoilMoistureWidget
 import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.wifi.CompiLabSession
@@ -187,7 +189,9 @@ fun ModuleWorkspaceScreen(
                                     )
                                 }
                             }
-                            item(key = "env_readings_$child") { ModuleReadings(child, state) }
+                            item(key = "env_readings_$child") {
+                                ModuleReadings(child, state, onRefresh = { scope.launch { vm.refresh() } })
+                            }
                             item(key = "env_edit_$child") {
                                 OutlinedButton(onClick = { editingId = child },
                                     modifier = Modifier.fillMaxWidth()
@@ -199,6 +203,10 @@ fun ModuleWorkspaceScreen(
                     } else {
                     item {
                         ModuleRuntimeCard(id, runtime(id), currentlyVerified)
+                    }
+                    // Real measurements and history must be visible before GPIO wiring.
+                    item(key = "module_metrics_$id") {
+                        ModuleReadings(id, state, onRefresh = { scope.launch { vm.refresh() } })
                     }
                     val savedPins = state.desiredConfig.components
                         .firstOrNull { it.id == id }?.pins
@@ -216,7 +224,6 @@ fun ModuleWorkspaceScreen(
                             )
                         }
                     }
-                    item { ModuleReadings(id, state) }
                     item {
                         OutlinedButton(onClick = { editingId = id }, modifier = Modifier.fillMaxWidth()) {
                             Icon(Icons.Default.Tune, null); Spacer(Modifier.width(8.dp))
@@ -572,7 +579,9 @@ private fun ModuleRuntimeCard(id: String, runtime: ComponentRuntimeStatus?, live
                     Text(ComponentCatalog.get(id)?.name ?: id,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold)
-                    Text(if (verified) "Activo · confirmado por ESP32"
+                    Text(if (verified && id in setOf("dht11", "dht22"))
+                             "GPIO activo · sin asegurar lectura física"
+                         else if (verified) "Activo · confirmado por ESP32"
                          else if (runtime != null && live) "Reportado por ESP32 · no activo"
                          else if (runtime != null) "Último estado registrado · no en vivo"
                          else "Configuración local · por verificar",
@@ -606,27 +615,41 @@ private fun ModuleRuntimeCard(id: String, runtime: ComponentRuntimeStatus?, live
 }
 
 @Composable
-private fun ModuleReadings(id: String, state: ComponentDashboardState) {
+private fun ModuleReadings(
+    id: String,
+    state: ComponentDashboardState,
+    onRefresh: () -> Unit
+) {
     val live = state.telemetryFreshness == ComponentStatusFreshness.LIVE &&
         state.authorityError == null && state.connected
-    val measurements = state.authoritativeTelemetry ?: state.persistedTelemetry
+    val reported = if (live) state.authoritative else state.persisted
+    val active = reported.orEmpty().any {
+        it.active && ComponentCatalog.catalogIdForFirmwareId(it.id) == id
+    }
+    val measurements = if (live) state.authoritativeTelemetry else state.persistedTelemetry
     fun reading(type: String): ComponentMeasurement? =
         ComponentTelemetryCodec.find(measurements.orEmpty(), type)
             ?.takeIf { it.valid && it.status == "fresh" }
     when (id) {
-        "dht11", "dht22" -> HumidityTemperatureWidget(
-            humidity = reading("humidity")?.value,
-            temperature = reading("temperature")?.value,
-            hasData = reading("humidity") != null && reading("temperature") != null,
-            model = id.uppercase(),
-            live = live, status = if (measurements == null) "sin lecturas" else null
-        )
-        "soil_moisture" -> SoilMoistureWidget(
-            moisturePercent = reading("soil_moisture")?.value,
-            rawAdc = reading("adc_raw")?.value?.toInt(),
-            calibrated = reading("soil_moisture") != null, live = live,
-            hasData = reading("soil_moisture") != null || reading("adc_raw") != null
-        )
+        "dht11", "dht22" -> SensorDashboard(id, state, active, live, onRefresh)
+        "soil_moisture" -> {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SoilMoistureWidget(
+                    moisturePercent = reading("soil_moisture")?.value,
+                    rawAdc = reading("adc_raw")?.value?.toInt(),
+                    calibrated = reading("soil_moisture") != null, live = live,
+                    hasData = reading("soil_moisture") != null || reading("adc_raw") != null
+                )
+                val windowMs = TelemetryChart.DEFAULT_WINDOW_MS
+                val geometry = TelemetryChart.build(
+                    "soil_moisture", "soil_moisture",
+                    state.series("soil_moisture", "soil_moisture"),
+                    nowMs = System.currentTimeMillis(), windowMs = windowMs,
+                    staleAfterMs = windowMs, disconnected = !live
+                )
+                TelemetryChartCard("Historial de humedad del suelo", geometry, live)
+            }
+        }
         else -> Card(Modifier.fillMaxWidth()) {
             Text("Este componente todavía no reporta lecturas compatibles con la app.",
                 modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall)
