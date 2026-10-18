@@ -8,6 +8,7 @@ import com.rgbcontroller.core.model.RgbDeviceCommand
  */
 object BleRgbPermission {
     fun permits(gattReady: Boolean, ownerState: BleSecurityState, command: String): Boolean =
-        gattReady && RgbDeviceCommand.allowed(command) &&
+        gattReady && !command.startsWith("AUTH ") &&
+            RgbDeviceCommand.allowed(command) &&
             (command == "GET" || ownerState == BleSecurityState.Authorized)
 }
