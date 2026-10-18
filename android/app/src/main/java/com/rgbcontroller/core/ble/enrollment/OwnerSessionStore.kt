@@ -68,6 +68,14 @@ class OwnerSessionStore(context: Context) {
         }
     }
 
+    /** Clear local credential ONLY after the ESP32 acknowledges physical RESET. */
+    fun clear(deviceId: String) {
+        checkDeviceId(deviceId)
+        check(preferences.edit().remove(deviceId).commit()) {
+            "could not forget reset owner credential"
+        }
+    }
+
     private fun checkDeviceId(id: String) {
         require(id.matches(Regex("[0-9A-F]{16}"))) { "invalid device ID" }
     }
