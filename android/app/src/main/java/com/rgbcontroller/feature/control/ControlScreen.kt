@@ -137,6 +137,9 @@ fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null, embedded
         CompiV9SectionTitle("Control de color")
         Text(
             when {
+                !ready && link?.transport == "BLUETOOTH" &&
+                    connection == BleConnectionState.Ready ->
+                    "Bluetooth conectado, pero sin autorización para controlar el LED. Autoriza el propietario en Conexiones."
                 !ready -> "Conecta el ESP32 para habilitar la rueda y los deslizadores."
                 confirmationError != null -> confirmationError!!
                 awaitingState != null -> "Aplicando ajustes, esperando confirmación del ESP32…"
