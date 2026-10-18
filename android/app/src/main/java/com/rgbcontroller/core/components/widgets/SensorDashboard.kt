@@ -38,6 +38,9 @@ fun SensorDashboard(
     val humidity = metric("humidity")
     val physicalReading = temperature != null && humidity != null && live
     val firmwareStatus = ComponentTelemetryCodec.find(readings.orEmpty(), "temperature")?.status
+    val diagnostic = (if (live) state.authoritative else state.persisted)
+        .orEmpty().firstOrNull { it.id == "sensor.$id" }
+    val fault = diagnostic?.diagnostic
     val windowMs = minutes * 60_000L
     val now = System.currentTimeMillis()
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -70,6 +73,18 @@ fun SensorDashboard(
                             "No se confirmó la telemetría: ${state.authorityError}"
                         physicalReading ->
                             "Temperatura y humedad confirmadas por el ESP32."
+                        fault == "line_low" ->
+                            "DATA permanece en nivel bajo en GPIO${diagnostic?.pins?.firstOrNull() ?: "?"}. Revisa cortocircuito, GND y orden de pines."
+                        fault == "no_response" ->
+                            "GPIO no recibió el pulso de respuesta del DHT11. Revisa DATA, alimentación, pull-up y continuidad."
+                        fault == "response_timeout" ->
+                            "El sensor comenzó a responder pero no completó el pulso de sincronización."
+                        fault == "bit_timeout" ->
+                            "Llegó una respuesta incompleta o fuera de tiempo; verifica cableado y pull-up."
+                        fault == "bad_checksum" ->
+                            "Se recibieron 40 bits, pero el checksum no coincide: posibles interferencias o temporización."
+                        fault == "invalid_payload" ->
+                            "Checksum correcto, pero los valores no corresponden al modelo seleccionado."
                         firmwareStatus == "sensor_error" ->
                             "El controlador recibió respuestas inválidas repetidamente."
                         firmwareStatus == "stale" || firmwareStatus == "invalid" ->
@@ -80,6 +95,11 @@ fun SensorDashboard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (active && diagnostic?.failures != null && diagnostic.failures > 0) {
+                    Text("Fallos de lectura consecutivos: ${diagnostic.failures}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 if (active && !physicalReading) {
                     Text("Verifica VCC → 3V3, GND → GND y DATA → GPIO configurado. " +
                         "Un DHT11 no debe leerse como DHT22.",
@@ -112,7 +132,7 @@ fun SensorDashboard(
                 componentId = id, measurementType = type,
                 samples = state.series(id, type), nowMs = now, windowMs = windowMs,
                 // Old valid measurements remain historical, not "live".
-                staleAfterMs = windowMs, disconnected = !physicalReading
+                staleAfterMs = windowMs, disconnected = !live
             )
             TelemetryChartCard(title, geometry, live = physicalReading,
                 modifier = Modifier.testTag("sensor_history_${type}_$id"))
