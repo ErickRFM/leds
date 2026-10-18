@@ -25,6 +25,11 @@ import com.rgbcontroller.core.model.RgbDeviceCommand
 import com.rgbcontroller.core.model.BleGpioPin
 import com.rgbcontroller.core.model.BleGpioSnapshot
 import com.rgbcontroller.core.model.DeviceIdCodec
+import com.rgbcontroller.core.ble.enrollment.EnrollmentReply
+import com.rgbcontroller.core.ble.enrollment.OwnerEnrollmentClient
+import com.rgbcontroller.core.ble.enrollment.OwnerSessionStore
+import com.rgbcontroller.core.security.BouncyCastleSessionCrypto
+import com.rgbcontroller.core.security.Hex
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -80,7 +85,20 @@ class BleManager(private val context: Context) {
     private val _securityState = MutableStateFlow(BleSecurityState.Disconnected)
     /** Firmware-confirmed owner authorization; bonding alone is never Authorized. */
     val securityState: StateFlow<BleSecurityState> = _securityState.asStateFlow()
-    private var ownerKey: String? = null
+    private val ownerCrypto = BouncyCastleSessionCrypto()
+    private val ownerStore = OwnerSessionStore(context)
+    private var ownerRecord: OwnerSessionStore.Record? = null
+    private var ownerClient: OwnerEnrollmentClient? = null
+    private enum class EnrollmentPhase { IDLE, PAIRING, CHALLENGE, PROOF, RESET }
+    private var enrollmentPhase = EnrollmentPhase.IDLE
+    private val ownerReplyTimeout = Runnable {
+        if (enrollmentPhase != EnrollmentPhase.IDLE &&
+            _connectionState.value == BleConnectionState.Ready) {
+            failAuthorization("El ESP32 no respondió al intercambio seguro en 12 s.")
+        }
+    }
+    private val _authorizationMessage = MutableStateFlow("Conecta el ESP32 para autorizar propietario.")
+    val authorizationMessage: StateFlow<String> = _authorizationMessage.asStateFlow()
     private var bondDeadlineMs = 0L
     private val bondPoll = object : Runnable {
         override fun run() {
@@ -489,9 +507,143 @@ class BleManager(private val context: Context) {
         drainQueue()
     }
 
-    /** Configure the provisioned owner key; null disables automatic authorization. */
-    fun setOwnerKey(key: String?) {
-        ownerKey = key?.trim()?.takeIf { it.isNotEmpty() }
+    /**
+     * Legacy static owner tokens are intentionally unsupported. New firmware
+     * requires a physical one-time enrollment and an X25519 proof on each link.
+     */
+    @Deprecated("Use enrollWithCode from the physical-owner pairing flow")
+    fun setOwnerKey(@Suppress("UNUSED_PARAMETER") key: String?) {
+        _authorizationMessage.value = "La clave BLE antigua no es compatible; usa el código físico."
+    }
+
+    /** Start physical owner enrollment; the 8-hex code appears ONLY on USB serial. */
+    fun enrollWithCode(code: String): Boolean {
+        if (_connectionState.value != BleConnectionState.Ready ||
+            activeDevice?.bondState != BluetoothDevice.BOND_BONDED ||
+            enrollmentPhase != EnrollmentPhase.IDLE) return false
+        val id = _publicDeviceId.value ?: return false
+        if (!code.matches(Regex("[a-fA-F0-9]{8}"))) {
+            _authorizationMessage.value = "Código inválido: usa ocho dígitos hexadecimales."
+            return false
+        }
+        return try {
+            val record = ownerStore.load(id) ?: run {
+                val keys = ownerCrypto.generateKeyPair()
+                val generated = OwnerSessionStore.Record(
+                    "phone_" + Hex.encode(ownerCrypto.randomBytes(8)), keys, 0
+                )
+                // Durable before PAIR: never strand ownership on an unpersisted key.
+                ownerStore.save(id, generated)
+                generated
+            }
+            ownerRecord = record
+            ownerClient = OwnerEnrollmentClient(
+                ownerCrypto, record.ownerId, record.keys, record.counter
+            )
+            enrollmentPhase = EnrollmentPhase.PAIRING
+            _securityState.value = BleSecurityState.Authorizing
+            _authorizationMessage.value = "Registrando propietario con el ESP32…"
+            enqueueProtocol(ownerClient!!.pairLine(code))
+            true
+        } catch (failure: Exception) {
+            failAuthorization("No se pudo guardar o iniciar el propietario: ${failure.message}")
+            false
+        }
+    }
+
+    /**
+     * Existing owner recovery requires the physical BOOT recovery window.
+     * RESET is authorized by its one-time serial code; it never bypasses firmware.
+     */
+    fun resetOwnerWithCode(code: String): Boolean {
+        if (_connectionState.value != BleConnectionState.Ready ||
+            activeDevice?.bondState != BluetoothDevice.BOND_BONDED ||
+            _publicDeviceId.value == null || enrollmentPhase != EnrollmentPhase.IDLE ||
+            !code.matches(Regex("[a-fA-F0-9]{8}"))) return false
+        enrollmentPhase = EnrollmentPhase.RESET
+        _securityState.value = BleSecurityState.Authorizing
+        _authorizationMessage.value = "Esperando confirmación de reinicio del propietario…"
+        enqueueProtocol("RESET $code")
+        return true
+    }
+
+    private fun failAuthorization(message: String) {
+        handler.removeCallbacks(ownerReplyTimeout)
+        enrollmentPhase = EnrollmentPhase.IDLE
+        ownerClient?.reset()
+        _securityState.value = BleSecurityState.AuthorizationFailed
+        _authorizationMessage.value = message
+    }
+
+    private fun enqueueProtocol(frame: String) {
+        // Only internally generated enrollment frames may bypass the RGB codec.
+        check(frame.length in 2..125)
+        synchronized(pending) {
+            if (pending.size >= 16) pending.removeFirst()
+            pending.addLast(frame)
+        }
+        handler.removeCallbacks(ownerReplyTimeout)
+        handler.postDelayed(ownerReplyTimeout, 12_000L)
+        drainQueue()
+    }
+
+    private fun acceptEnrollment(reply: EnrollmentReply) {
+        val phase = enrollmentPhase
+        if (phase == EnrollmentPhase.IDLE) return
+        if (reply is EnrollmentReply.Err) {
+            failAuthorization("ESP32 rechazó autorización: ${reply.reason}")
+            return
+        }
+        try {
+            when (phase) {
+                EnrollmentPhase.PAIRING -> {
+                    require(reply is EnrollmentReply.Ok) { "PAIR: respuesta inesperada" }
+                    val client = ownerClient ?: error("sin propietario")
+                    enrollmentPhase = EnrollmentPhase.CHALLENGE
+                    _authorizationMessage.value = "Solicitando desafío del ESP32…"
+                    enqueueProtocol(client.beginLine())
+                }
+                EnrollmentPhase.CHALLENGE -> {
+                    require(reply is EnrollmentReply.Challenge) { "desafío inválido" }
+                    val id = _publicDeviceId.value ?: error("identidad perdida")
+                    val client = ownerClient ?: error("sin propietario")
+                    val record = ownerRecord ?: error("credencial ausente")
+                    val frame = client.authLine(reply)
+                    // Reserve counter durably BEFORE transmission so a missing
+                    // OK cannot replay the same proof after reconnect/reboot.
+                    val updated = record.copy(counter = Math.addExact(record.counter, 1))
+                    ownerStore.save(id, updated)
+                    ownerRecord = updated
+                    enrollmentPhase = EnrollmentPhase.PROOF
+                    _authorizationMessage.value = "Verificando prueba criptográfica…"
+                    enqueueProtocol(frame)
+                }
+                EnrollmentPhase.PROOF -> {
+                    require(reply is EnrollmentReply.Ok) { "AUTH: respuesta inesperada" }
+                    handler.removeCallbacks(ownerReplyTimeout)
+                    ownerClient?.onAuthenticated()
+                    enrollmentPhase = EnrollmentPhase.IDLE
+                    _securityState.value = BleSecurityState.Authorized
+                    _authorizationMessage.value = "Propietario autenticado por el ESP32."
+                    writeCommand("GET")
+                }
+                EnrollmentPhase.RESET -> {
+                    require(reply is EnrollmentReply.Ok) { "RESET: respuesta inesperada" }
+                    handler.removeCallbacks(ownerReplyTimeout)
+                    val id = _publicDeviceId.value ?: error("identidad perdida")
+                    ownerStore.clear(id)
+                    ownerClient = null
+                    ownerRecord = null
+                    enrollmentPhase = EnrollmentPhase.IDLE
+                    _securityState.value = BleSecurityState.Unauthorized
+                    _authorizationMessage.value =
+                        "Propietario restablecido. Abre otra ventana física con BOOT para emparejar."
+                }
+                EnrollmentPhase.IDLE -> Unit
+            }
+        } catch (failure: Exception) {
+            failAuthorization("Error de protocolo de propietario: ${failure.message}")
+        }
     }
 
     /**
@@ -525,18 +677,32 @@ class BleManager(private val context: Context) {
     }
 
     private fun requestAuthorization() {
-        val key = ownerKey
-        if (key == null) {
+        val id = _publicDeviceId.value
+        if (id == null) {
             _securityState.value = BleSecurityState.Unauthorized
+            _authorizationMessage.value = "Firmware sin identidad pública compatible; no se permite control."
             return
         }
-        val frame = RgbDeviceCommand.auth(key)
-        if (frame == null) {
-            _securityState.value = BleSecurityState.Unauthorized
-            return
+        try {
+            val record = ownerStore.load(id)
+            if (record == null) {
+                _securityState.value = BleSecurityState.Unauthorized
+                _authorizationMessage.value =
+                    "Sin propietario: mantén BOOT 3 s, lee el código por USB (115200) y emparéjalo."
+                return
+            }
+            ownerRecord = record
+            val client = OwnerEnrollmentClient(
+                ownerCrypto, record.ownerId, record.keys, record.counter
+            )
+            ownerClient = client
+            enrollmentPhase = EnrollmentPhase.CHALLENGE
+            _securityState.value = BleSecurityState.Authorizing
+            _authorizationMessage.value = "Revalidando propietario con el ESP32…"
+            enqueueProtocol(client.beginLine())
+        } catch (failure: Exception) {
+            failAuthorization("No fue posible recuperar la identidad segura: ${failure.message}")
         }
-        _securityState.value = BleSecurityState.Authorizing
-        writeCommand(frame)
     }
 
     private fun completeInitialRead(bytes: ByteArray?) {
@@ -561,16 +727,16 @@ class BleManager(private val context: Context) {
 
     private fun acceptState(bytes: ByteArray?) {
         val text = bytes?.toString(Charsets.UTF_8) ?: return
-        when (text) {
-            // Firmware-confirmed owner authorization over the encrypted link.
-            "AUTH,OK" -> {
-                _securityState.value = BleSecurityState.Authorized
-                return
-            }
-            "AUTH,ERR" -> {
-                _securityState.value = BleSecurityState.AuthorizationFailed
-                return
-            }
+        // New firmware replies use OK / ERR <reason> / CHALLENGE <nonce> <pubkey>.
+        // An obsolete AUTH,OK must NEVER authorize a modern owner session.
+        val enrollmentReply = EnrollmentReply.parse(text)
+        if (enrollmentReply != null) {
+            acceptEnrollment(enrollmentReply)
+            return
+        }
+        if (text == "ERR,INVALID_COMMAND") {
+            _authorizationMessage.value = "ESP32 rechazó el comando; verifica autorización y modo."
+            return
         }
         _deviceState.value = text
         RgbDeviceState.parse(text)?.let {
@@ -580,9 +746,11 @@ class BleManager(private val context: Context) {
     }
 
     fun writeCommand(text: String) {
-        // Reject malformed/unknown operations before they enter the GATT queue.
+        // Privileged RGB controls are not available on an unauthenticated link.
         if (!RgbDeviceCommand.allowed(text) ||
-            _connectionState.value != BleConnectionState.Ready) return
+            !BleRgbControlPolicy.allowed(
+                _connectionState.value, _securityState.value, text
+            )) return
         synchronized(pending) {
             if (text.startsWith("SET,")) pending.removeAll { it.startsWith("SET,") }
             if (pending.size >= 16) pending.removeFirst()
@@ -655,6 +823,12 @@ class BleManager(private val context: Context) {
         _connectedAddress.value = null
         // Closing the link revokes authorization; the firmware does the same.
         _securityState.value = BleSecurityState.Disconnected
+        handler.removeCallbacks(ownerReplyTimeout)
+        enrollmentPhase = EnrollmentPhase.IDLE
+        ownerClient?.reset()
+        ownerClient = null
+        ownerRecord = null
+        _authorizationMessage.value = "Sin sesión BLE autenticada."
         synchronized(pending) {
             pending.clear()
             writeInFlight = false

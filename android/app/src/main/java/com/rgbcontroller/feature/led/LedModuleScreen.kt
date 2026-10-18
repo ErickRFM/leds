@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
+import com.rgbcontroller.core.ble.BleSecurityState
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.model.RgbControlLink
@@ -44,6 +45,7 @@ fun LedModuleScreen(
     val wifiClient = remember(context) { LocalLabClient(context.applicationContext) }
     val scope = rememberCoroutineScope()
     val bleConnection by bleManager.connectionState.collectAsState()
+    val bleSecurity by bleManager.securityState.collectAsState()
     val bleState by bleManager.rgbState.collectAsState()
     val bleRevision by bleManager.stateRevision.collectAsState()
     val mode = labSession.transport
@@ -115,7 +117,9 @@ fun LedModuleScreen(
     }
 
     val isWifi = mode == LabTransport.WIFI_LAB
-    val connected = if (isWifi) wifiReady else bleConnection == BleConnectionState.Ready
+    val transportConnected = if (isWifi) wifiReady else bleConnection == BleConnectionState.Ready
+    val connected = if (isWifi) wifiReady else
+        transportConnected && bleSecurity == BleSecurityState.Authorized
     val state = if (isWifi) wifiState else bleState
     val link = RgbControlLink(
         transport = if (isWifi) "WIFI_LAB" else "BLUETOOTH",
@@ -127,7 +131,7 @@ fun LedModuleScreen(
                 if (wifiReady && !wifiCommands.trySend(command).isSuccess) {
                     labSession.invalidate("Demasiados comandos pendientes; vuelve a sincronizar Wi-Fi.")
                 }
-            } else if (bleConnection == BleConnectionState.Ready) {
+            } else if (connected) {
                 bleManager.writeCommand(command)
             }
         }
@@ -210,16 +214,19 @@ fun LedModuleScreen(
                             Surface(
                                 modifier = Modifier.size(8.dp),
                                 shape = androidx.compose.foundation.shape.CircleShape,
-                                color = if (connected) Color(0xFF22C55E) else Color(0xFFEF4444)
+                                color = if (connected) Color(0xFF22C55E) else if (transportConnected)
+                                    Color(0xFFF59E0B) else Color(0xFFEF4444)
                             ) {}
                             Text(
-                                if (connected) "ESP32 conectado" else "ESP32 sin conectar",
+                                if (connected) "ESP32 autorizado" else if (transportConnected)
+                                    "ESP32 conectado · sin autorizar" else "ESP32 sin conectar",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
                             )
                         }
                         Text(
-                            if (isWifi) "Red Lab-Red · Wi-Fi" else "Compi-ESP32 · Bluetooth",
+                            if (isWifi) "ESP32-Control-Lab · Wi-Fi" else if (transportConnected && !connected)
+                                "Autoriza propietario en Conexiones" else "Compi-ESP32 · Bluetooth",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

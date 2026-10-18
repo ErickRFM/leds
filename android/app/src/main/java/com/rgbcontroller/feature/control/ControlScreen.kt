@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
+import com.rgbcontroller.core.ble.BleSecurityState
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.model.RgbControlLink
 import com.rgbcontroller.core.model.ColorUtils
@@ -41,11 +42,13 @@ import kotlin.math.cos
 @Composable
 fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null, embedded: Boolean = false) {
     val connection by bleManager.connectionState.collectAsState()
+    val security by bleManager.securityState.collectAsState()
     val bleActual by bleManager.rgbState.collectAsState()
     val bleRevision by bleManager.stateRevision.collectAsState()
     val actual = if (link != null) link.state else bleActual
     val deviceRevision = link?.stateRevision ?: bleRevision
-    val ready = link?.ready ?: (connection == BleConnectionState.Ready)
+    val ready = link?.ready ?: (connection == BleConnectionState.Ready &&
+        security == BleSecurityState.Authorized)
     fun send(command: String) {
         if (link != null) link.sendCommand(command) else bleManager.writeCommand(command)
     }
@@ -137,7 +140,10 @@ fun ControlScreen(bleManager: BleManager, link: RgbControlLink? = null, embedded
         CompiV9SectionTitle("Control de color")
         Text(
             when {
-                !ready -> "Conecta el ESP32 para habilitar la rueda y los deslizadores."
+                !ready -> if (connection == BleConnectionState.Ready &&
+                    security != BleSecurityState.Authorized && link?.transport != "WIFI_LAB")
+                    "Bluetooth conectado, pero sin autorización del propietario. Ve a Conexiones."
+                else "Conecta el ESP32 para habilitar la rueda y los deslizadores."
                 confirmationError != null -> confirmationError!!
                 awaitingState != null -> "Aplicando ajustes, esperando confirmación del ESP32…"
                 dirty -> "Preparando nuevo color…"

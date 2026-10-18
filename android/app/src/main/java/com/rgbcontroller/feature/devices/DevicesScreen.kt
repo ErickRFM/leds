@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
 import com.rgbcontroller.core.ble.BleManager
@@ -38,6 +39,9 @@ fun DevicesScreen(
 ) {
     val connection by bleManager.connectionState.collectAsState()
     val security by bleManager.securityState.collectAsState()
+    val ownerMessage by bleManager.authorizationMessage.collectAsState()
+    var physicalCode by remember { mutableStateOf("") }
+    var recoveryMode by remember { mutableStateOf(false) }
     val devices by bleManager.discoveredDevices.collectAsState()
     val scanStats by bleManager.scanStatistics.collectAsState()
     val publicId by bleManager.publicDeviceId.collectAsState()
@@ -64,7 +68,7 @@ fun DevicesScreen(
         BleConnectionState.Discovering -> "Verificando GATT…"
         BleConnectionState.Ready -> if (authorized)
             "Propietario autorizado por firmware."
-        else "BLE conectado · autorización pendiente."
+        else "BLE conectado · ${ownerMessage}"
         is BleConnectionState.Error -> current.message
     }
 
@@ -128,6 +132,69 @@ fun DevicesScreen(
                         Text("Último ESP32: …${lastMac!!.takeLast(5)}",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+        if (ready && !authorized) {
+            item {
+                Card(Modifier.fillMaxWidth().testTag("ble_owner_setup")) {
+                    Column(Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Autorizar control Bluetooth", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Bluetooth conectado no da permiso para encender el LED. " +
+                                "Conecta el ESP32 al monitor serie USB a 115200 baudios, " +
+                                "mantén BOOT durante 3 segundos y usa el código de 8 caracteres " +
+                                "que imprime la placa (ventana de 2 minutos).",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Text(
+                            ownerMessage,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (security == BleSecurityState.AuthorizationFailed)
+                                MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = physicalCode,
+                            onValueChange = { next ->
+                                physicalCode = next.filter {
+                                    it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F'
+                                }.take(8).uppercase()
+                            },
+                            label = { Text("Código físico (8 caracteres hex)") },
+                            visualTransformation = PasswordVisualTransformation(),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("ble_pairing_code")
+                        )
+                        Button(
+                            onClick = {
+                                val started = if (recoveryMode) {
+                                    bleManager.resetOwnerWithCode(physicalCode)
+                                } else bleManager.enrollWithCode(physicalCode)
+                                if (started) physicalCode = ""
+                            },
+                            enabled = physicalCode.length == 8 &&
+                                security != BleSecurityState.Authorizing,
+                            modifier = Modifier.fillMaxWidth().testTag("ble_authorize_owner")
+                        ) { Text(if (recoveryMode) "Confirmar recuperación física" else "Autorizar propietario") }
+                        TextButton(
+                            onClick = { recoveryMode = !recoveryMode; physicalCode = "" },
+                            modifier = Modifier.testTag("ble_owner_recovery")
+                        ) {
+                            Text(if (recoveryMode) "Volver a emparejamiento"
+                                else "Ya tenía propietario y perdí la clave")
+                        }
+                        if (recoveryMode) {
+                            Text(
+                                "La recuperación exige la ventana física RECOVERY. " +
+                                    "Solo tras la confirmación de RESET, mantén BOOT otra vez " +
+                                    "para abrir PAIRING y registrar el teléfono.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
                     }
                 }
             }
