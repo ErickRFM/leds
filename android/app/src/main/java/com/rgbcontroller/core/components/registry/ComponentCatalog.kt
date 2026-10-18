@@ -5,6 +5,16 @@ import com.rgbcontroller.core.components.model.*
 object ComponentCatalog {
     val components = listOf(
         HardwareComponentDescriptor(
+            id = "dht11",
+            name = "DHT11",
+            type = ComponentType.SENSOR,
+            interfaces = setOf(HardwareInterface.GPIO, HardwareInterface.DIGITAL),
+            capabilities = setOf("humidity", "temperature", "environmental"),
+            requiredPins = setOf(16),
+            description = "Sensor DHT11 de humedad y temperatura, DATA en GPIO16 por defecto",
+            category = "sensors"
+        ),
+        HardwareComponentDescriptor(
             id = "dht22",
             name = "DHT22",
             type = ComponentType.SENSOR,
@@ -86,6 +96,7 @@ object ComponentCatalog {
      * unchanged so a new firmware module is never silently hidden.
      */
     fun catalogIdForFirmwareId(firmwareId: String): String = when (firmwareId) {
+        "sensor.dht11" -> "dht11"
         "sensor.dht22" -> "dht22"
         "sensor.soil_moisture" -> "soil_moisture"
         "led.rgb" -> "led_rgb"

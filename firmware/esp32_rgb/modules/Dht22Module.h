@@ -26,8 +26,8 @@ class Dht22Module final : public IModule {
 
   Dht22Module(uint8_t dataPin, ReadFn read, void* context,
               uint32_t minIntervalMs = 2000, const char* moduleId = "sensor.dht22")
-      : pin_(dataPin), read_(read), context_(context),
-        minIntervalMs_(minIntervalMs), moduleId_(moduleId) {}
+      : pin_(dataPin), moduleId_(moduleId), read_(read), context_(context),
+        minIntervalMs_(minIntervalMs) {}
 
   const char* id() const override { return moduleId_; }
   uint16_t version() const override { return 1; }

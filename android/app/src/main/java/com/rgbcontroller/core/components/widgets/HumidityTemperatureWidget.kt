@@ -24,11 +24,12 @@ fun HumidityTemperatureWidget(
     calibrated: Boolean = true,
     live: Boolean = true,
     status: String? = null,
+    model: String = "DHT22",
     modifier: Modifier = Modifier
 ) {
     Card(modifier = modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("DHT22 - Humedad y Temperatura", style = MaterialTheme.typography.titleMedium)
+            Text("$model - Humedad y Temperatura", style = MaterialTheme.typography.titleMedium)
             if (!hasData || humidity == null || temperature == null) {
                 Text(
                     "Sin datos - Sensor no detectado, desconectado o con lectura inválida",

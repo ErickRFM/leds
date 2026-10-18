@@ -94,6 +94,7 @@ class LocalLabClient(private val context: Context) {
         key: String, id: String, target: List<Int>
     ): JSONObject {
         val names = mapOf(
+            "dht11" to "sensor.dht11",
             "dht22" to "sensor.dht22",
             "soil_moisture" to "sensor.soil_moisture",
             "ssd1306_oled" to "display.ssd1306",
