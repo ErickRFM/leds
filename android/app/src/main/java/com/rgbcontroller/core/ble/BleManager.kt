@@ -106,7 +106,8 @@ class BleManager(private val context: Context) {
             if (device == null || !hasPermissions()) return
             when (_securityState.value) {
                 BleSecurityState.Authorized, BleSecurityState.AuthorizationFailed,
-                BleSecurityState.Disconnected -> return
+                BleSecurityState.Disconnected, BleSecurityState.Timeout,
+                BleSecurityState.Revoked, BleSecurityState.RecoveryRequired -> return
                 else -> Unit
             }
             if (device.bondState == BluetoothDevice.BOND_BONDED) {
@@ -116,7 +117,7 @@ class BleManager(private val context: Context) {
             }
             if (System.currentTimeMillis() >= bondDeadlineMs) {
                 if (_securityState.value != BleSecurityState.Authorizing) {
-                    _securityState.value = BleSecurityState.Unauthorized
+                    _securityState.value = BleSecurityState.Timeout
                 }
                 return
             }
@@ -737,6 +738,20 @@ class BleManager(private val context: Context) {
         if (text == "ERR,INVALID_COMMAND") {
             _authorizationMessage.value = "ESP32 rechazó el comando; verifica autorización y modo."
             return
+        }
+        when (text) {
+            "AUTH,ERR" -> {
+                _securityState.value = BleSecurityState.AuthorizationFailed
+                return
+            }
+            "ERR revoked", "ERR_REVOKED" -> {
+                _securityState.value = BleSecurityState.Revoked
+                return
+            }
+            "ERR recovery_requires_physical", "ERR_RECOVERY" -> {
+                _securityState.value = BleSecurityState.RecoveryRequired
+                return
+            }
         }
         _deviceState.value = text
         RgbDeviceState.parse(text)?.let {

@@ -28,5 +28,14 @@ enum class BleSecurityState {
     Authorized,
 
     /** Firmware rejected the owner key or pairing failed. */
-    AuthorizationFailed
+    AuthorizationFailed,
+
+    /** Authorization or pairing timed out. */
+    Timeout,
+
+    /** Session or owner has been revoked by the device. */
+    Revoked,
+
+    /** Physical gesture (BOOT button / recovery window) required on device. */
+    RecoveryRequired
 }
