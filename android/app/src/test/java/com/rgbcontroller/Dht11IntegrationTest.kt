@@ -1,5 +1,6 @@
 package com.rgbcontroller
 
+import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
 import com.rgbcontroller.core.components.registry.ComponentCatalog
 import com.rgbcontroller.core.components.registry.PinAssignmentPolicy
 import com.rgbcontroller.core.components.model.ComponentRuntimeStatus
@@ -14,6 +15,10 @@ class Dht11IntegrationTest {
         assertEquals(listOf(32), PinAssignmentPolicy.profile("dht22")?.defaults)
         assertEquals("dht11", ComponentCatalog.catalogIdForFirmwareId("sensor.dht11"))
         assertEquals("dht22", ComponentCatalog.catalogIdForFirmwareId("sensor.dht22"))
+    }
+    @Test fun dht11TelemetryTypesAreRecognized() {
+        assertEquals(setOf("humidity", "temperature"),
+            ComponentTelemetryCodec.measurementTypesFor("dht11"))
     }
     @Test fun gpio16IsAllowedButRgbPinsRemainReserved() {
         assertTrue(PinAssignmentPolicy.validate("dht11", listOf(16)).isEmpty())
