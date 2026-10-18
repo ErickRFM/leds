@@ -1,5 +1,7 @@
 package com.rgbcontroller.feature.modules
 
+import androidx.activity.compose.BackHandler
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -89,6 +91,10 @@ fun ModuleWorkspaceScreen(
     var editingId by remember { mutableStateOf<String?>(null) }
     var applyMessage by remember { mutableStateOf<String?>(null) }
     var applying by remember { mutableStateOf(false) }
+    // Physical Back should close a nested component editor/detail before leaving Modules.
+    BackHandler(enabled = editingId != null || openedId != null) {
+        if (editingId != null) editingId = null else openedId = null
+    }
     val labClient = remember(context) { LocalLabClient(context.applicationContext) }
 
     LaunchedEffect(Unit) {

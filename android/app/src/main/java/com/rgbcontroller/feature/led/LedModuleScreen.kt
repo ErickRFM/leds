@@ -150,7 +150,7 @@ fun LedModuleScreen(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text("LED RGB", style = MaterialTheme.typography.headlineMedium)
-            IconButton(onClick = { /* Settings action */ }) {
+            IconButton(onClick = onOpenDevices) {
                 Icon(
                     imageVector = androidx.compose.material.icons.Icons.Default.Settings,
                     contentDescription = "Ajustes"
