@@ -736,9 +736,9 @@ class BleManager(private val context: Context) {
 
     fun writeCommand(text: String) {
         // Privileged RGB controls are not available on an unauthenticated link.
-        if (!RgbDeviceCommand.allowed(text) ||
-            _connectionState.value != BleConnectionState.Ready ||
-            _securityState.value != BleSecurityState.Authorized) return
+        if (!BleRgbControlPolicy.allowed(
+                _connectionState.value, _securityState.value, text
+            )) return
         synchronized(pending) {
             if (text.startsWith("SET,")) pending.removeAll { it.startsWith("SET,") }
             if (pending.size >= 16) pending.removeFirst()
