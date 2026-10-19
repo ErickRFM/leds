@@ -44,6 +44,7 @@ import com.rgbcontroller.core.components.registry.ComponentCatalog
 import com.rgbcontroller.core.components.registry.ModuleWorkspaceGrouping
 import com.rgbcontroller.core.components.registry.PinAssignmentPolicy
 import com.rgbcontroller.core.components.status.ComponentDashboardState
+import com.rgbcontroller.core.components.status.ModuleEvidence
 import com.rgbcontroller.core.components.status.ComponentStatusFreshness
 import com.rgbcontroller.core.components.status.LocalDesiredComponent
 import com.rgbcontroller.core.components.status.LocalDesiredConfig
@@ -175,7 +176,8 @@ fun ModuleWorkspaceScreen(
                         }
                         for (child in listOf(environmentSensor, "soil_moisture")) {
                             item(key = "env_status_$child") {
-                                ModuleRuntimeCard(child, runtime(child), currentlyVerified)
+                                ModuleRuntimeCard(child, runtime(child), currentlyVerified,
+                                    ModuleEvidence.dhtResponding(state, child))
                             }
                             val draftPins = state.desiredConfig.components
                                 .firstOrNull { it.id == child }?.pins
@@ -202,7 +204,8 @@ fun ModuleWorkspaceScreen(
                         }
                     } else {
                     item {
-                        ModuleRuntimeCard(id, runtime(id), currentlyVerified)
+                        ModuleRuntimeCard(id, runtime(id), currentlyVerified,
+                            ModuleEvidence.dhtResponding(state, id))
                     }
                     // Real measurements and history must be visible before GPIO wiring.
                     item(key = "module_metrics_$id") {
@@ -290,7 +293,7 @@ fun ModuleWorkspaceScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = onConnect,
                                 modifier = Modifier.weight(1f).testTag("modules_connect")) {
-                                Text("Conectar")
+                                Text(ModuleEvidence.connectionAction(wifiAuthorized, bleReady))
                             }
                             OutlinedButton(onClick = onHardware, modifier = Modifier.weight(1f)) {
                                 Text("Hardware")
@@ -389,9 +392,13 @@ fun ModuleWorkspaceScreen(
                                                 currentlyVerified) "${environmentSensor.uppercase()} + suelo · drivers activos"
                                             else "${environmentSensor.uppercase()} + suelo · estado parcial o último conocido"
                                         id == "led_rgb" && physical != null && currentlyVerified ->
-                                            "PWM configurado · conexión física no verificable"
+                                            "Control RGB preparado · sin detección física"
+                                        id in setOf("dht11", "dht22") && currentlyVerified ->
+                                            if (ModuleEvidence.dhtResponding(state, id))
+                                                "Temperatura y humedad · en vivo"
+                                            else "GPIO preparado · esperando datos válidos"
                                         physical != null && currentlyVerified ->
-                                            "Firmware: ${physical.state} · ${if (physical.active) "activo" else "no activo"}"
+                                            "Firmware: ${if (physical.active) "activo" else "no activo"}"
                                         physical != null -> "Última confirmación del firmware · no en vivo"
                                         bleReady && id == "led_rgb" -> "Control BLE RGB disponible · GPIO sin confirmar"
                                         else -> "Borrador local · sin confirmar"
@@ -407,14 +414,10 @@ fun ModuleWorkspaceScreen(
                                 )
                                 val climateModel = id == "dht11" || id == "dht22" ||
                                     id == ModuleWorkspaceGrouping.ENVIRONMENT
-                                val sensorHasValidReadings = state.telemetryFreshness ==
-                                    ComponentStatusFreshness.LIVE && state.connected &&
-                                    state.authorityError == null &&
-                                    listOf("humidity", "temperature").all { type ->
-                                        ComponentTelemetryCodec.find(
-                                            state.authoritativeTelemetry.orEmpty(), type
-                                        )?.let { it.valid && it.status == "fresh" } == true
-                                    }
+                                val respondingModel = if (id == ModuleWorkspaceGrouping.ENVIRONMENT)
+                                    environmentSensor else id
+                                val sensorHasValidReadings =
+                                    ModuleEvidence.dhtResponding(state, respondingModel)
                                 val sensorConfirmed = if (id == "led_rgb") {
                                     // PWM leases do not provide physical LED detection.
                                     false
@@ -425,11 +428,12 @@ fun ModuleWorkspaceScreen(
                                         else physical?.active == true)
                                 } else physical?.active == true
                                 val evidenceLabel = when {
-                                    id == "led_rgb" && physical?.active == true ->
-                                        "PWM configurado · LED no detectable"
-                                    sensorConfirmed && currentlyVerified -> "Confirmado por firmware"
-                                    climateModel && physical?.active == true ->
-                                        "Driver GPIO activo · esperando temperatura y humedad válidas"
+                                    id == "led_rgb" && physical?.active == true &&
+                                        currentlyVerified -> "PWM activo · LED no detectable"
+                                    sensorConfirmed && currentlyVerified ->
+                                        "Sensor respondiendo · datos en vivo"
+                                    climateModel && physical?.active == true &&
+                                        currentlyVerified -> "GPIO activo · sin lecturas válidas"
                                     physical != null -> "Estado guardado · no en vivo"
                                     bleReady && id == "led_rgb" -> "BLE RGB listo · GPIO sin confirmar"
                                     else -> "Pendiente de aplicar"
@@ -574,7 +578,12 @@ private fun ModuleVisualIcon(id: String) {
 }
 
 @Composable
-private fun ModuleRuntimeCard(id: String, runtime: ComponentRuntimeStatus?, live: Boolean) {
+private fun ModuleRuntimeCard(
+    id: String,
+    runtime: ComponentRuntimeStatus?,
+    live: Boolean,
+    sensorResponding: Boolean = false
+) {
     val verified = runtime?.active == true && live
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp),
@@ -586,19 +595,16 @@ private fun ModuleRuntimeCard(id: String, runtime: ComponentRuntimeStatus?, live
                     Text(ComponentCatalog.get(id)?.name ?: id,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold)
-                    Text(if (verified && id == "led_rgb")
-                             "PWM preparado · LED físico no verificado"
-                         else if (verified && id in setOf("dht11", "dht22"))
-                             "GPIO activo · sin asegurar lectura física"
-                         else if (verified) "Activo · confirmado por ESP32"
-                         else if (runtime != null && live) "Reportado por ESP32 · no activo"
-                         else if (runtime != null) "Último estado registrado · no en vivo"
-                         else "Configuración local · por verificar",
+                    Text(if (runtime == null) "Configuración local · por verificar"
+                         else ModuleEvidence.moduleStatus(id, runtime.active, live, sensorResponding),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                if (verified && id !in setOf("led_rgb", "dht11", "dht22"))
-                    Icon(Icons.Default.CheckCircle, contentDescription = "Confirmado",
+                if (verified && (id !in setOf("led_rgb", "dht11", "dht22") ||
+                    sensorResponding))
+                    Icon(Icons.Default.CheckCircle,
+                    contentDescription = if (sensorResponding) "Lectura confirmada"
+                                         else "Controlador confirmado",
                     tint = Color(0xFF54D8A3))
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -607,8 +613,10 @@ private fun ModuleRuntimeCard(id: String, runtime: ComponentRuntimeStatus?, live
                     runtime == null -> "El ESP32 aún no ha confirmado este componente."
                     !runtime.active && runtime.state == "catalog" ->
                         "Driver disponible, pero sensor no activado ni detectado."
+                    runtime.active && id in setOf("dht11", "dht22") && sensorResponding ->
+                        "Temperatura y humedad válidas recibidas del ESP32 por Wi-Fi."
                     runtime.active && id in setOf("dht11", "dht22") ->
-                        "Driver ${id.uppercase()} activo en firmware; la lectura física se verifica abajo."
+                        "Driver ${id.uppercase()} configurado; aún no se confirma una lectura física."
                     runtime.active && id == "led_rgb" ->
                         "Salidas PWM preparadas. El ESP32 no dispone de sensor de corriente ni retorno para detectar si hay un LED conectado."
                     runtime.active -> "Estado del firmware: ${runtime.state}"

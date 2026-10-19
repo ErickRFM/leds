@@ -2,6 +2,9 @@ package com.rgbcontroller.core.components.widgets
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -12,9 +15,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import java.util.Locale
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.components.telemetry.SampleQuality
 import com.rgbcontroller.core.components.telemetry.TelemetryChartGeometry
@@ -45,6 +50,14 @@ fun TelemetryChartCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (geometry.hasData) {
+                Text(
+                    "Mín ${formatChartValue(geometry.minValue)} ${geometry.unit}   ·   " +
+                    "Máx ${formatChartValue(geometry.maxValue)} ${geometry.unit}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             val note = when {
                 geometry.disconnected ->
                     "Desconectado · sin telemetría en vivo (datos históricos listados abajo)."
@@ -57,12 +70,26 @@ fun TelemetryChartCard(
                     color = if (geometry.disconnected) MaterialTheme.colorScheme.error
                     else MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Canvas(
+            if (!geometry.hasData && geometry.classified.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(68.dp)
+                        .testTag("chart_${geometry.componentId}_${geometry.measurementType}"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Esperando mediciones reales",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else Canvas(
                 Modifier.fillMaxWidth().height(120.dp)
                     .testTag("chart_${geometry.componentId}_${geometry.measurementType}")
             ) {
                 val w = size.width
                 val h = size.height
+                val grid = lineColor.copy(alpha = 0.12f)
+                for (fraction in listOf(0.25f, 0.5f, 0.75f)) {
+                    drawLine(grid, Offset(0f, h * fraction), Offset(w, h * fraction), strokeWidth = 1f)
+                }
                 for (segment in geometry.segments) {
                     if (segment.size == 1) {
                         val p = segment[0]
@@ -99,3 +126,6 @@ private fun rangeLabel(geometry: TelemetryChartGeometry): String {
     val unit = geometry.unit.ifBlank { "" }
     return "$min..$max $unit".trim()
 }
+
+private fun formatChartValue(value: Float): String =
+    String.format(Locale.getDefault(), "%.1f", value)

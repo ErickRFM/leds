@@ -11,6 +11,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
 import com.rgbcontroller.core.components.status.ComponentDashboardState
+import com.rgbcontroller.core.components.status.ModuleEvidence
 import com.rgbcontroller.core.components.telemetry.TelemetryChart
 import java.util.Locale
 
@@ -36,7 +37,7 @@ fun SensorDashboard(
     }
     val temperature = metric("temperature")
     val humidity = metric("humidity")
-    val physicalReading = temperature != null && humidity != null && live
+    val physicalReading = active && live && ModuleEvidence.dhtResponding(state, id)
     val firmwareStatus = ComponentTelemetryCodec.find(readings.orEmpty(), "temperature")?.status
     val diagnostic = (if (live) state.authoritative else state.persisted)
         .orEmpty().firstOrNull { it.id == "sensor.$id" }
@@ -54,9 +55,9 @@ fun SensorDashboard(
             )
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            SensorMetric("Temperatura", temperature, "°C",
+            SensorMetric("Temperatura", temperature, "°C", live,
                 Modifier.weight(1f).testTag("sensor_temperature_$id"))
-            SensorMetric("Humedad relativa", humidity, "%",
+            SensorMetric("Humedad relativa", humidity, "%", live,
                 Modifier.weight(1f).testTag("sensor_humidity_$id"))
         }
         Card(shape = RoundedCornerShape(20.dp)) {
@@ -106,9 +107,11 @@ fun SensorDashboard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Text("Driver activo ≠ sensor detectado físicamente.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (!physicalReading) {
+                    Text("GPIO asignado no significa sensor detectado físicamente.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 OutlinedButton(onClick = onRefresh, enabled = state.connected,
                     modifier = Modifier.testTag("sensor_refresh_$id")) {
                     Text("Actualizar lectura")
@@ -141,7 +144,10 @@ fun SensorDashboard(
 }
 
 @Composable
-private fun SensorMetric(title: String, value: Float?, unit: String, modifier: Modifier) {
+private fun SensorMetric(
+    title: String, value: Float?, unit: String,
+    live: Boolean, modifier: Modifier
+) {
     Card(modifier = modifier, shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -153,7 +159,11 @@ private fun SensorMetric(title: String, value: Float?, unit: String, modifier: M
             Text(value?.let { String.format(Locale.getDefault(), "%.1f %s", it, unit) }
                 ?: "-- $unit", style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold)
-            Text(if (value == null) "Esperando dato" else "Lectura confirmada",
+            Text(when {
+                value == null -> "Esperando dato"
+                live -> "Lectura en vivo"
+                else -> "Última lectura guardada"
+            },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
