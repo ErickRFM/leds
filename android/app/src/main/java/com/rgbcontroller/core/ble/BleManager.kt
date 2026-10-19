@@ -564,7 +564,7 @@ class BleManager(private val context: Context) {
         enrollmentPhase = EnrollmentPhase.RESET
         _securityState.value = BleSecurityState.Authorizing
         _authorizationMessage.value = "Esperando confirmación de reinicio del propietario…"
-        enqueueProtocol("RESET $code")
+        enqueueProtocol("RESET ${code.lowercase()}")
         return true
     }
 
