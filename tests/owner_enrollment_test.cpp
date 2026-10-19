@@ -51,8 +51,14 @@ int main() {
   assert(enrollment.enroll("owner-1", "abcd", kCode, 1100) ==
          EnrollmentResult::INVALID_ARGUMENT);
 
+  // Hex digits encode bytes: Android displays uppercase, device generates
+  // lowercase. The same valid physical code must work in either case.
+  assert(enrollment.enroll("owner-1", kPubA, "DEADBEE0", 1100) ==
+         EnrollmentResult::BAD_CODE);
+  assert(enrollment.enroll("owner-1", kPubA, "ZZZZZZZZ", 1100) ==
+         EnrollmentResult::BAD_CODE);
   // Correct enrollment lands in ENROLLED, not yet authenticated.
-  assert(enrollment.enroll("owner-1", kPubA, kCode, 1100) == EnrollmentResult::OK);
+  assert(enrollment.enroll("owner-1", kPubA, "DeAdBeEf", 1100) == EnrollmentResult::OK);
   assert(enrollment.state() == EnrollmentState::ENROLLED);
   assert(enrollment.hasOwner());
   assert(!enrollment.authenticated());
@@ -124,7 +130,7 @@ int main() {
   // Factory reset requires the recovery code and wipes the owner.
   assert(enrollment.factoryReset("00000000", 1500) == EnrollmentResult::BAD_CODE);
   assert(enrollment.state() == EnrollmentState::RECOVERY);
-  assert(enrollment.factoryReset(kCode, 1500) == EnrollmentResult::OK);
+  assert(enrollment.factoryReset("DEADBEEF", 1500) == EnrollmentResult::OK);
   assert(enrollment.state() == EnrollmentState::UNPAIRED);
   assert(!enrollment.hasOwner());
   assert(!enrollment.authenticated());
