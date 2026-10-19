@@ -132,7 +132,7 @@ class OwnerEnrollment final {
       reason_ = "invalid_arguments";
       return EnrollmentResult::INVALID_ARGUMENT;
     }
-    if (!constantTimeEquals(presentedCode, oneTimeCode_)) {
+    if (!constantTimeCodeEquals(presentedCode, oneTimeCode_)) {
       reason_ = "bad_code";
       return EnrollmentResult::BAD_CODE;
     }
@@ -284,7 +284,7 @@ class OwnerEnrollment final {
     }
     // Recovery still requires the one-time code that was issued with the
     // physical window, so a stale physical action cannot wipe the owner.
-    if (oneTimeCode_[0] != '\0' && !constantTimeEquals(presentedCode, oneTimeCode_)) {
+    if (oneTimeCode_[0] != '\0' && !constantTimeCodeEquals(presentedCode, oneTimeCode_)) {
       reason_ = "bad_code";
       return EnrollmentResult::BAD_CODE;
     }
@@ -366,6 +366,30 @@ class OwnerEnrollment final {
       }
     }
     return true;
+  }
+
+  // A one-time code represents four bytes in hexadecimal, not case-sensitive
+  // text. Android's pairing field historically uppercased A-F while the ESP32
+  // generated lowercase hex, causing valid codes to fail with bad_code.
+  // Validate public format first, then compare all eight nibbles uniformly.
+  static bool constantTimeCodeEquals(const char* a, const char* b) {
+    if (!a || !b || std::strlen(a) != kOneTimeCodeLength ||
+        std::strlen(b) != kOneTimeCodeLength) return false;
+    unsigned diff = 0;
+    unsigned invalid = 0;
+    for (size_t i = 0; i < kOneTimeCodeLength; ++i) {
+      const unsigned char ac = static_cast<unsigned char>(a[i]);
+      const unsigned char bc = static_cast<unsigned char>(b[i]);
+      const bool aHex = (ac >= '0' && ac <= '9') ||
+                        (ac >= 'a' && ac <= 'f') || (ac >= 'A' && ac <= 'F');
+      const bool bHex = (bc >= '0' && bc <= '9') ||
+                        (bc >= 'a' && bc <= 'f') || (bc >= 'A' && bc <= 'F');
+      invalid |= static_cast<unsigned>(!aHex || !bHex);
+      const unsigned char al = (ac >= 'A' && ac <= 'F') ? ac + ('a' - 'A') : ac;
+      const unsigned char bl = (bc >= 'A' && bc <= 'F') ? bc + ('a' - 'A') : bc;
+      diff |= static_cast<unsigned>(al ^ bl);
+    }
+    return (diff | invalid) == 0;
   }
 
   static bool constantTimeEquals(const char* a, const char* b) {
