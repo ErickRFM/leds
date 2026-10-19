@@ -53,6 +53,13 @@ fun DevicesScreen(
     val searching = connection == BleConnectionState.Scanning
     val ready = connection == BleConnectionState.Ready
     val authorized = ready && security == BleSecurityState.Authorized
+    // Retain the transient code on a rejected attempt so the user can check it.
+    // Erase it only on confirmed authorization/reset or when leaving the link.
+    LaunchedEffect(ready, authorized, ownerMessage) {
+        if (!ready || authorized || ownerMessage.startsWith("Propietario restablecido.")) {
+            physicalCode = ""
+        }
+    }
     val status = when (connection) {
         BleConnectionState.Disconnected -> "Sin conexión"
         BleConnectionState.Scanning -> "Buscando ESP32"
@@ -164,16 +171,18 @@ fun DevicesScreen(
                                 }.take(8).uppercase()
                             },
                             label = { Text("Código físico (8 caracteres hex)") },
+                            isError = security == BleSecurityState.AuthorizationFailed,
                             visualTransformation = PasswordVisualTransformation(),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth().testTag("ble_pairing_code")
                         )
                         Button(
                             onClick = {
-                                val started = if (recoveryMode) {
+                                if (recoveryMode) {
                                     bleManager.resetOwnerWithCode(physicalCode)
-                                } else bleManager.enrollWithCode(physicalCode)
-                                if (started) physicalCode = ""
+                                } else {
+                                    bleManager.enrollWithCode(physicalCode)
+                                }
                             },
                             enabled = physicalCode.length == 8 &&
                                 security != BleSecurityState.Authorizing,

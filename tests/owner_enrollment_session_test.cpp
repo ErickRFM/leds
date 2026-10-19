@@ -121,8 +121,8 @@ std::string attemptAuth(OwnerEnrollmentSession& session, TestOnlySessionCrypto& 
   return reply;
 }
 
-std::string pairLine(const char* ownerPubKeyHex) {
-  return std::string("PAIR ") + kCode + " owner-1 " + ownerPubKeyHex;
+std::string pairLine(const char* ownerPubKeyHex, const char* code = kCode) {
+  return std::string("PAIR ") + code + " owner-1 " + ownerPubKeyHex;
 }
 
 }  // namespace
@@ -165,7 +165,7 @@ int main() {
   assert(session.begin());
   assert(!session.authenticated());
   assert(session.openPairingWindow(1000, 120000, kCode));
-  assert(session.handleFrame(pairLine(ownerPubHex).c_str(), reply, sizeof(reply)));
+  assert(session.handleFrame(pairLine(ownerPubHex, "DEADBEEF").c_str(), reply, sizeof(reply)));
   assert(std::string(reply) == "OK");
   assert(session.hasOwner());
   assert(!session.authenticated());
@@ -240,7 +240,7 @@ int main() {
     assert(revoked.openRecoveryWindow(1000, 120000, kCode));
     assert(revoked.handleFrame("RESET 00000000", reply, sizeof(reply)));
     assert(std::string(reply).rfind("ERR ", 0) == 0);  // wrong code
-    assert(revoked.handleFrame(("RESET " + std::string(kCode)).c_str(), reply,
+    assert(revoked.handleFrame("RESET DEADBEEF", reply,
                                sizeof(reply)));
     assert(std::string(reply) == "OK");
     assert(revoked.state() == EnrollmentState::UNPAIRED);

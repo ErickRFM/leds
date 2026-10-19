@@ -27,6 +27,7 @@ import com.rgbcontroller.core.model.BleGpioSnapshot
 import com.rgbcontroller.core.model.DeviceIdCodec
 import com.rgbcontroller.core.ble.enrollment.EnrollmentReply
 import com.rgbcontroller.core.ble.enrollment.OwnerEnrollmentClient
+import com.rgbcontroller.core.ble.enrollment.ownerEnrollmentErrorMessage
 import com.rgbcontroller.core.ble.enrollment.OwnerSessionStore
 import com.rgbcontroller.core.security.BouncyCastleSessionCrypto
 import com.rgbcontroller.core.security.Hex
@@ -564,7 +565,7 @@ class BleManager(private val context: Context) {
         enrollmentPhase = EnrollmentPhase.RESET
         _securityState.value = BleSecurityState.Authorizing
         _authorizationMessage.value = "Esperando confirmación de reinicio del propietario…"
-        enqueueProtocol("RESET $code")
+        enqueueProtocol("RESET ${code.lowercase()}")
         return true
     }
 
@@ -592,7 +593,7 @@ class BleManager(private val context: Context) {
         val phase = enrollmentPhase
         if (phase == EnrollmentPhase.IDLE) return
         if (reply is EnrollmentReply.Err) {
-            failAuthorization("ESP32 rechazó autorización: ${reply.reason}")
+            failAuthorization(ownerEnrollmentErrorMessage(reply.reason))
             return
         }
         try {

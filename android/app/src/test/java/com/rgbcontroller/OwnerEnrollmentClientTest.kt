@@ -69,6 +69,8 @@ class OwnerEnrollmentClientTest {
 
         val pair = client.pairLine("deadbeef")
         assertEquals("PAIR deadbeef pixel-1 ${Hex.encode(owner.publicKey)}", pair)
+        assertEquals(pair, client.pairLine("DEADBEEF"))
+        assertEquals(pair, client.pairLine("DeAdBeEf"))
 
         val deviceNonce = crypto.randomBytes(SessionKeySchedule.NONCE_BYTES)
         val challenge = EnrollmentReply.Challenge(
