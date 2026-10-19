@@ -38,7 +38,7 @@ class OwnerEnrollmentClient(
             "one-time code must be $ONE_TIME_CODE_LENGTH hex chars"
         }
         require(validOwnerId(ownerId)) { "invalid owner id" }
-        return "PAIR $code $ownerId $ownerPublicKeyHex"
+        return "PAIR ${code.lowercase()} $ownerId $ownerPublicKeyHex"
     }
 
     /** Starts a session; the returned line must be written before the challenge. */
