@@ -204,7 +204,8 @@ class LocalWifiControl final {
       }
       const String componentId = server_.arg("id");
       if (componentId != "dht11" && componentId != "dht22" && componentId != "soil_moisture" &&
-          componentId != "ssd1306_oled" && componentId != "led_rgb") {
+          componentId != "ssd1306_oled" && componentId != "ldr_light" &&
+          componentId != "led_rgb") {
         jsonError(400, "unsupported_component"); return;
       }
       int from1 = -1, from2 = -1, to1 = -1, to2 = -1;
