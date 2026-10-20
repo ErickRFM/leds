@@ -203,7 +203,8 @@ class LocalWifiControl final {
     server_.on("/v2/components/ldr/calibrate", HTTP_POST, [this]() {
       if (!authorized()) return;
       if (ldrCalibration_ == nullptr || script_.active() ||
-          experiment_.active() || automation_.active() || hasManual()) {
+          experiment_.active() || automation_.active() ||
+          environmentalRgbEnabled_ || hasManual()) {
         jsonError(409, "ldr_calibration_unavailable_or_busy");
         return;
       }
@@ -239,7 +240,7 @@ class LocalWifiControl final {
     server_.on("/v2/components/apply", HTTP_POST, [this]() {
       if (!authorized()) return;
       if (apply_ == nullptr || script_.active() || experiment_.active() ||
-          automation_.active() || hasManual()) {
+          automation_.active() || environmentalRgbEnabled_ || hasManual()) {
         jsonError(409, "component_apply_unavailable_or_busy"); return;
       }
       const String componentId = server_.arg("id");
