@@ -61,6 +61,27 @@ class LocalLabClient(private val context: Context) {
     suspend fun stopAutomation(key: String): JSONObject =
         request("POST", "/v2/automation/stop", key)
 
+    /** Runtime-only environmental RGB, requires the existing authenticated SoftAP.
+     * BLE bonding alone never authorizes these operations.
+     */
+    suspend fun environmentalRgbStatus(key: String): JSONObject =
+        request("GET", "/v2/environment/rgb/status", key)
+
+    suspend fun startEnvironmentalRgb(key: String): JSONObject {
+        val response = request("POST", "/v2/environment/rgb/start", key)
+        check(response.optString("status") == "ENABLED" &&
+            response.optBoolean("runtimeOnly")) { "El ESP32 no confirmó el modo ambiental." }
+        return response
+    }
+
+    suspend fun stopEnvironmentalRgb(key: String): JSONObject {
+        val response = request("POST", "/v2/environment/rgb/stop", key)
+        check(response.optString("status") == "STOPPED" &&
+            response.optBoolean("runtimeOnly")) { "El ESP32 no confirmó la detención." }
+        return response
+    }
+
+
     suspend fun writePin(key: String, pin: Int, value: Boolean): JSONObject {
         require(allowedOutput(pin) && pin !in setOf(25,26,27)) // RGB is reserved.
         return request("POST", "/v2/gpio/write", key,
