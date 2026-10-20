@@ -35,6 +35,16 @@ object ComponentCatalog {
             category = "sensors"
         ),
         HardwareComponentDescriptor(
+            id = "ldr_light",
+            name = "Sensor de Luz LDR",
+            type = ComponentType.SENSOR,
+            interfaces = setOf(HardwareInterface.ADC),
+            capabilities = setOf("ambient_light", "analog", "calibrated"),
+            requiredPins = setOf(32, 33, 34, 35, 36, 39),
+            description = "Fotorresistencia LDR en divisor de tensión 10k (ADC1, GPIO36)",
+            category = "sensors"
+        ),
+        HardwareComponentDescriptor(
             id = "led_rgb",
             name = "LED RGB",
             type = ComponentType.LIGHTING,
@@ -99,6 +109,7 @@ object ComponentCatalog {
         "sensor.dht11" -> "dht11"
         "sensor.dht22" -> "dht22"
         "sensor.soil_moisture" -> "soil_moisture"
+        "sensor.ldr_light" -> "ldr_light"
         "led.rgb" -> "led_rgb"
         "display.ssd1306" -> "ssd1306_oled"
         else -> firmwareId

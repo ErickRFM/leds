@@ -121,6 +121,7 @@ object ComponentTelemetryCodec {
     fun measurementTypesFor(componentId: String): Set<String> = when (componentId) {
         "dht11", "dht22" -> setOf("humidity", "temperature")
         "soil_moisture" -> setOf("soil_moisture", "adc_raw")
+        "ldr_light" -> setOf("ambient_light", "adc_raw")
         "led_rgb" -> setOf("rgb_state")
         else -> emptySet()
     }

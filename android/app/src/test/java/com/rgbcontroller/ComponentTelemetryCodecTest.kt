@@ -120,14 +120,16 @@ class ComponentTelemetryCodecTest {
 
     @Test fun catalogIdsMatchFirmwareContract() {
         val ids = ComponentCatalog.components.map { it.id }.toSet()
-        assertTrue(ids.containsAll(setOf("dht22", "soil_moisture", "led_rgb", "ssd1306_oled")))
+        assertTrue(ids.containsAll(setOf("dht22", "soil_moisture", "ldr_light", "led_rgb", "ssd1306_oled")))
         assertEquals("dht22", ComponentCatalog.get("dht22")?.id)
+        assertEquals("ldr_light", ComponentCatalog.get("ldr_light")?.id)
         assertNull(ComponentCatalog.get("does_not_exist"))
     }
 
     @Test fun catalogIdForFirmwareIdResolvesFirmwarePrefixes() {
         assertEquals("dht22", ComponentCatalog.catalogIdForFirmwareId("sensor.dht22"))
         assertEquals("soil_moisture", ComponentCatalog.catalogIdForFirmwareId("sensor.soil_moisture"))
+        assertEquals("ldr_light", ComponentCatalog.catalogIdForFirmwareId("sensor.ldr_light"))
         assertEquals("led_rgb", ComponentCatalog.catalogIdForFirmwareId("led.rgb"))
         assertEquals("ssd1306_oled", ComponentCatalog.catalogIdForFirmwareId("display.ssd1306"))
         // An unknown module is returned unchanged so it is never silently hidden.
@@ -139,5 +141,6 @@ class ComponentTelemetryCodecTest {
             """{"version":1,"measurements":[{"type":"adc_raw","status":"fresh","valid":true,"value":2500,"unit":"raw","timestampMs":1}]}"""
         )
         assertEquals(ComponentState.ACTIVE, ComponentTelemetryCodec.stateFor("soil_moisture", decoded))
+        assertEquals(ComponentState.ACTIVE, ComponentTelemetryCodec.stateFor("ldr_light", decoded))
     }
 }
