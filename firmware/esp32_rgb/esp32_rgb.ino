@@ -966,6 +966,16 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
   return false;  // Build did not include this optional physical component.
 }
 
+#if COMPI_BUILD_LDR
+bool calibrateLdr(uint16_t darkRaw, uint16_t brightRaw, void*) {
+  // GPIO ownership and actual ADC sampling are required for calibration.
+  return ldrModule.ready() &&
+         pinManager.belongsTo(ldrModule.pin(), ldrModule.id()) &&
+         ldrModule.rawReading().valid &&
+         ldrModule.setCalibration(darkRaw, brightRaw);
+}
+#endif
+
 esp32core::LocalWifiControl wifiLab(pinManager, stateString, applyRgbCommand,
     applyRgbRuntimeCommand, []() { return deviceIdentity.value(); });
 
@@ -1160,6 +1170,9 @@ void setup() {
   wifiLab.setComponentTelemetry(collectComponentTelemetry, nullptr);
   wifiLab.setComponentStatus(collectComponentStatus, nullptr);
   wifiLab.setComponentApply(applyComponentPins, nullptr);
+#if COMPI_BUILD_LDR
+  wifiLab.setLdrCalibration(calibrateLdr, nullptr);
+#endif
   wifiLab.begin();
   Serial.print("BOOT: Wi-Fi mode=");
   Serial.print(static_cast<int>(WiFi.getMode()));
