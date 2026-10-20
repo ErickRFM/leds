@@ -37,7 +37,7 @@ class LdrLightModule final : public IModule {
     raw_ = 0;
     filtered_ = 0.0f;
     haveSample_ = false;
-    rawReading_ = {MeasurementType::AdcRaw, MeasurementStatus::Absent, false, 0.0f, "raw", 0};
+    rawReading_ = {MeasurementType::AmbientLightRaw, MeasurementStatus::Absent, false, 0.0f, "raw", 0};
     lightReading_ = {MeasurementType::AmbientLight, MeasurementStatus::NotCalibrated, false, 0.0f, "%", 0};
     return true;
   }
@@ -63,7 +63,7 @@ class LdrLightModule final : public IModule {
     lastSampleMs_ = nowMs;
     const int sample = read_(pin_, context_);
     if (sample < 0 || sample > kAdcMax) {
-      rawReading_ = {MeasurementType::AdcRaw, MeasurementStatus::SensorError,
+      rawReading_ = {MeasurementType::AmbientLightRaw, MeasurementStatus::SensorError,
                      false, 0.0f, "raw", nowMs};
       lightReading_ = {MeasurementType::AmbientLight, MeasurementStatus::SensorError,
                        false, 0.0f, "%", nowMs};
@@ -81,7 +81,7 @@ class LdrLightModule final : public IModule {
     } else {
       filtered_ += (static_cast<float>(raw) - filtered_) / 4.0f;
     }
-    rawReading_ = {MeasurementType::AdcRaw, MeasurementStatus::Fresh, true,
+    rawReading_ = {MeasurementType::AmbientLightRaw, MeasurementStatus::Fresh, true,
                    static_cast<float>(raw), "raw", nowMs};
     if (!calibrated_) {
       lightReading_ = {MeasurementType::AmbientLight,
