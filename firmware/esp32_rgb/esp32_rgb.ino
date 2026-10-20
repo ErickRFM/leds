@@ -30,6 +30,7 @@
 #include "core/ComponentStatus.h"
 #include "core/SensorTelemetry.h"
 #include "core/SensorTelemetryCodec.h"
+#include "core/EnvironmentalRgbPolicy.h"
 #include "modules/Dht22Module.h"
 #include "core/DhtFrameCodec.h"
 #include "core/DhtWireDiagnostics.h"
@@ -333,6 +334,11 @@ bool rgbDirty = false;
 // automation transitions must never overwrite the user's restored preference.
 esp32core::RgbSaved rgbPendingPersist{};
 bool rgbPersistenceAttempted = false;
+// Pure policy, no competing PWM driver. The authenticated Wi-Fi transport
+// controls opt-in mode, and manual BLE/Wi-Fi commands cancel it.
+esp32core::EnvironmentalRgbPolicy environmentRgbPolicy;
+uint32_t lastEnvironmentalRgbAt = 0;
+void stopEnvironmentalRgbOnManual();
 // Legacy BLE stack invokes onWrite on a different task. Never mutate the
 // RGB engine/LED state in that callback; the Arduino loop owns all commands.
 portMUX_TYPE bleInboxMux = portMUX_INITIALIZER_UNLOCKED;
@@ -495,6 +501,8 @@ bool applyRgbCommandInternal(const String& cmd, bool persistManualChoice) {
   line.trim();
   esp32core::RgbCommand command{};
   if (!esp32core::parseRgbCommand(line.c_str(), command)) return false;
+  if (persistManualChoice && command.action != esp32core::RgbAction::Get)
+    stopEnvironmentalRgbOnManual();
   switch (command.action) {
     case esp32core::RgbAction::Get:
       publishState();
@@ -979,6 +987,10 @@ bool calibrateLdr(uint16_t darkRaw, uint16_t brightRaw, void*) {
 esp32core::LocalWifiControl wifiLab(pinManager, stateString, applyRgbCommand,
     applyRgbRuntimeCommand, []() { return deviceIdentity.value(); });
 
+void stopEnvironmentalRgbOnManual() {
+  wifiLab.disableEnvironmentalRgb();
+  environmentRgbPolicy.reset();
+}
 void stopScriptOnManualBle() { wifiLab.stopScriptFromBle(); }
 
 void processEnrollmentFrames() {
@@ -1270,6 +1282,51 @@ void loop() {
   if (oledModule.ready() && moduleRegistry.find(oledModule.id()) == nullptr)
     oledModule.tick(now);
 #endif
+  // Single Arduino loop is the only RGB writer. No BLE ISR or sensor module
+  // writes PWM; mode is opt-in via authorized SoftAP and manual control cancels.
+  if (wifiLab.environmentalRgbMayRun() && rgbModule.ready() &&
+      static_cast<uint32_t>(now - lastEnvironmentalRgbAt) >= 1000u) {
+    lastEnvironmentalRgbAt = now;
+    esp32core::EnvironmentalRgbInput input{};
+#if COMPI_BUILD_DHT11
+    if (dht11Module.ready()) {
+      const auto& measure = dht11Module.temperatureReading();
+      input.temperatureFresh = measure.valid &&
+          measure.status == esp32core::MeasurementStatus::Fresh;
+      input.temperatureC = measure.value;
+      input.temperatureAgeMs = static_cast<uint32_t>(now - measure.timestampMs);
+    }
+#endif
+#if COMPI_BUILD_DHT22
+    if (!input.temperatureFresh && dht22Module.ready()) {
+      const auto& measure = dht22Module.temperatureReading();
+      input.temperatureFresh = measure.valid &&
+          measure.status == esp32core::MeasurementStatus::Fresh;
+      input.temperatureC = measure.value;
+      input.temperatureAgeMs = static_cast<uint32_t>(now - measure.timestampMs);
+    }
+#endif
+#if COMPI_BUILD_LDR
+    if (ldrModule.ready()) {
+      const auto& light = ldrModule.lightReading();
+      input.lightFresh = light.valid &&
+          light.status == esp32core::MeasurementStatus::Fresh;
+      input.lightPercent = light.value;
+      input.lightAgeMs = static_cast<uint32_t>(now - light.timestampMs);
+    }
+#endif
+    const auto decision = environmentRgbPolicy.evaluate(input);
+    // Do not change RGB when temperature is stale or invalid.
+    if (decision.apply &&
+        (!rgb.power || rgb.mode != Mode::NONE || rgb.r != decision.red ||
+         rgb.g != decision.green || rgb.b != decision.blue ||
+         rgb.brightness != decision.brightness)) {
+      const String command = "SET," + String(decision.red) + "," +
+          String(decision.green) + "," + String(decision.blue) + "," +
+          String(decision.brightness);
+      applyRgbRuntimeCommand(command);  // never persists a temporary color
+    }
+  }
   persistRgbIfDue(now);
   // Read-only electrical/protocol evidence on the USB serial monitor (115200).
   // Do not toggle GPIO16/17 to "test" while a sensor is attached.
