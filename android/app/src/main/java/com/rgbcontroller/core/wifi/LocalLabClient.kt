@@ -85,6 +85,21 @@ class LocalLabClient(private val context: Context) {
     suspend fun componentStatus(key: String): JSONObject =
         request("GET", "/v2/components/status", key)
 
+    /** The LDR needs a real 3.3V divider and two distinct ADC1 references.
+     * Calibration is runtime-only and requires the existing SoftAP authorization.
+     */
+    suspend fun calibrateLdr(key: String, darkRaw: Int, brightRaw: Int): JSONObject {
+        require(darkRaw in 0..4095 && brightRaw in 0..4095 &&
+            brightRaw - darkRaw >= 32) { "Captura primero oscuridad y claridad diferentes." }
+        val response = request("POST", "/v2/components/ldr/calibrate", key, mapOf(
+            "darkRaw" to darkRaw.toString(), "brightRaw" to brightRaw.toString()
+        ))
+        check(response.optString("status") == "CALIBRATED" &&
+            response.optBoolean("runtimeOnly")) { "El ESP32 no confirmó la calibración LDR." }
+        return response
+    }
+
+
     /**
      * Only acknowledges a runtime GPIO change after an independent firmware
      * readback. A successful HTTP 200 alone is not proof of a new assignment.
@@ -97,6 +112,7 @@ class LocalLabClient(private val context: Context) {
             "dht11" to "sensor.dht11",
             "dht22" to "sensor.dht22",
             "soil_moisture" to "sensor.soil_moisture",
+            "ldr_light" to "sensor.ldr_light",
             "ssd1306_oled" to "display.ssd1306",
             "led_rgb" to "led.rgb"
         )
