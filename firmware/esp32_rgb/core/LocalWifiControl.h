@@ -41,6 +41,8 @@ class LocalWifiControl final {
                                    uint8_t to1, uint8_t to2, uint8_t from3,
                                    uint8_t to3, void* context);
 
+  using LdrCalibration = bool (*)(uint16_t darkRaw, uint16_t brightRaw, void* context);
+
   LocalWifiControl(PinManager& pins, RgbState state, RgbCommand manualCommand,
                    RgbCommand runtimeCommand, DeviceId deviceId)
       : pins_(pins), rgbState_(state), rgbCommand_(manualCommand),
@@ -59,6 +61,11 @@ class LocalWifiControl final {
   void setComponentApply(ComponentApply apply, void* context) {
     apply_ = apply;
     applyContext_ = context;
+  }
+
+  void setLdrCalibration(LdrCalibration calibrate, void* context) {
+    ldrCalibration_ = calibrate;
+    ldrCalibrationContext_ = context;
   }
 
   // Independent LAB HTTP access key, printed only to physical serial.
@@ -166,7 +173,7 @@ class LocalWifiControl final {
 
     server_.on("/v2/components/catalog", HTTP_GET, [this]() {
       if (!authorized()) return;
-      char body[384];
+      char body[1024];
       if (!encodeCatalog(body, sizeof(body))) {
         jsonError(500, "catalog_encode_failed");
         return;
@@ -182,6 +189,30 @@ class LocalWifiControl final {
         return;
       }
       server_.send(200, "application/json", body);
+    });
+
+    server_.on("/v2/components/ldr/calibrate", HTTP_POST, [this]() {
+      if (!authorized()) return;
+      if (ldrCalibration_ == nullptr || script_.active() ||
+          experiment_.active() || automation_.active() || hasManual()) {
+        jsonError(409, "ldr_calibration_unavailable_or_busy");
+        return;
+      }
+      int dark = -1, bright = -1;
+      if (!parseInt("darkRaw", 0, 4095, dark) ||
+          !parseInt("brightRaw", 0, 4095, bright) ||
+          dark >= bright || bright - dark < 32) {
+        jsonError(400, "invalid_ldr_calibration");
+        return;
+      }
+      if (!ldrCalibration_(static_cast<uint16_t>(dark),
+                           static_cast<uint16_t>(bright),
+                           ldrCalibrationContext_)) {
+        jsonError(409, "ldr_calibration_rejected");
+        return;
+      }
+      server_.send(200, "application/json",
+                   "{\"status\":\"CALIBRATED\",\"runtimeOnly\":true}");
     });
 
     server_.on("/v2/components/status", HTTP_GET, [this]() {
@@ -662,6 +693,8 @@ class LocalWifiControl final {
   void* statusContext_ = nullptr;
   ComponentApply apply_ = nullptr;
   void* applyContext_ = nullptr;
+  LdrCalibration ldrCalibration_ = nullptr;
+  void* ldrCalibrationContext_ = nullptr;
   ComponentApplyReplayGuard replayGuard_;
   Preferences prefs_;
   WebServer server_{80};
