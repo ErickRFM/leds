@@ -21,9 +21,11 @@ class EnvironmentalSpeechFormatterTest {
             ), includeDht = true, includeLight = true
         )
         assertTrue(report.hasFreshData)
-        assertTrue(report.text.contains("22,3"))
-        assertTrue(report.text.contains("60,0"))
-        assertTrue(report.text.contains("35,0"))
+        // es-MX may use '.' while other Spanish locales use ',' as decimal separator.
+        val normalized = report.text.replace(',', '.')
+        assertTrue(normalized.contains("22.3"))
+        assertTrue(normalized.contains("60.0"))
+        assertTrue(normalized.contains("35.0"))
     }
 
     @Test fun rejectsStaleInvalidAndUncalibratedValues() {
