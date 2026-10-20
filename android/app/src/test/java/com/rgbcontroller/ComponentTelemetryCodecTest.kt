@@ -141,6 +141,15 @@ class ComponentTelemetryCodecTest {
             """{"version":1,"measurements":[{"type":"adc_raw","status":"fresh","valid":true,"value":2500,"unit":"raw","timestampMs":1}]}"""
         )
         assertEquals(ComponentState.ACTIVE, ComponentTelemetryCodec.stateFor("soil_moisture", decoded))
-        assertEquals(ComponentState.ACTIVE, ComponentTelemetryCodec.stateFor("ldr_light", decoded))
+        // Soil ADC must never impersonate the LDR ADC channel.
+        assertEquals(ComponentState.NO_DATA, ComponentTelemetryCodec.stateFor("ldr_light", decoded))
+        val ldr = ComponentTelemetryCodec.decode(
+            """{"version":1,"measurements":[
+                {"type":"ambient_light_raw","status":"fresh","valid":true,"value":1800,"unit":"raw","timestampMs":2},
+                {"type":"ambient_light","status":"not_calibrated","valid":false,"value":0,"unit":"%","timestampMs":2}
+            ]}"""
+        )
+        assertEquals(ComponentState.ACTIVE, ComponentTelemetryCodec.stateFor("ldr_light", ldr))
+        assertEquals(ComponentState.NO_DATA, ComponentTelemetryCodec.stateFor("soil_moisture", ldr))
     }
 }
