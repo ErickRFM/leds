@@ -23,6 +23,7 @@ import com.rgbcontroller.core.wifi.LabConnectionState
 import com.rgbcontroller.core.wifi.LabTransport
 import com.rgbcontroller.core.wifi.LocalLabClient
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Acknowledged firmware mode, not a local animation or a fake RGB timer. */
@@ -41,20 +42,28 @@ fun EnvironmentalRgbControlCard(session: CompiLabSession, client: LocalLabClient
             message = "Para automatizar el ESP32, conéctate al Wi-Fi local autorizado."
             return@LaunchedEffect
         }
-        try {
-            val version = session.revision
-            val key = session.key
-            val result = session.serialized { client.environmentalRgbStatus(key) }
-            if (authorized && session.revision == version) {
-                enabled = result.optBoolean("enabled")
-                message = if (enabled) "Modo configurado. Solo actuará con temperatura vigente."
-                    else "Modo manual; puedes activar iluminación ambiental."
+        // Read back mode during this visible screen's lifetime: a manual BLE or
+        // Wi-Fi command can legitimately cancel automation behind this UI.
+        while (true) {
+            try {
+                if (!busy) {
+                    val version = session.revision
+                    val key = session.key
+                    val result = session.serialized { client.environmentalRgbStatus(key) }
+                    if (authorized && session.revision == version && !busy) {
+                        enabled = result.optBoolean("enabled")
+                        message = if (enabled)
+                            "Modo habilitado. Solo cambia colores con temperatura válida."
+                        else "Modo manual; puedes activar iluminación ambiental."
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                enabled = false
+                message = "No se confirmó el modo ambiental: ${failure.message}"
             }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (failure: Exception) {
-            enabled = false
-            message = "No se confirmó el modo ambiental: ${failure.message}"
+            delay(3_500L)
         }
     }
 
