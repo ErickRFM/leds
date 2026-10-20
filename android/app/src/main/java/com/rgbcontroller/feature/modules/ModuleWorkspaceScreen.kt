@@ -513,7 +513,7 @@ fun ModuleWorkspaceScreen(
         ModulePinWizard(
             componentId = id,
             canApply = wifiAuthorized && currentlyVerified && current != null &&
-                id in setOf("dht11", "dht22", "soil_moisture", "ssd1306_oled", "led_rgb"),
+                id in setOf("dht11", "dht22", "soil_moisture", "ldr_light", "ssd1306_oled", "led_rgb"),
             applying = applying,
             applyMessage = applyMessage,
             onApply = { pins ->
