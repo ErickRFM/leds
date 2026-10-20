@@ -93,6 +93,7 @@ fun ModuleWorkspaceScreen(
     var openedId by rememberSaveable { mutableStateOf<String?>(null) }
     var editingId by remember { mutableStateOf<String?>(null) }
     var applyMessage by remember { mutableStateOf<String?>(null) }
+    var ldrCalibrationMessage by remember { mutableStateOf<String?>(null) }
     var applying by remember { mutableStateOf(false) }
     // Physical Back should close a nested component editor/detail before leaving Modules.
     BackHandler(enabled = editingId != null || openedId != null) {
@@ -209,7 +210,38 @@ fun ModuleWorkspaceScreen(
                     }
                     // Real measurements and history must be visible before GPIO wiring.
                     item(key = "module_metrics_$id") {
-                        ModuleReadings(id, state, onRefresh = { scope.launch { vm.refresh() } })
+                        ModuleReadings(
+                            id, state, onRefresh = { scope.launch { vm.refresh() } },
+                            canCalibrateLdr = wifiAuthorized,
+                            calibrationMessage = ldrCalibrationMessage,
+                            onCalibrateLdr = { dark, bright ->
+                                scope.launch {
+                                    ldrCalibrationMessage = "Aplicando calibración en el ESP32…"
+                                    try {
+                                        check(wifiAuthorized) { "Conecta al Wi-Fi autorizado." }
+                                        val revision = session.revision
+                                        val key = session.key
+                                        session.serialized {
+                                            check(wifiAuthorized && session.revision == revision) {
+                                                "Cambió la conexión antes de calibrar."
+                                            }
+                                            labClient.calibrateLdr(key, dark, bright)
+                                        }
+                                        check(wifiAuthorized && session.revision == revision) {
+                                            "La sesión cambió; vuelve a comprobar la calibración."
+                                        }
+                                        delay(650L)
+                                        vm.refresh()
+                                        ldrCalibrationMessage = "Calibración recibida por el ESP32. " +
+                                            "Se perderá al reiniciar; comprueba el porcentaje en vivo."
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
+                                    } catch (failure: Exception) {
+                                        ldrCalibrationMessage = "No se calibró: ${failure.message}"
+                                    }
+                                }
+                            }
+                        )
                     }
                     val savedPins = state.desiredConfig.components
                         .firstOrNull { it.id == id }?.pins
@@ -481,7 +513,7 @@ fun ModuleWorkspaceScreen(
         ModulePinWizard(
             componentId = id,
             canApply = wifiAuthorized && currentlyVerified && current != null &&
-                id in setOf("dht11", "dht22", "soil_moisture", "ssd1306_oled", "led_rgb"),
+                id in setOf("dht11", "dht22", "soil_moisture", "ldr_light", "ssd1306_oled", "led_rgb"),
             applying = applying,
             applyMessage = applyMessage,
             onApply = { pins ->
@@ -638,7 +670,10 @@ private fun ModuleRuntimeCard(
 private fun ModuleReadings(
     id: String,
     state: ComponentDashboardState,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    canCalibrateLdr: Boolean = false,
+    calibrationMessage: String? = null,
+    onCalibrateLdr: (Int, Int) -> Unit = { _, _ -> }
 ) {
     val live = state.telemetryFreshness == ComponentStatusFreshness.LIVE &&
         state.authorityError == null && state.connected
@@ -668,6 +703,80 @@ private fun ModuleReadings(
                     staleAfterMs = windowMs, disconnected = !live
                 )
                 TelemetryChartCard("Historial de humedad del suelo", geometry, live)
+            }
+        }
+        "ldr_light" -> {
+            var darkReference by remember { mutableStateOf<Int?>(null) }
+            var brightReference by remember { mutableStateOf<Int?>(null) }
+            val light = if (active && live) reading("ambient_light")?.value else null
+            val raw = if (active && live) reading("ambient_light_raw")?.value?.toInt() else null
+            val status = ComponentTelemetryCodec.find(measurements.orEmpty(), "ambient_light")?.status
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Card(Modifier.fillMaxWidth().testTag("ldr_light_readings")) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Luz ambiental · LDR", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            if (light != null) "Iluminación relativa: %.1f %%".format(java.util.Locale.ROOT, light)
+                            else "Iluminación relativa: —",
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.testTag("ldr_light_percent")
+                        )
+                        Text(
+                            when {
+                                !live -> "Sin telemetría en vivo; no se presentan valores almacenados como actuales."
+                                !active -> "El firmware no tiene un GPIO ADC1 activo para este módulo."
+                                status == "not_calibrated" -> "ADC activo, falta calibrar referencias de oscuridad y claridad."
+                                status == "sensor_error" || status == "invalid" -> "Lectura ADC inválida. Comprueba el divisor de 3.3 V y el cableado."
+                                light != null -> "Porcentaje calibrado: es una escala relativa, no lux."
+                                else -> "Esperando una lectura calibrada y válida."
+                            },
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Text("ADC1 crudo: ${raw?.toString() ?: "—"} (0–4095)",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.testTag("ldr_light_raw"))
+                        OutlinedButton(onClick = onRefresh) { Text("Actualizar lectura") }
+                        Text("Calibración relativa: cubre el sensor, captura oscuridad; " +
+                            "después ilumínalo y captura claridad. Requiere Wi-Fi autorizado.",
+                            style = MaterialTheme.typography.bodySmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = { darkReference = raw },
+                                enabled = canCalibrateLdr && raw != null,
+                                modifier = Modifier.weight(1f).testTag("ldr_capture_dark")
+                            ) { Text("Oscuridad") }
+                            OutlinedButton(
+                                onClick = { brightReference = raw },
+                                enabled = canCalibrateLdr && raw != null,
+                                modifier = Modifier.weight(1f).testTag("ldr_capture_bright")
+                            ) { Text("Claridad") }
+                        }
+                        Text("Referencia oscura: ${darkReference ?: "—"} · clara: ${brightReference ?: "—"}",
+                             style = MaterialTheme.typography.bodySmall)
+                        Button(
+                            enabled = canCalibrateLdr && darkReference != null &&
+                                brightReference != null &&
+                                brightReference!! - darkReference!! >= 32,
+                            onClick = {
+                                val dark = darkReference
+                                val bright = brightReference
+                                if (dark != null && bright != null) onCalibrateLdr(dark, bright)
+                            },
+                            modifier = Modifier.fillMaxWidth().testTag("ldr_apply_calibration")
+                        ) { Text("Aplicar calibración") }
+                        if (calibrationMessage != null) {
+                            Text(calibrationMessage, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+                val windowMs = TelemetryChart.DEFAULT_WINDOW_MS
+                val geometry = TelemetryChart.build(
+                    "ldr_light", "ambient_light",
+                    state.series("ldr_light", "ambient_light"),
+                    nowMs = System.currentTimeMillis(), windowMs = windowMs,
+                    staleAfterMs = windowMs, disconnected = !live
+                )
+                TelemetryChartCard("Historial de luz relativa", geometry, live)
             }
         }
         else -> Card(Modifier.fillMaxWidth()) {

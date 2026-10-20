@@ -15,6 +15,7 @@ constexpr uint16_t kCapTemperature = 1u << 1;
 constexpr uint16_t kCapSoilMoisture = 1u << 2;
 constexpr uint16_t kCapRgb = 1u << 3;
 constexpr uint16_t kCapDisplay = 1u << 4;
+constexpr uint16_t kCapAmbientLight = 1u << 5;
 
 struct ComponentCatalogEntry {
   const char* id;
@@ -33,6 +34,8 @@ inline constexpr ComponentCatalogEntry kCatalog[] = {
      kCapHumidity | kCapTemperature, true},
     {"soil_moisture", "Soil moisture", ComponentType::Sensor, HardwareInterface::Adc, 34,
      kCapSoilMoisture, true},
+    {"ldr_light", "LDR Light", ComponentType::Sensor, HardwareInterface::Adc, 36,
+     kCapAmbientLight, true},
     {"led_rgb", "RGB LED", ComponentType::Actuator, HardwareInterface::Pwm, 27,
      kCapRgb, true},
     {"ssd1306_oled", "SSD1306 OLED", ComponentType::Display, HardwareInterface::I2c, 0x3C,

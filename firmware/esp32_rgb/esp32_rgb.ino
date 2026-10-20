@@ -35,6 +35,7 @@
 #include "core/DhtWireDiagnostics.h"
 #include "core/DhtProbeCore.h"
 #include "modules/SoilMoistureModule.h"
+#include "modules/LdrLightModule.h"
 #include "modules/OledSsd1306Module.h"
 
 // ---------------------------------------------------------------------------
@@ -78,6 +79,17 @@
 #endif
 #ifndef COMPI_SOIL_PIN
 #define COMPI_SOIL_PIN 34
+#endif
+#ifndef COMPI_BUILD_LDR
+#define COMPI_BUILD_LDR 1
+#endif
+#ifndef COMPI_ENABLE_LDR
+// An ADC lease alone does not prove a physical LDR is connected.
+// Start only after explicit authorized configuration via /components/apply.
+#define COMPI_ENABLE_LDR 0
+#endif
+#ifndef COMPI_LDR_PIN
+#define COMPI_LDR_PIN 36
 #endif
 #ifndef COMPI_ENABLE_OLED
 #define COMPI_ENABLE_OLED 0
@@ -283,6 +295,9 @@ esp32core::Dht22Module::Reading dht22Read(void*) {
 #if COMPI_BUILD_SOIL
 int soilAdcRead(uint8_t pin, void*) { return analogRead(pin); }
 #endif  // COMPI_ENABLE_SOIL
+#if COMPI_BUILD_LDR
+int ldrAdcRead(uint8_t pin, void*) { return analogRead(pin); }
+#endif
 
 #if COMPI_BUILD_OLED
 #include <Wire.h>
@@ -626,6 +641,9 @@ esp32core::Dht22Module dht22Module(COMPI_DHT22_PIN, dht22Read, nullptr, 2000);
 #if COMPI_BUILD_SOIL
 esp32core::SoilMoistureModule soilModule(COMPI_SOIL_PIN, soilAdcRead, nullptr, 1000);
 #endif
+#if COMPI_BUILD_LDR
+esp32core::LdrLightModule ldrModule(COMPI_LDR_PIN, ldrAdcRead, nullptr, 500);
+#endif
 #if COMPI_BUILD_OLED && COMPI_OLED_LIBRARY
 esp32core::OledSsd1306Module oledModule(COMPI_OLED_ADDRESS, COMPI_OLED_SDA,
     COMPI_OLED_SCL, oledInit, oledPresent, nullptr, 250);
@@ -653,6 +671,12 @@ bool collectComponentTelemetry(char* output, size_t capacity, void*) {
   if (soilModule.ready()) {
     entries[count++] = soilModule.rawReading();
     entries[count++] = soilModule.moistureReading();
+  }
+#endif
+#if COMPI_BUILD_LDR
+  if (ldrModule.ready()) {
+    entries[count++] = ldrModule.rawReading();
+    entries[count++] = ldrModule.lightReading();
   }
 #endif
   return esp32core::SensorTelemetryCodec::encode(entries, count, output, capacity);
@@ -721,6 +745,20 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
     entry.interfaceType = esp32core::HardwareInterface::Adc;
     entry.pins[0] = soilModule.pin();
     entry.active = soilModule.ready();
+    entry.pinCount = entry.active ? 1 : 0;
+    entry.state = entry.active ? esp32core::ComponentState::Active
+                               : esp32core::ComponentState::Catalog;
+  }
+#endif
+#if COMPI_BUILD_LDR
+  {
+    esp32core::ComponentStatusEntry& entry = entries[count++];
+    entry = {};
+    entry.id = ldrModule.id();
+    entry.type = esp32core::ComponentType::Sensor;
+    entry.interfaceType = esp32core::HardwareInterface::Adc;
+    entry.pins[0] = ldrModule.pin();
+    entry.active = ldrModule.ready();
     entry.pinCount = entry.active ? 1 : 0;
     entry.state = entry.active ? esp32core::ComponentState::Active
                                : esp32core::ComponentState::Catalog;
@@ -884,6 +922,23 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
     return false;
   }
 #endif
+#if COMPI_BUILD_LDR
+  if (std::strcmp(catalogId, "ldr_light") == 0) {
+    if (from2 != 0 || to2 != 0 || from3 != 0 || to3 != 0 ||
+        esp32core::PinManager::reservedForRgb(to1) ||
+        !esp32core::PinManager::analogInputCapable(to1) ||
+        !available(to1, ldrModule.id())) return false;
+    const bool wasReady = ldrModule.ready();
+    const uint8_t oldPin = ldrModule.pin();
+    if ((wasReady ? oldPin : 0) != from1) return false;
+    if (wasReady && from1 == to1) return true;
+    if (wasReady) ldrModule.stop(pinManager);
+    if (ldrModule.configurePin(to1) && ldrModule.begin(pinManager)) return true;
+    ldrModule.configurePin(oldPin);
+    if (wasReady) ldrModule.begin(pinManager);
+    return false;
+  }
+#endif
 #if COMPI_BUILD_OLED && COMPI_OLED_LIBRARY
   if (std::strcmp(catalogId, "ssd1306_oled") == 0) {
     if (to1 == to2 || esp32core::PinManager::reservedForRgb(to1) ||
@@ -910,6 +965,16 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
 #endif
   return false;  // Build did not include this optional physical component.
 }
+
+#if COMPI_BUILD_LDR
+bool calibrateLdr(uint16_t darkRaw, uint16_t brightRaw, void*) {
+  // GPIO ownership and actual ADC sampling are required for calibration.
+  return ldrModule.ready() &&
+         pinManager.belongsTo(ldrModule.pin(), ldrModule.id()) &&
+         ldrModule.rawReading().valid &&
+         ldrModule.setCalibration(darkRaw, brightRaw);
+}
+#endif
 
 esp32core::LocalWifiControl wifiLab(pinManager, stateString, applyRgbCommand,
     applyRgbRuntimeCommand, []() { return deviceIdentity.value(); });
@@ -1083,6 +1148,9 @@ void setup() {
 #if COMPI_ENABLE_SOIL
   moduleRegistry.add(soilModule);
 #endif
+#if COMPI_ENABLE_LDR && COMPI_BUILD_LDR
+  moduleRegistry.add(ldrModule);
+#endif
 #if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
   moduleRegistry.add(oledModule);
 #endif
@@ -1102,6 +1170,9 @@ void setup() {
   wifiLab.setComponentTelemetry(collectComponentTelemetry, nullptr);
   wifiLab.setComponentStatus(collectComponentStatus, nullptr);
   wifiLab.setComponentApply(applyComponentPins, nullptr);
+#if COMPI_BUILD_LDR
+  wifiLab.setLdrCalibration(calibrateLdr, nullptr);
+#endif
   wifiLab.begin();
   Serial.print("BOOT: Wi-Fi mode=");
   Serial.print(static_cast<int>(WiFi.getMode()));
@@ -1190,6 +1261,10 @@ void loop() {
 #if COMPI_BUILD_SOIL
   if (soilModule.ready() && moduleRegistry.find(soilModule.id()) == nullptr)
     soilModule.tick(now);
+#endif
+#if COMPI_BUILD_LDR
+  if (ldrModule.ready() && moduleRegistry.find(ldrModule.id()) == nullptr)
+    ldrModule.tick(now);
 #endif
 #if COMPI_BUILD_OLED && COMPI_OLED_LIBRARY
   if (oledModule.ready() && moduleRegistry.find(oledModule.id()) == nullptr)

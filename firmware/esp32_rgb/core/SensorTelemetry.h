@@ -12,6 +12,8 @@ enum class MeasurementType : uint8_t {
   SoilMoisture,
   AdcRaw,
   RgbState,
+  AmbientLight,
+  AmbientLightRaw,
 };
 
 // Status is deliberately separate from the numeric value. A consumer must never
@@ -43,6 +45,8 @@ constexpr const char* measurementTypeName(MeasurementType type) {
     case MeasurementType::SoilMoisture: return "soil_moisture";
     case MeasurementType::AdcRaw: return "adc_raw";
     case MeasurementType::RgbState: return "rgb_state";
+    case MeasurementType::AmbientLight: return "ambient_light";
+    case MeasurementType::AmbientLightRaw: return "ambient_light_raw";
   }
   return "none";
 }

@@ -14,6 +14,7 @@
 #include "../firmware/esp32_rgb/modules/Dht22Module.h"
 #include "../firmware/esp32_rgb/core/DhtFrameCodec.h"
 #include "../firmware/esp32_rgb/core/DhtWireDiagnostics.h"
+#include "../firmware/esp32_rgb/modules/LdrLightModule.h"
 #include "../firmware/esp32_rgb/modules/OledSsd1306Module.h"
 #include "../firmware/esp32_rgb/modules/SoilMoistureModule.h"
 
@@ -76,6 +77,8 @@ int main() {
   assert(std::strcmp(componentStateName(ComponentState::Detected), "detected") == 0);
   assert(std::strcmp(interfaceName(HardwareInterface::Adc), "adc") == 0);
   assert(std::strcmp(measurementTypeName(MeasurementType::SoilMoisture), "soil_moisture") == 0);
+  assert(std::strcmp(measurementTypeName(MeasurementType::AmbientLight), "ambient_light") == 0);
+  assert(std::strcmp(measurementTypeName(MeasurementType::AmbientLightRaw), "ambient_light_raw") == 0);
   assert(std::strcmp(measurementStatusName(MeasurementStatus::NotCalibrated), "not_calibrated") == 0);
 
   // --- Telemetry codec: bounded, NaN-safe, status-preserving ---------------
@@ -95,6 +98,13 @@ int main() {
     assert(std::strstr(encoded, "\"valid\":false") != nullptr);
     assert(std::strstr(encoded, "\"status\":\"invalid\"") != nullptr);
 
+    Measurement uncalibrated{MeasurementType::AmbientLight,
+                             MeasurementStatus::NotCalibrated, false, 0.0f, "%", 42};
+    char diagnostic[180] = {};
+    assert(SensorTelemetryCodec::encode(&uncalibrated, 1, diagnostic, sizeof(diagnostic)));
+    assert(std::strstr(diagnostic, "\"status\":\"not_calibrated\"") != nullptr);
+    assert(std::strstr(diagnostic, "\"valid\":false") != nullptr);
+
     char tiny[16] = {};
     assert(!SensorTelemetryCodec::encode(&good, 1, tiny, sizeof(tiny)));
     assert(!SensorTelemetryCodec::encode(nullptr, 0, nullptr, 0));
@@ -106,13 +116,16 @@ int main() {
     DhtDouble sensor;
     Dht22Module dht(32, readDht, &sensor);
     SoilMoistureModule soil(34, readAdc, nullptr);
+    LdrLightModule ldr(36, readAdc, nullptr);
     OledDouble displayDriver;
     OledSsd1306Module display(0x3C, 21, 22, oledInit, oledPresent, &displayDriver);
     assert(dht.begin(pins));
     assert(soil.begin(pins));
+    assert(ldr.begin(pins));
     assert(display.begin(pins));
     assert(!dht.configurePin(18)); // active module cannot move
     assert(!soil.configurePin(35));
+    assert(!ldr.configurePin(39));
     assert(!display.configurePins(18, 19));
     dht.stop(pins);
     assert(!dht.configurePin(25)); // RGB reserved even when not leased
@@ -145,8 +158,62 @@ int main() {
     assert(pins.belongsTo(23, display.id()));
     dht.stop(pins);
     soil.stop(pins);
+    ldr.stop(pins);
     display.stop(pins);
     assert(pins.leasedCount() == 0);
+  }
+
+  // --- LDR Light Sensor -----------------------------------------------------
+  {
+    PinManager pins;
+    assert(!LdrLightModule(18, readAdc, nullptr).begin(pins));  // not ADC1
+
+    AdcDouble adc;
+    LdrLightModule ldr(36, readAdc, &adc, 500);
+    assert(ldr.begin(pins));
+    assert(pins.belongsTo(36, "sensor.ldr_light"));
+
+    // Without calibration, raw is fresh, percentage is NotCalibrated
+    assert(ldr.applySample(1000, 100));
+    assert(ldr.lightReading().status == MeasurementStatus::NotCalibrated);
+    assert(!ldr.lightReading().valid);
+    assert(ldr.rawReading().valid);
+    assert(ldr.rawReading().value == 1000.0f);
+    assert(!ldr.calibrated());
+
+    // Invalid calibration rejected
+    assert(!ldr.setCalibration(4000, 1000));  // backwards for 3V3->LDR->ADC->GND
+    assert(!ldr.setCalibration(1000, 1015));  // too little contrast
+    assert(!ldr.setCalibration(2000, 2000));
+    assert(!ldr.setCalibration(5000, 1000));
+
+    // Dark reference (500) -> 0%, Bright reference (3500) -> 100%
+    assert(ldr.setCalibration(500, 3500));
+    assert(ldr.calibrated());
+
+    for (int i = 0; i < 40; ++i) ldr.applySample(500, 200 + i);
+    assert(std::fabs(ldr.lightReading().value - 0.0f) < 1.0f);
+    assert(ldr.lightReading().valid);
+
+    for (int i = 0; i < 40; ++i) ldr.applySample(3500, 300 + i);
+    assert(std::fabs(ldr.lightReading().value - 100.0f) < 1.0f);
+    assert(ldr.lightReading().valid);
+
+    ldr.clearCalibration();
+    ldr.applySample(1000, 20000);
+    assert(ldr.lightReading().status == MeasurementStatus::NotCalibrated);
+
+    // Failed ADC read never becomes a valid temperature/light automation input.
+    adc.value = -1;
+    ldr.tick(100000);
+    assert(ldr.lightReading().status == MeasurementStatus::SensorError);
+    assert(!ldr.lightReading().valid);
+    adc.value = 2300;
+    ldr.tick(101000);
+    assert(ldr.rawReading().valid);
+
+    ldr.stop(pins);
+    assert(pins.lease(36) == nullptr);
   }
 
   // Read high-pulse width accurately; never silently decode noise as data.
