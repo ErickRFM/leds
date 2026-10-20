@@ -43,6 +43,7 @@ object PinAssignmentPolicy {
         ModuleWiringProfile("dht11", listOf(signal("Datos · DATA", generalOutputs, 16))),
         ModuleWiringProfile("dht22", listOf(signal("Datos · DATA", generalOutputs, 32))),
         ModuleWiringProfile("soil_moisture", listOf(signal("Salida analógica · ADC1", adc1Inputs, 34))),
+        ModuleWiringProfile("ldr_light", listOf(signal("Fotorresistencia · ADC1", adc1Inputs, 36))),
         ModuleWiringProfile("ssd1306_oled", listOf(
             signal("Datos I²C · SDA", generalOutputs, 21),
             signal("Reloj I²C · SCL", generalOutputs, 22)
