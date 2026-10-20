@@ -176,7 +176,7 @@ class LocalWifiControl final {
 
     server_.on("/v2/components/telemetry", HTTP_GET, [this]() {
       if (!authorized()) return;
-      char body[640];
+      char body[1024];
       if (telemetry_ == nullptr || !telemetry_(body, sizeof(body), telemetryContext_)) {
         jsonError(503, "telemetry_unavailable");
         return;
