@@ -78,6 +78,7 @@ int main() {
   assert(std::strcmp(interfaceName(HardwareInterface::Adc), "adc") == 0);
   assert(std::strcmp(measurementTypeName(MeasurementType::SoilMoisture), "soil_moisture") == 0);
   assert(std::strcmp(measurementTypeName(MeasurementType::AmbientLight), "ambient_light") == 0);
+  assert(std::strcmp(measurementTypeName(MeasurementType::AmbientLightRaw), "ambient_light_raw") == 0);
   assert(std::strcmp(measurementStatusName(MeasurementStatus::NotCalibrated), "not_calibrated") == 0);
 
   // --- Telemetry codec: bounded, NaN-safe, status-preserving ---------------
@@ -96,6 +97,13 @@ int main() {
     assert(SensorTelemetryCodec::encode(&nan, 1, encoded, sizeof(encoded)));
     assert(std::strstr(encoded, "\"valid\":false") != nullptr);
     assert(std::strstr(encoded, "\"status\":\"invalid\"") != nullptr);
+
+    Measurement uncalibrated{MeasurementType::AmbientLight,
+                             MeasurementStatus::NotCalibrated, false, 0.0f, "%", 42};
+    char diagnostic[180] = {};
+    assert(SensorTelemetryCodec::encode(&uncalibrated, 1, diagnostic, sizeof(diagnostic)));
+    assert(std::strstr(diagnostic, "\"status\":\"not_calibrated\"") != nullptr);
+    assert(std::strstr(diagnostic, "\"valid\":false") != nullptr);
 
     char tiny[16] = {};
     assert(!SensorTelemetryCodec::encode(&good, 1, tiny, sizeof(tiny)));
@@ -174,6 +182,8 @@ int main() {
     assert(!ldr.calibrated());
 
     // Invalid calibration rejected
+    assert(!ldr.setCalibration(4000, 1000));  // backwards for 3V3->LDR->ADC->GND
+    assert(!ldr.setCalibration(1000, 1015));  // too little contrast
     assert(!ldr.setCalibration(2000, 2000));
     assert(!ldr.setCalibration(5000, 1000));
 
@@ -192,6 +202,15 @@ int main() {
     ldr.clearCalibration();
     ldr.applySample(1000, 20000);
     assert(ldr.lightReading().status == MeasurementStatus::NotCalibrated);
+
+    // Failed ADC read never becomes a valid temperature/light automation input.
+    adc.value = -1;
+    ldr.tick(100000);
+    assert(ldr.lightReading().status == MeasurementStatus::SensorError);
+    assert(!ldr.lightReading().valid);
+    adc.value = 2300;
+    ldr.tick(101000);
+    assert(ldr.rawReading().valid);
 
     ldr.stop(pins);
     assert(pins.lease(36) == nullptr);
