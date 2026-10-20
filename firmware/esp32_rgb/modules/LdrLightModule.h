@@ -44,7 +44,8 @@ class LdrLightModule final : public IModule {
 
   // Calibration: darkRaw (lower ADC value) and brightRaw (higher ADC value)
   bool setCalibration(uint16_t darkRaw, uint16_t brightRaw) {
-    if (darkRaw > kAdcMax || brightRaw > kAdcMax || darkRaw == brightRaw) return false;
+    if (darkRaw > kAdcMax || brightRaw > kAdcMax ||
+        darkRaw >= brightRaw || brightRaw - darkRaw < kMinCalibrationSpan) return false;
     darkRaw_ = darkRaw;
     brightRaw_ = brightRaw;
     calibrated_ = true;
@@ -60,11 +61,19 @@ class LdrLightModule final : public IModule {
       return;
     }
     lastSampleMs_ = nowMs;
-    applySample(clampRaw(read_(pin_, context_)), nowMs);
+    const int sample = read_(pin_, context_);
+    if (sample < 0 || sample > kAdcMax) {
+      rawReading_ = {MeasurementType::AdcRaw, MeasurementStatus::SensorError,
+                     false, 0.0f, "raw", nowMs};
+      lightReading_ = {MeasurementType::AmbientLight, MeasurementStatus::SensorError,
+                       false, 0.0f, "%", nowMs};
+      return;
+    }
+    applySample(static_cast<uint16_t>(sample), nowMs);
   }
 
   bool applySample(uint16_t raw, uint32_t nowMs) {
-    if (!ready_) return false;
+    if (!ready_ || raw > kAdcMax) return false;
     raw_ = raw;
     if (!haveSample_) {
       filtered_ = static_cast<float>(raw);
@@ -89,9 +98,14 @@ class LdrLightModule final : public IModule {
     manager.release(pin_, id());
     ready_ = false;
     haveSample_ = false;
+    rawReading_.status = MeasurementStatus::Absent;
+    rawReading_.valid = false;
+    lightReading_.status = MeasurementStatus::Absent;
+    lightReading_.valid = false;
   }
 
   static constexpr uint16_t kAdcMax = 4095;
+  static constexpr uint16_t kMinCalibrationSpan = 32;
 
   bool configurePin(uint8_t next) {
     if (ready_ || !PinManager::analogInputCapable(next) ||
