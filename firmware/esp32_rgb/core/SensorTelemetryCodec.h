@@ -27,13 +27,20 @@ struct SensorTelemetryCodec {
     used = static_cast<size_t>(written);
     for (size_t i = 0; i < count; ++i) {
       const Measurement& m = entries[i];
-      const bool valid = m.valid && finite(m.value);
+      // Absent, stale and not_calibrated must retain their diagnostic status:
+      // invalidating every false-valued reading previously hid calibration UI.
+      const bool numericOk = finite(m.value);
+      const bool valid = m.valid && m.status == MeasurementStatus::Fresh && numericOk;
+      const MeasurementStatus status = numericOk
+          ? (m.status == MeasurementStatus::Fresh && !valid
+                ? MeasurementStatus::Invalid : m.status)
+          : MeasurementStatus::Invalid;
       written = std::snprintf(
           output + used, capacity - used,
           "%s{\"type\":\"%s\",\"status\":\"%s\",\"valid\":%s,\"value\":%.2f,"
           "\"unit\":\"%s\",\"timestampMs\":%lu}",
           i == 0 ? "" : ",", measurementTypeName(m.type),
-          measurementStatusName(valid ? m.status : MeasurementStatus::Invalid),
+          measurementStatusName(status),
           valid ? "true" : "false", valid ? static_cast<double>(m.value) : 0.0,
           m.unit ? m.unit : "", static_cast<unsigned long>(m.timestampMs));
       if (written < 0 || static_cast<size_t>(written) >= capacity - used) return false;
