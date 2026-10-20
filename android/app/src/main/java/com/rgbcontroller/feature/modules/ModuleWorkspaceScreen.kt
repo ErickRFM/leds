@@ -670,6 +670,47 @@ private fun ModuleReadings(
                 TelemetryChartCard("Historial de humedad del suelo", geometry, live)
             }
         }
+        "ldr_light" -> {
+            val light = if (active && live) reading("ambient_light")?.value else null
+            val raw = if (active && live) reading("ambient_light_raw")?.value?.toInt() else null
+            val status = ComponentTelemetryCodec.find(measurements.orEmpty(), "ambient_light")?.status
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Card(Modifier.fillMaxWidth().testTag("ldr_light_readings")) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Luz ambiental · LDR", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            if (light != null) "Iluminación relativa: %.1f %%".format(java.util.Locale.ROOT, light)
+                            else "Iluminación relativa: —",
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.testTag("ldr_light_percent")
+                        )
+                        Text(
+                            when {
+                                !live -> "Sin telemetría en vivo; no se presentan valores almacenados como actuales."
+                                !active -> "El firmware no tiene un GPIO ADC1 activo para este módulo."
+                                status == "not_calibrated" -> "ADC activo, falta calibrar referencias de oscuridad y claridad."
+                                status == "sensor_error" || status == "invalid" -> "Lectura ADC inválida. Comprueba el divisor de 3.3 V y el cableado."
+                                light != null -> "Porcentaje calibrado: es una escala relativa, no lux."
+                                else -> "Esperando una lectura calibrada y válida."
+                            },
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Text("ADC1 crudo: ${raw?.toString() ?: "—"} (0–4095)",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.testTag("ldr_light_raw"))
+                        OutlinedButton(onClick = onRefresh) { Text("Actualizar lectura") }
+                    }
+                }
+                val windowMs = TelemetryChart.DEFAULT_WINDOW_MS
+                val geometry = TelemetryChart.build(
+                    "ldr_light", "ambient_light",
+                    state.series("ldr_light", "ambient_light"),
+                    nowMs = System.currentTimeMillis(), windowMs = windowMs,
+                    staleAfterMs = windowMs, disconnected = !live
+                )
+                TelemetryChartCard("Historial de luz relativa", geometry, live)
+            }
+        }
         else -> Card(Modifier.fillMaxWidth()) {
             Text("Este componente todavía no reporta lecturas compatibles con la app.",
                 modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall)
