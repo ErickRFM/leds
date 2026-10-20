@@ -175,6 +175,9 @@ fun ModuleWorkspaceScreen(
                             Text("${environmentSensor.uppercase()} + sensor de suelo ADC1",
                                 style = MaterialTheme.typography.titleMedium)
                         }
+                        item(key = "environmental_voice_summary") {
+                            EnvironmentalSpeechCard(state)
+                        }
                         for (child in listOf(environmentSensor, "soil_moisture")) {
                             item(key = "env_status_$child") {
                                 ModuleRuntimeCard(child, runtime(child), currentlyVerified,
@@ -242,6 +245,9 @@ fun ModuleWorkspaceScreen(
                                 }
                             }
                         )
+                    }
+                    if (id == "dht11" || id == "dht22" || id == "ldr_light") {
+                        item(key = "module_voice_$id") { EnvironmentalSpeechCard(state) }
                     }
                     val savedPins = state.desiredConfig.components
                         .firstOrNull { it.id == id }?.pins
