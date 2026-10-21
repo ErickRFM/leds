@@ -230,7 +230,7 @@ class LocalWifiControl final {
         return;
       }
       server_.send(200, "application/json",
-                   "{\\"status\\":\\"DISPLAYED\\",\\"runtimeOnly\\":true}");
+                   "{\"status\":\"DISPLAYED\",\"runtimeOnly\":true}");
     });
 
     server_.on("/v2/components/catalog", HTTP_GET, [this]() {
