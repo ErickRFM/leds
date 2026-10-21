@@ -333,38 +333,6 @@ bool oledPresent(uint8_t, const char* text, void*) {
 #endif
 #endif  // COMPI_ENABLE_OLED
 
-#if COMPI_BUILD_OLED && COMPI_OLED_LIBRARY
-bool oledDisplayCommand(const char* mode, const char* value, void*) {
-  if (!oledModule.ready() || mode == nullptr || value == nullptr) return false;
-  if (std::strcmp(mode, "text") == 0) {
-    return oledModule.setText(value) && oledModule.refreshNow(millis());
-  }
-  if (std::strcmp(mode, "face") != 0) return false;
-  oledDriver.clearDisplay();
-  oledDriver.setTextColor(SSD1306_WHITE);
-  if (std::strcmp(value, "sleepy") == 0) {
-    oledDriver.drawLine(20, 35, 48, 35, SSD1306_WHITE);
-    oledDriver.drawLine(80, 35, 108, 35, SSD1306_WHITE);
-  } else if (std::strcmp(value, "angry") == 0) {
-    oledDriver.fillTriangle(19, 23, 51, 35, 51, 49, SSD1306_WHITE);
-    oledDriver.fillTriangle(109, 23, 77, 35, 77, 49, SSD1306_WHITE);
-  } else if (std::strcmp(value, "surprised") == 0) {
-    oledDriver.fillCircle(34, 34, 13, SSD1306_WHITE);
-    oledDriver.fillCircle(94, 34, 13, SSD1306_WHITE);
-    oledDriver.drawCircle(64, 56, 5, SSD1306_WHITE);
-  } else if (std::strcmp(value, "happy") == 0) {
-    oledDriver.fillRoundRect(19, 22, 29, 29, 12, SSD1306_WHITE);
-    oledDriver.fillRoundRect(80, 22, 29, 29, 12, SSD1306_WHITE);
-    oledDriver.drawLine(58, 55, 64, 58, SSD1306_WHITE);
-    oledDriver.drawLine(64, 58, 70, 55, SSD1306_WHITE);
-  } else {
-    return false;
-  }
-  oledDriver.display();
-  return true;
-}
-#endif
-
 esp32core::RgbSettingsStore rgbStorage;
 bool rgbDirty = false;
 // Only explicit manual RGB choices become persistent. Temporary scripts and
@@ -699,6 +667,39 @@ esp32core::LdrLightModule ldrModule(COMPI_LDR_PIN, ldrAdcRead, nullptr, 500);
 #if COMPI_BUILD_OLED && COMPI_OLED_LIBRARY
 esp32core::OledSsd1306Module oledModule(COMPI_OLED_ADDRESS, COMPI_OLED_SDA,
     COMPI_OLED_SCL, oledInit, oledPresent, nullptr, 250);
+#if COMPI_BUILD_OLED && COMPI_OLED_LIBRARY
+bool oledDisplayCommand(const char* mode, const char* value, void*) {
+  if (!oledModule.ready() || mode == nullptr || value == nullptr) return false;
+  if (std::strcmp(mode, "text") == 0) {
+    return oledModule.setText(value) && oledModule.refreshNow(millis());
+  }
+  if (std::strcmp(mode, "face") != 0) return false;
+  oledDriver.clearDisplay();
+  oledDriver.setTextColor(SSD1306_WHITE);
+  if (std::strcmp(value, "sleepy") == 0) {
+    oledDriver.drawLine(20, 35, 48, 35, SSD1306_WHITE);
+    oledDriver.drawLine(80, 35, 108, 35, SSD1306_WHITE);
+  } else if (std::strcmp(value, "angry") == 0) {
+    oledDriver.fillTriangle(19, 23, 51, 35, 51, 49, SSD1306_WHITE);
+    oledDriver.fillTriangle(109, 23, 77, 35, 77, 49, SSD1306_WHITE);
+  } else if (std::strcmp(value, "surprised") == 0) {
+    oledDriver.fillCircle(34, 34, 13, SSD1306_WHITE);
+    oledDriver.fillCircle(94, 34, 13, SSD1306_WHITE);
+    oledDriver.drawCircle(64, 56, 5, SSD1306_WHITE);
+  } else if (std::strcmp(value, "happy") == 0) {
+    oledDriver.fillRoundRect(19, 22, 29, 29, 12, SSD1306_WHITE);
+    oledDriver.fillRoundRect(80, 22, 29, 29, 12, SSD1306_WHITE);
+    oledDriver.drawLine(58, 55, 64, 58, SSD1306_WHITE);
+    oledDriver.drawLine(64, 58, 70, 55, SSD1306_WHITE);
+  } else {
+    return false;
+  }
+  oledDriver.display();
+  return true;
+}
+#endif
+
+
 #endif
 
 // Collects the freshest measurement from every active component. Returns false
