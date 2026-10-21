@@ -182,4 +182,32 @@ class CompiLabSessionTest {
         assertTrue(session.wifiReady)
         assertEquals("Parámetro inválido", session.message)
     }
+    @Test fun routeLossRevokesWifiAndStaleReadbacksCannotReauthorize() {
+        val session = CompiLabSession()
+        session.selectTransport(LabTransport.WIFI_LAB)
+        session.updateNetworkRouteAvailable(true)
+        session.updateKey("1234567890abcdef")
+        val (epoch, key) = session.beginVerification()
+        assertTrue(session.verified(epoch, key, red))
+        session.updateNetworkRouteAvailable(false)
+        assertFalse(session.wifiReady)
+        assertNull(session.rgbState)
+        assertEquals(LabConnectionState.SOFTAP_DETECTED, session.connectionState)
+        assertFalse(session.verified(epoch, key, red))
+        assertFalse(session.commandReadback(epoch, key, red))
+        session.updateNetworkRouteAvailable(true)
+        assertEquals(LabConnectionState.LOCAL_ROUTE_AVAILABLE, session.connectionState)
+        val (newEpoch, newKey) = session.beginVerification()
+        assertTrue(session.verified(newEpoch, newKey, red))
+    }
+
+    @Test fun noRouteCannotBeAuthorizedEvenWithAResponse() {
+        val session = CompiLabSession()
+        session.selectTransport(LabTransport.WIFI_LAB)
+        session.updateKey("1234567890abcdef")
+        val (epoch, key) = session.beginVerification()
+        assertFalse(session.verified(epoch, key, red))
+        assertFalse(session.wifiReady)
+    }
+
 }

@@ -13,6 +13,8 @@ class AudioPlaylistQueue(private val limit: Int = 50) {
 
     fun enqueue(contentUri: String): Boolean {
         if (!contentUri.startsWith("content://") || contentUri.length > 2048 ||
+            contentUri.removePrefix("content://").substringBefore('/').isBlank() ||
+            contentUri.any { it.isWhitespace() || it.isISOControl() } ||
             items.size >= limit || contentUri in items) return false
         items += contentUri
         if (currentIndex < 0) currentIndex = 0

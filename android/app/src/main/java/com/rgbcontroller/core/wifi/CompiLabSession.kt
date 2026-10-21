@@ -45,7 +45,11 @@ class CompiLabSession {
     fun updateNetworkRouteAvailable(available: Boolean) {
         if (isNetworkRouteAvailable != available) {
             isNetworkRouteAvailable = available
-            reevaluateConnectionState()
+            if (!available && wifiReady) {
+                invalidate("Se perdió la ruta Wi-Fi; vuelve a verificar el ESP32.")
+            } else {
+                reevaluateConnectionState()
+            }
         }
     }
 
@@ -161,7 +165,8 @@ class CompiLabSession {
     }
 
     fun verified(epoch: Int, verifiedKey: String, state: RgbDeviceState): Boolean {
-        if (epoch != revision || verifiedKey != key || transport != LabTransport.WIFI_LAB) return false
+        if (epoch != revision || verifiedKey != key || transport != LabTransport.WIFI_LAB ||
+            !isNetworkRouteAvailable) return false
         wifiReady = true
         rgbState = state
         stateRevision += 1
@@ -172,7 +177,7 @@ class CompiLabSession {
 
     fun commandReadback(epoch: Int, verifiedKey: String, state: RgbDeviceState): Boolean {
         if (epoch != revision || verifiedKey != key || transport != LabTransport.WIFI_LAB ||
-            !wifiReady) return false
+            !wifiReady || !isNetworkRouteAvailable) return false
         rgbState = state
         stateRevision += 1
         connectionState = LabConnectionState.AUTHORIZED
