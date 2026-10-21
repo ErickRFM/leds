@@ -31,6 +31,18 @@ int main() {
   assert(guard.inspect({"aabbcc", "dht22", 0, 0, 18, 0}) == Verdict::Invalid);
   assert(guard.inspect({"001122334455667z", "dht22", 0, 0, 18, 0}) == Verdict::Invalid);
   assert(guard.inspect({"001122334455667788", "dht22", 0, 0, 18, 0}) == Verdict::Invalid);
+  // All firmware runtime apply-supported components must be eligible.
+  // Previously DHT11 and LDR were erroneously rejected by the replay ledger.
+  Guard::Request dht11{"0000000000000001", "dht11", 0, 0, 16, 0};
+  Guard::Request ldr{"0000000000000002", "ldr_light", 0, 0, 36, 0};
+  assert(guard.inspect(dht11) == Verdict::New);
+  assert(guard.commit(dht11));
+  assert(guard.inspect(dht11) == Verdict::IdenticalRetry);
+  assert(guard.inspect(ldr) == Verdict::New);
+  assert(guard.commit(ldr));
+  assert(guard.inspect(ldr) == Verdict::IdenticalRetry);
+  assert(guard.inspect({"0000000000000003", "unknown", 0, 0, 36, 0}) == Verdict::Invalid);
+
   // RGB has three independently verified PWM signals. Changing only B on
   // the same request ID must be treated as a conflicting replay.
   Guard::Request rgb{"0011223344556688", "led_rgb", 27, 25, 18, 19, 26, 23};
