@@ -335,11 +335,13 @@ bool oledPresent(uint8_t, const char* text, void*) {
   return true;
 }
 #else
-// No display library available: the module is intentionally left unsupported
-// rather than claiming pixels were drawn.
+#if COMPI_ENABLE_OLED
+#error "COMPI OLED requires Adafruit SSD1306 + Adafruit GFX + Adafruit BusIO libraries"
+#endif
+// Only builds explicitly not enabling OLED can omit the display dependency.
 #define COMPI_OLED_LIBRARY 0
 #endif
-#endif  // COMPI_ENABLE_OLED
+#endif  // COMPI_BUILD_OLED
 
 esp32core::RgbSettingsStore rgbStorage;
 bool rgbDirty = false;
