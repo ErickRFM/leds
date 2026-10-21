@@ -309,7 +309,10 @@ int ldrAdcRead(uint8_t pin, void*) { return analogRead(pin); }
 
 #if COMPI_BUILD_OLED
 #include <Wire.h>
-#if __has_include(<Adafruit_SSD1306.h>)
+#if COMPI_ENABLE_OLED
+// Use a real include: Arduino CLI's library resolver does not discover a
+// library when it appears only behind __has_include.
+// If missing, Arduino prints the header name and the build stops.
 #include <Adafruit_SSD1306.h>
 #define COMPI_OLED_LIBRARY 1
 Adafruit_SSD1306 oledDriver(128, 64, &Wire, -1);
@@ -335,10 +338,6 @@ bool oledPresent(uint8_t, const char* text, void*) {
   return true;
 }
 #else
-#if COMPI_ENABLE_OLED
-#error "COMPI OLED requires Adafruit SSD1306 + Adafruit GFX + Adafruit BusIO libraries"
-#endif
-// Only builds explicitly not enabling OLED can omit the display dependency.
 #define COMPI_OLED_LIBRARY 0
 #endif
 #endif  // COMPI_BUILD_OLED
