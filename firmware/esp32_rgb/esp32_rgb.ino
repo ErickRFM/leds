@@ -136,7 +136,6 @@ volatile uint32_t bleDisconnectMs = 0;
 // Single source of truth for BLE link security and owner authorization.
 esp32core::BleSecurityPolicy bleSecurity;
 esp32core::BleSnapshotFramer bleSnapshot;
-uint16_t bleSnapshotSequence = 0;
 uint32_t lastBleSnapshotPartAt = 0;
 // SEG.1b-2b: the owner-enrollment session is the authority for privileged BLE
 // commands. It composes framing, the enrollment state machine, real mbedTLS
@@ -593,9 +592,12 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
       return;
     }
     esp32core::RgbCommand parsed{};
+    char kind = 0;
+    uint16_t requestId = 0;
     const bool valid = esp32core::parseRgbCommand(command.c_str(), parsed) ||
                        esp32core::isBleEnvironmentalCommand(command.c_str()) ||
-                       command == "SNP,S" || command == "SNP,T";
+                       esp32core::parseBleSnapshotRequest(command.c_str(),
+                                                         kind, requestId);
     portENTER_CRITICAL(&bleInboxMux);
     const bool accepted = valid && bleInbox.push(command.c_str());
     if (!accepted && bleRejected < 65535) ++bleRejected;
@@ -1039,8 +1041,10 @@ void processBleCommands() {
     const bool found = bleInbox.pop(buffer);
     portEXIT_CRITICAL(&bleInboxMux);
     if (!found) break;
-    const bool snapshotRequest = std::strcmp(buffer, "SNP,S") == 0 ||
-                                 std::strcmp(buffer, "SNP,T") == 0;
+    char snapshotKind = 0;
+    uint16_t snapshotId = 0;
+    const bool snapshotRequest = esp32core::parseBleSnapshotRequest(
+        buffer, snapshotKind, snapshotId);
     const auto environmental = esp32core::parseBleEnvironmentalCommand(buffer);
     esp32core::RgbCommand parsed{};
     if (!snapshotRequest &&
@@ -1065,14 +1069,14 @@ void processBleCommands() {
         publishControlReply("SNP,BUSY");
       } else {
         char json[esp32core::BleSnapshotFramer::kPayloadMax + 1] = {};
-        const bool statusRequest = buffer[4] == 'S';
+        const bool statusRequest = snapshotKind == 'S';
         const bool encoded = statusRequest
             ? collectComponentStatus(json, sizeof(json), nullptr)
             : collectComponentTelemetry(json, sizeof(json), nullptr);
         if (!encoded || !bleSnapshot.start(statusRequest
                 ? esp32core::BleSnapshotFramer::Kind::Status
                 : esp32core::BleSnapshotFramer::Kind::Telemetry,
-                json, ++bleSnapshotSequence)) {
+                json, snapshotId)) {
           publishControlReply("SNP,ERROR");
         }
       }
