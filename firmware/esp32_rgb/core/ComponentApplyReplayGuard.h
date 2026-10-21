@@ -64,9 +64,12 @@ class ComponentApplyReplayGuard final {
 
  private:
   static constexpr bool validComponent(const char* id) {
-    // Precisely the three module IDs accepted by the runtime apply API.
+    // Must match LocalWifiControl /v2/components/apply exactly:
+    // a compiled module may be inactive, but GPIO authority stays with
+    // PinManager and the compare-and-swap checks inside applyComponentPins.
     return id != nullptr &&
-       (equal(id, "dht22") || equal(id, "soil_moisture") ||
+       (equal(id, "dht11") || equal(id, "dht22") ||
+        equal(id, "ldr_light") || equal(id, "soil_moisture") ||
         equal(id, "ssd1306_oled") || equal(id, "led_rgb"));
   }
   static constexpr bool equal(const char* a, const char* b) {
