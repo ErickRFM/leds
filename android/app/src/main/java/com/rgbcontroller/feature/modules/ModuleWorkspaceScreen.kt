@@ -182,6 +182,9 @@ fun ModuleWorkspaceScreen(
                         item(key = "environmental_voice_summary") {
                             EnvironmentalSpeechCard(state)
                         }
+                        item(key = "environmental_audio_library") {
+                            CompiAudioPlayerCard()
+                        }
                         for (child in listOf(environmentSensor, "soil_moisture")) {
                             item(key = "env_status_$child") {
                                 ModuleRuntimeCard(child, runtime(child), currentlyVerified,
