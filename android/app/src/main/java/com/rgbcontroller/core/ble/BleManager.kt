@@ -796,13 +796,16 @@ class BleManager(private val context: Context) {
         if (_connectionState.value != BleConnectionState.Ready ||
             _securityState.value != BleSecurityState.Authorized ||
             enrollmentPhase != EnrollmentPhase.IDLE) return false
+        synchronized(pending) {
+            if (pending.size >= 16) return false
+            // Coalesce queued status reads; never evict privileged controls.
+            if (action == BleEnvironmentalProtocol.Action.GET &&
+                pending.contains(action.frame)) return true
+            pending.addLast(action.frame)
+        }
         if (action != BleEnvironmentalProtocol.Action.GET) {
             _environmentalRgbEnabled.value = null
             _environmentalRgbMessage.value = "Esperando confirmación del ESP32…"
-        }
-        synchronized(pending) {
-            if (pending.size >= 16) return false
-            pending.addLast(action.frame)
         }
         drainQueue()
         return true
