@@ -7,6 +7,25 @@
 
 namespace esp32core {
 
+// An explicit client request sequence binds the reply to its request.
+// Strict parser rejects suffixes, empty sequences and overflow.
+inline bool parseBleSnapshotRequest(const char* input, char& kind, uint16_t& sequence) {
+  if (!input || std::strncmp(input, "SNP,", 4) != 0 ||
+      (input[4] != 'S' && input[4] != 'T') || input[5] != ',') return false;
+  uint32_t value = 0;
+  size_t digits = 0;
+  const char* ptr = input + 6;
+  while (*ptr) {
+    if (*ptr < '0' || *ptr > '9' || ++digits > 5) return false;
+    value = value * 10u + static_cast<uint32_t>(*ptr - '0');
+    ++ptr;
+  }
+  if (digits == 0 || value == 0 || value > 65535u) return false;
+  kind = input[4];
+  sequence = static_cast<uint16_t>(value);
+  return true;
+}
+
 // Read-only, bounded snapshots on the existing STATE notification characteristic.
 // 38 ASCII JSON bytes + framing stay under an ATT payload of 61 (MTU 64).
 // No dynamic allocations, delays or GPIO access in this transport.
