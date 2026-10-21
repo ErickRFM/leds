@@ -242,9 +242,7 @@ fun LedModuleScreen(
             }
         }
 
-        if (isWifi) {
-            EnvironmentalRgbControlCard(labSession, wifiClient)
-        }
+        EnvironmentalRgbControlCard(labSession, wifiClient, bleManager)
 
         if (isWifi && isDebug) {
             Card(
