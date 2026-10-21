@@ -86,6 +86,11 @@ class BleManager(private val context: Context) {
     private val _securityState = MutableStateFlow(BleSecurityState.Disconnected)
     /** Firmware-confirmed owner authorization; bonding alone is never Authorized. */
     val securityState: StateFlow<BleSecurityState> = _securityState.asStateFlow()
+    private val _environmentalRgbEnabled = MutableStateFlow<Boolean?>(null)
+    /** Null means unconfirmed or unavailable, never assume an old firmware has V30. */
+    val environmentalRgbEnabled: StateFlow<Boolean?> = _environmentalRgbEnabled.asStateFlow()
+    private val _environmentalRgbMessage = MutableStateFlow("Sin estado BLE ambiental confirmado.")
+    val environmentalRgbMessage: StateFlow<String> = _environmentalRgbMessage.asStateFlow()
     private val ownerCrypto = BouncyCastleSessionCrypto()
     private val ownerStore = OwnerSessionStore(context)
     private var ownerRecord: OwnerSessionStore.Record? = null
@@ -729,6 +734,27 @@ class BleManager(private val context: Context) {
 
     private fun acceptState(bytes: ByteArray?) {
         val text = bytes?.toString(Charsets.UTF_8) ?: return
+        val environment = BleEnvironmentalProtocol.parseReply(text)
+        if (environment != null) {
+            // Bonding is insufficient; a previous session's notification must
+            // never make control appear authorized on a new/unverified link.
+            if (_connectionState.value == BleConnectionState.Ready &&
+                _securityState.value == BleSecurityState.Authorized) {
+                when (environment) {
+                    is BleEnvironmentalProtocol.Reply.State -> {
+                        _environmentalRgbEnabled.value = environment.enabled
+                        _environmentalRgbMessage.value = if (environment.enabled)
+                            "ESP32 confirmó RGB ambiental activo."
+                        else "ESP32 confirmó RGB ambiental detenido."
+                    }
+                    BleEnvironmentalProtocol.Reply.Busy -> {
+                        _environmentalRgbMessage.value =
+                            "El ESP32 rechazó RGB ambiental: hay un script o control en uso."
+                    }
+                }
+            }
+            return
+        }
         // New firmware replies use OK / ERR <reason> / CHALLENGE <nonce> <pubkey>.
         // An obsolete AUTH,OK must NEVER authorize a modern owner session.
         val enrollmentReply = EnrollmentReply.parse(text)
@@ -759,6 +785,27 @@ class BleManager(private val context: Context) {
             _rgbState.value = it
             _stateRevision.value += 1
         }
+    }
+
+    /**
+     * Environmental mode uses the existing owner-authenticated GATT write path,
+     * but never passes unrecognized frames into the RGB command validator.
+     * Only a firmware response changes [environmentalRgbEnabled].
+     */
+    fun requestEnvironmentalRgb(action: BleEnvironmentalProtocol.Action): Boolean {
+        if (_connectionState.value != BleConnectionState.Ready ||
+            _securityState.value != BleSecurityState.Authorized ||
+            enrollmentPhase != EnrollmentPhase.IDLE) return false
+        if (action != BleEnvironmentalProtocol.Action.GET) {
+            _environmentalRgbEnabled.value = null
+            _environmentalRgbMessage.value = "Esperando confirmación del ESP32…"
+        }
+        synchronized(pending) {
+            if (pending.size >= 16) return false
+            pending.addLast(action.frame)
+        }
+        drainQueue()
+        return true
     }
 
     fun writeCommand(text: String) {
@@ -835,6 +882,8 @@ class BleManager(private val context: Context) {
         gpioReadInFlight = false
         gpioPollingDisabled = false
         _gpioPins.value = null
+        _environmentalRgbEnabled.value = null
+        _environmentalRgbMessage.value = "Sin sesión BLE autenticada."
         mtuReady = false
         _connectedAddress.value = null
         // Closing the link revokes authorization; the firmware does the same.
