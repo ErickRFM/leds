@@ -101,6 +101,8 @@ class BleManager(private val context: Context) {
     private val snapshotAssembler = BleSnapshotAssembler()
     private var snapshotRequestId = 0
     private var pendingSnapshot: CompletableDeferred<BleSnapshotAssembler.Snapshot>? = null
+    private var pendingLdrCalibration: CompletableDeferred<Boolean>? = null
+    private var pendingLdrCalibrationId = 0
     private val ownerCrypto = BouncyCastleSessionCrypto()
     private val ownerStore = OwnerSessionStore(context)
     private var ownerRecord: OwnerSessionStore.Record? = null
@@ -763,6 +765,17 @@ class BleManager(private val context: Context) {
             }
             return
         }
+        val calibrationReply = BleLdrCalibrationProtocol.reply(text)
+        if (calibrationReply != null) {
+            if (_connectionState.value == BleConnectionState.Ready &&
+                _securityState.value == BleSecurityState.Authorized &&
+                calibrationReply.id == pendingLdrCalibrationId) {
+                pendingLdrCalibration?.complete(
+                    calibrationReply is BleLdrCalibrationProtocol.Reply.Applied
+                )
+            }
+            return
+        }
         if (text == "SNP,ERROR" || text == "SNP,BUSY") {
             pendingSnapshot?.completeExceptionally(
                 IllegalStateException("ESP32 no puede entregar la instantánea BLE ($text).")
@@ -821,6 +834,36 @@ class BleManager(private val context: Context) {
             _stateRevision.value += 1
         }
     }
+
+    /** Runtime-only LDR calibration over cryptographic owner GATT.
+     * True means the firmware acknowledged applying it, not physical lux accuracy.
+     */
+    suspend fun calibrateLdrBle(dark: Int, bright: Int): Boolean =
+        snapshotMutex.withLock {
+            if (_connectionState.value != BleConnectionState.Ready ||
+                _securityState.value != BleSecurityState.Authorized ||
+                enrollmentPhase != EnrollmentPhase.IDLE) return@withLock false
+            snapshotRequestId = snapshotRequestId % 65535 + 1
+            val id = snapshotRequestId
+            val command = BleLdrCalibrationProtocol.request(id, dark, bright)
+            val deferred = CompletableDeferred<Boolean>()
+            val enqueued = synchronized(pending) {
+                if (pending.size >= 16) false
+                else { pending.addLast(command); true }
+            }
+            if (!enqueued) return@withLock false
+            pendingLdrCalibrationId = id
+            pendingLdrCalibration = deferred
+            drainQueue()
+            try {
+                withTimeoutOrNull(5_000L) { deferred.await() } == true
+            } finally {
+                if (pendingLdrCalibration === deferred) {
+                    pendingLdrCalibration = null
+                    pendingLdrCalibrationId = 0
+                }
+            }
+        }
 
     /** Reads an authoritative firmware snapshot from GATT, never local storage.
      * One request at a time, with a 16-bit client nonce and bounded reassembly.
@@ -956,6 +999,9 @@ class BleManager(private val context: Context) {
         _gpioPins.value = null
         pendingSnapshot?.cancel()
         pendingSnapshot = null
+        pendingLdrCalibration?.cancel()
+        pendingLdrCalibration = null
+        pendingLdrCalibrationId = 0
         snapshotAssembler.reset()
         _environmentalRgbEnabled.value = null
         _environmentalRgbMessage.value = "Sin sesión BLE autenticada."
