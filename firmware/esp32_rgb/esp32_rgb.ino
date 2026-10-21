@@ -31,6 +31,7 @@
 #include "core/SensorTelemetry.h"
 #include "core/SensorTelemetryCodec.h"
 #include "core/EnvironmentalRgbPolicy.h"
+#include "core/BleEnvironmentalCommand.h"
 #include "modules/Dht22Module.h"
 #include "core/DhtFrameCodec.h"
 #include "core/DhtWireDiagnostics.h"
@@ -588,7 +589,8 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
       return;
     }
     esp32core::RgbCommand parsed{};
-    const bool valid = esp32core::parseRgbCommand(command.c_str(), parsed);
+    const bool valid = esp32core::parseRgbCommand(command.c_str(), parsed) ||
+                       esp32core::isBleEnvironmentalCommand(command.c_str());
     portENTER_CRITICAL(&bleInboxMux);
     const bool accepted = valid && bleInbox.push(command.c_str());
     if (!accepted && bleRejected < 65535) ++bleRejected;
@@ -1032,16 +1034,36 @@ void processBleCommands() {
     const bool found = bleInbox.pop(buffer);
     portEXIT_CRITICAL(&bleInboxMux);
     if (!found) break;
+    const auto environmental = esp32core::parseBleEnvironmentalCommand(buffer);
     esp32core::RgbCommand parsed{};
-    if (!esp32core::parseRgbCommand(buffer, parsed)) {
+    if (environmental == esp32core::BleEnvironmentalAction::Invalid &&
+        !esp32core::parseRgbCommand(buffer, parsed)) {
       reject();
       continue;
     }
-    const bool isStop = (parsed.action == esp32core::RgbAction::StopEffect || parsed.action == esp32core::RgbAction::Off);
+    const bool isStop =
+        environmental == esp32core::BleEnvironmentalAction::Stop ||
+        (environmental == esp32core::BleEnvironmentalAction::Invalid &&
+         (parsed.action == esp32core::RgbAction::StopEffect ||
+          parsed.action == esp32core::RgbAction::Off));
     const auto channelSource = esp32core::CompiCommandArbiter::mapBleSource(bleAuthState);
     auto evaluation = commandArbiter.evaluate(channelSource, isStop);
     if (!evaluation.allowed) {
       reject();
+      continue;
+    }
+    if (environmental != esp32core::BleEnvironmentalAction::Invalid) {
+      if (environmental == esp32core::BleEnvironmentalAction::Start &&
+          !wifiLab.startEnvironmentalRgb()) {
+        publishControlReply("ENV,BUSY");
+      } else {
+        if (environmental == esp32core::BleEnvironmentalAction::Stop) {
+          wifiLab.disableEnvironmentalRgb();
+          environmentRgbPolicy.reset();
+        }
+        publishControlReply(wifiLab.environmentalRgbEnabled()
+                                ? "ENV,ON" : "ENV,OFF");
+      }
       continue;
     }
     if (parsed.action != esp32core::RgbAction::Get) {
