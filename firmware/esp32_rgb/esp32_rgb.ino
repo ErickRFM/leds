@@ -1271,6 +1271,12 @@ void setup() {
     Serial.println("ERROR: required RGB module start failed; control services disabled");
     while (true) delay(1000);
   }
+#if COMPI_BUILD_OLED && COMPI_OLED_LIBRARY
+  if (oledModule.ready()) {
+    oledModule.setText("Hola, soy Compi!");
+    oledModule.refreshNow(millis());
+  }
+#endif
   if (moduleRegistry.unavailableAtBoot() > 0) {
     Serial.print("WARN: optional modules inactive at boot: ");
     Serial.println(moduleRegistry.unavailableAtBoot());
