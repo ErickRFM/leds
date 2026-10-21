@@ -40,6 +40,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.security.SecureRandom
 import java.util.ArrayDeque
 import java.util.UUID
 
@@ -103,6 +104,8 @@ class BleManager(private val context: Context) {
     private var pendingSnapshot: CompletableDeferred<BleSnapshotAssembler.Snapshot>? = null
     private var pendingLdrCalibration: CompletableDeferred<Boolean>? = null
     private var pendingLdrCalibrationId = 0
+    private var pendingPinChange: CompletableDeferred<Boolean>? = null
+    private var pendingPinToken: String? = null
     private val ownerCrypto = BouncyCastleSessionCrypto()
     private val ownerStore = OwnerSessionStore(context)
     private var ownerRecord: OwnerSessionStore.Record? = null
@@ -765,6 +768,18 @@ class BleManager(private val context: Context) {
             }
             return
         }
+        val pinReply = BleSensorPinProtocol.receipt(text)
+        if (pinReply != null) {
+            if (_connectionState.value == BleConnectionState.Ready &&
+                _securityState.value == BleSecurityState.Authorized &&
+                pendingPinToken.equals(pinReply.token, ignoreCase = true)) {
+                pendingPinChange?.complete(pinReply.outcome in setOf(
+                    BleSensorPinProtocol.Outcome.APPLIED,
+                    BleSensorPinProtocol.Outcome.REPLAYED
+                ))
+            }
+            return
+        }
         val calibrationReply = BleLdrCalibrationProtocol.reply(text)
         if (calibrationReply != null) {
             if (_connectionState.value == BleConnectionState.Ready &&
@@ -833,6 +848,62 @@ class BleManager(private val context: Context) {
             _rgbState.value = it
             _stateRevision.value += 1
         }
+    }
+
+    /** Single GPIO reassignment via owner BLE with CAS and authoritative readback.
+     * Supports only DHT11/LDR; other GPIO edits stay on guarded Wi-Fi.
+     * Never automatically retries after an unconfirmed write.
+     */
+    suspend fun applySensorPinBle(componentId: String, targetPin: Int): Boolean {
+        val sensor = when (componentId) {
+            "dht11" -> BleSensorPinProtocol.Sensor.DHT11
+            "ldr_light" -> BleSensorPinProtocol.Sensor.LDR
+            else -> return false
+        }
+        if (targetPin !in 0..39) return false
+        val beforeJson = readComponentSnapshot(BleSnapshotAssembler.Kind.STATUS)
+            ?: return false
+        val before = ComponentStatusCodec.decode(beforeJson)?.firstOrNull {
+            it.id == sensor.firmwareId
+        } ?: return false
+        val from = when {
+            before.active && before.pins.size == 1 -> before.pins[0]
+            !before.active && before.pins.isEmpty() -> 0
+            else -> return false
+        }
+        val random = ByteArray(4)
+        SecureRandom().nextBytes(random)
+        val token = random.joinToString("") { "%02x".format(it.toInt() and 0xff) }
+        val command = BleSensorPinProtocol.request(token, sensor, from, targetPin)
+        val accepted = snapshotMutex.withLock {
+            if (_connectionState.value != BleConnectionState.Ready ||
+                _securityState.value != BleSecurityState.Authorized ||
+                enrollmentPhase != EnrollmentPhase.IDLE) return@withLock false
+            val deferred = CompletableDeferred<Boolean>()
+            val enqueued = synchronized(pending) {
+                if (pending.size >= 16) false
+                else { pending.addLast(command); true }
+            }
+            if (!enqueued) return@withLock false
+            pendingPinToken = token
+            pendingPinChange = deferred
+            drainQueue()
+            try {
+                withTimeoutOrNull(5_000L) { deferred.await() } == true
+            } finally {
+                if (pendingPinChange === deferred) {
+                    pendingPinChange = null
+                    pendingPinToken = null
+                }
+            }
+        }
+        if (!accepted) return false
+        val afterJson = readComponentSnapshot(BleSnapshotAssembler.Kind.STATUS)
+            ?: return false
+        val confirmed = ComponentStatusCodec.decode(afterJson)?.firstOrNull {
+            it.id == sensor.firmwareId
+        }
+        return confirmed?.active == true && confirmed.pins == listOf(targetPin)
     }
 
     /** Runtime-only LDR calibration over cryptographic owner GATT.
@@ -1002,6 +1073,9 @@ class BleManager(private val context: Context) {
         pendingLdrCalibration?.cancel()
         pendingLdrCalibration = null
         pendingLdrCalibrationId = 0
+        pendingPinChange?.cancel()
+        pendingPinChange = null
+        pendingPinToken = null
         snapshotAssembler.reset()
         _environmentalRgbEnabled.value = null
         _environmentalRgbMessage.value = "Sin sesión BLE autenticada."
