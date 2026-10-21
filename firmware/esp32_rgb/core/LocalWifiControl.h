@@ -68,6 +68,15 @@ class LocalWifiControl final {
     ldrCalibrationContext_ = context;
   }
 
+  // One authority for both authorized transports. No duplicate GPIO rules.
+  bool calibrateLdr(uint16_t dark, uint16_t bright) {
+    if (ldrCalibration_ == nullptr || script_.active() ||
+        experiment_.active() || automation_.active() ||
+        environmentalRgbEnabled_ || hasManual() ||
+        bright <= dark || bright - dark < 32u || bright > 4095u) return false;
+    return ldrCalibration_(dark, bright, ldrCalibrationContext_);
+  }
+
   // No extra RGB driver: the loop reads this opt-in mode and uses the existing
   // authenticated RGB command path. Never persists a mode on reboot.
   bool environmentalRgbEnabled() const { return environmentalRgbEnabled_; }
@@ -210,12 +219,6 @@ class LocalWifiControl final {
 
     server_.on("/v2/components/ldr/calibrate", HTTP_POST, [this]() {
       if (!authorized()) return;
-      if (ldrCalibration_ == nullptr || script_.active() ||
-          experiment_.active() || automation_.active() ||
-          environmentalRgbEnabled_ || hasManual()) {
-        jsonError(409, "ldr_calibration_unavailable_or_busy");
-        return;
-      }
       int dark = -1, bright = -1;
       if (!parseInt("darkRaw", 0, 4095, dark) ||
           !parseInt("brightRaw", 0, 4095, bright) ||
@@ -223,9 +226,8 @@ class LocalWifiControl final {
         jsonError(400, "invalid_ldr_calibration");
         return;
       }
-      if (!ldrCalibration_(static_cast<uint16_t>(dark),
-                           static_cast<uint16_t>(bright),
-                           ldrCalibrationContext_)) {
+      if (!calibrateLdr(static_cast<uint16_t>(dark),
+                        static_cast<uint16_t>(bright))) {
         jsonError(409, "ldr_calibration_rejected");
         return;
       }
