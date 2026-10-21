@@ -96,7 +96,9 @@
 #define COMPI_LDR_PIN 36
 #endif
 #ifndef COMPI_ENABLE_OLED
-#define COMPI_ENABLE_OLED 0
+// Lab profile: enable the attached I2C SSD1306 at boot. The OLED remains
+// optional: absent hardware must NEVER prevent Wi-Fi, BLE or DHT11 from booting.
+#define COMPI_ENABLE_OLED 1
 #endif
 #ifndef COMPI_OLED_SDA
 #define COMPI_OLED_SDA 21
@@ -307,13 +309,22 @@ int ldrAdcRead(uint8_t pin, void*) { return analogRead(pin); }
 
 #if COMPI_BUILD_OLED
 #include <Wire.h>
-#if __has_include(<Adafruit_SSD1306.h>)
+#if COMPI_ENABLE_OLED
+// Use a real include: Arduino CLI's library resolver does not discover a
+// library when it appears only behind __has_include.
+// If missing, Arduino prints the header name and the build stops.
 #include <Adafruit_SSD1306.h>
 #define COMPI_OLED_LIBRARY 1
 Adafruit_SSD1306 oledDriver(128, 64, &Wire, -1);
 bool oledInit(uint8_t address, uint8_t sda, uint8_t scl, void*) {
   Wire.begin(sda, scl);
-  if (!oledDriver.begin(SSD1306_SWITCHCAPVCC, address)) return false;
+  // SSD1306.begin() can succeed without an attached display. Require an
+  // actual I2C ACK before reporting this optional component as operational.
+  Wire.beginTransmission(address);
+  if (Wire.endTransmission() != 0) return false;
+  // Keep the explicitly selected SDA/SCL pins; do not call Wire.begin() again.
+  if (!oledDriver.begin(SSD1306_SWITCHCAPVCC, address, false, false)) return false;
+  oledDriver.setTextColor(SSD1306_WHITE);
   oledDriver.clearDisplay();
   oledDriver.display();
   return true;
@@ -327,11 +338,9 @@ bool oledPresent(uint8_t, const char* text, void*) {
   return true;
 }
 #else
-// No display library available: the module is intentionally left unsupported
-// rather than claiming pixels were drawn.
 #define COMPI_OLED_LIBRARY 0
 #endif
-#endif  // COMPI_ENABLE_OLED
+#endif  // COMPI_BUILD_OLED
 
 esp32core::RgbSettingsStore rgbStorage;
 bool rgbDirty = false;
@@ -1244,6 +1253,21 @@ void setup() {
     Serial.println("Control services continue; check wiring via component status.");
   }
 
+#if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
+  if (oledModule.ready()) {
+    oledModule.setText("HOLA, SOY COMPI!\nOLED LISTA  (^_^)");
+    if (oledModule.refreshNow(millis())) {
+      Serial.println("BOOT: OLED SSD1306 ACK OK, saludo mostrado");
+    } else {
+      Serial.println("WARN: OLED responde por I2C, pero no confirmo refresco");
+    }
+  } else {
+    Serial.println("WARN: OLED no responde; comprueba 3V3/GND/SDA21/SCL22 y 0x3C");
+  }
+#elif COMPI_ENABLE_OLED && COMPI_BUILD_OLED
+  Serial.println("WARN: falta instalar Adafruit SSD1306 y Adafruit GFX en Arduino IDE");
+#endif
+
   Serial.println("BOOT: required modules started; optional components reported individually");
   wifiLab.setComponentTelemetry(collectComponentTelemetry, nullptr);
   wifiLab.setComponentStatus(collectComponentStatus, nullptr);
@@ -1326,6 +1350,27 @@ void loop() {
   servePhysicalWindow(now);
   wifiLab.tick(now);
   moduleRegistry.tickAll(millis());
+#if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY && COMPI_BUILD_DHT11
+  // Small independent OLED dashboard: never writes PWM and never blocks
+  // the network. Start after the greeting, then refresh every 3 seconds.
+  static uint32_t lastOledTelemetryAt = 0;
+  if (oledModule.ready() && now >= 8000U &&
+      (lastOledTelemetryAt == 0 ||
+       static_cast<uint32_t>(now - lastOledTelemetryAt) >= 3000U)) {
+    lastOledTelemetryAt = now;
+    char oledLines[esp32core::OledSsd1306Module::kMaxTextBytes] = {};
+    const auto& temperature = dht11Module.temperatureReading();
+    const auto& humidity = dht11Module.humidityReading();
+    if (temperature.valid && humidity.valid) {
+      std::snprintf(oledLines, sizeof(oledLines), "COMPI - DHT11\nT: %.1f C\nH: %.0f %%",
+                    static_cast<double>(temperature.value),
+                    static_cast<double>(humidity.value));
+    } else {
+      std::snprintf(oledLines, sizeof(oledLines), "COMPI - DHT11\nEsperando lectura");
+    }
+    if (oledModule.setText(oledLines)) oledModule.refreshNow(now);
+  }
+#endif
   // Modules activated at runtime are not in the boot-time registry; tick them
   // explicitly, only when their leases are active, from this same loop thread.
 #if COMPI_BUILD_DHT11

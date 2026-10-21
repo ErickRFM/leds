@@ -23,14 +23,24 @@ README = """Compi ESP32 — firmware completo de laboratorio
 4) ESP32 by Espressif Systems core 3.0.7.
 5) Tools > Partition Scheme: Minimal SPIFFS (1.9MB APP with OTA).
 6) Verifica y luego sube al puerto USB confirmado de TU placa.
-7) Monitor Serie: 115200 baud. Claves solo por serial fisico.
+7) Instala las librerias Arduino: Adafruit BusIO, Adafruit GFX Library,
+   Adafruit SSD1306 (pantalla 128x64 I2C).
+8) Conecta OLED SSD1306 a 3V3, GND, SDA GPIO21, SCL GPIO22 (0x3C).
+9) Monitor Serie: 115200 baud. Al arrancar: HOLA, SOY COMPI;
+   despues debe mostrar temperatura/humedad del DHT11 en GPIO16.
 
 RGB: GPIO27 rojo, GPIO25 verde, GPIO26 azul, 220–330 ohm en cada
 canal. COMMON_ANODE=true: confirma polaridad y cableado antes de cargar.
 
-AVISO: BLE V1 NO autentica propietario. SOLO laboratorio.
-No se incluye firmware personalizado, claves, NVS, OTA firmado o
-funcion de subida de Arduino C++ desde la aplicacion.
+BLE: emparejamiento Secure Connections Just Works (SIN PIN numerico fijo).
+La conexion BLE no autoriza comandos; la app debe realizar el proceso
+seguro de propietario. Mantener BOOT presionado 3 segundos para abrir
+la ventana fisica de alta/recuperacion: codigo temporal en USB serial.
+No compartas dicho codigo. No se incluyen claves ni NVS personalizados.
+
+Si la OLED no responde, el resto del firmware debe seguir operativo.
+El controlador OLED esta habilitado por defecto y requiere sus librerias.
+NO es firmware firmado de distribucion ni OTA autonomo.
 """
 
 

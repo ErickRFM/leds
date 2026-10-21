@@ -37,3 +37,41 @@ arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=min_spiffs firmware
 - No registrar la MAC ni credenciales de SoftAP/clave API en logs públicos, Git ni screenshots.
 
 Instrucciones de ensayo físico y recuperación: [Hardware confirmado](../docs/HARDWARE_ESP32.md).
+
+
+## Perfil OLED SSD1306 + DHT11 (Compi)
+
+El firmware completo actual tiene **COMPI_ENABLE_OLED=1** (OLED SSD1306 128×64 I²C)
+para el prototipo de Compi. El display es un módulo **opcional en ejecución**:
+si el panel no responde a la dirección `0x3C`, el Wi-Fi/BLE/RGB/DHT11
+continúan encendiendo y el fallo aparece en el monitor serie.
+
+Cableado: OLED VCC → **3V3** (si el módulo es compatible), GND → GND,
+SDA → **GPIO21**, SCL → **GPIO22**. DHT11 DATA → **GPIO16**,
+RGB → GPIO27/25/26. Confirmar que tu módulo no sea SH1106,
+SSD1306 128×32, ni de dirección 0x3D antes de usar este perfil.
+
+Instala estas bibliotecas desde Arduino IDE > Library Manager:
+`Adafruit SSD1306`, `Adafruit GFX Library` y `Adafruit BusIO`.
+La compilación detiene con error claro si el OLED está habilitado y falta
+SSD1306. En Arduino CLI:
+
+```sh
+arduino-cli lib update-index
+arduino-cli lib install "Adafruit BusIO" "Adafruit GFX Library" "Adafruit SSD1306"
+arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=min_spiffs firmware/esp32_rgb
+```
+
+En el arranque, primero aparece «HOLA, SOY COMPI!» en la pantalla y,
+tras unos 8 s, un resumen de temperatura/humedad DHT11 cada 3 s.
+Si faltan lecturas, no se inventan valores: muestra «Esperando lectura».
+Para validarlo, buscar en USB serial el registro `BOOT: OLED SSD1306 ACK OK`.
+Eso confirma la respuesta I²C y el intento de refresco, **no**
+verifica visualmente los píxeles sin una prueba física del panel.
+
+El BLE usa emparejamiento cifrado Secure Connections «Just Works»:
+**no existe un PIN fijo Bluetooth**. El emparejamiento no da permisos de
+control; hay un alta de propietario adicional. Para abrir ventana de alta/
+recuperación, mantener BOOT (GPIO0) durante 3 segundos con la placa
+ya encendida y leer el código temporal en monitor serie USB. No publicar
+ese código. La integración app↔propietario requiere prueba física.
