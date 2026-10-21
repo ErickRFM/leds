@@ -39,7 +39,7 @@ class BleSnapshotFramer final {
   using Output = void (*)(const char* frame, void* ctx);
 
   bool start(Kind kind, const char* json, uint16_t seq) {
-    if (active_ || !json) return false;
+    if (active() || !json) return false;
     const size_t size = boundedLength(json, kPayloadMax);
     if (size == 0 || size > kPayloadMax) return false;
     for (size_t i = 0; i < size; ++i) {
