@@ -34,6 +34,7 @@
 #include "core/BleEnvironmentalCommand.h"
 #include "core/BleSnapshotFramer.h"
 #include "core/BleLdrCalibration.h"
+#include "core/BleSensorPinRequest.h"
 #include "modules/Dht22Module.h"
 #include "core/DhtFrameCodec.h"
 #include "core/DhtWireDiagnostics.h"
@@ -596,7 +597,9 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
     char kind = 0;
     uint16_t requestId = 0;
     esp32core::BleLdrCalibration calibration{};
+    esp32core::BleSensorPinRequest pinRequest{};
     const bool valid = esp32core::parseRgbCommand(command.c_str(), parsed) ||
+                       esp32core::parseBleSensorPinRequest(command.c_str(), pinRequest) ||
                        esp32core::isBleEnvironmentalCommand(command.c_str()) ||
                        esp32core::parseBleSnapshotRequest(command.c_str(),
                                                          kind, requestId) ||
@@ -1052,8 +1055,11 @@ void processBleCommands() {
     esp32core::BleLdrCalibration calibration{};
     const bool calibrationRequest = esp32core::parseBleLdrCalibration(
         buffer, calibration);
+    esp32core::BleSensorPinRequest pinRequest{};
+    const bool sensorPinRequest = esp32core::parseBleSensorPinRequest(
+        buffer, pinRequest);
     esp32core::RgbCommand parsed{};
-    if (!snapshotRequest && !calibrationRequest &&
+    if (!snapshotRequest && !calibrationRequest && !sensorPinRequest &&
         environmental == esp32core::BleEnvironmentalAction::Invalid &&
         !esp32core::parseRgbCommand(buffer, parsed)) {
       reject();
@@ -1068,6 +1074,20 @@ void processBleCommands() {
     auto evaluation = commandArbiter.evaluate(channelSource, isStop);
     if (!evaluation.allowed) {
       reject();
+      continue;
+    }
+    if (sensorPinRequest) {
+      const auto verdict = wifiLab.applySingleSensorPinBle(
+          pinRequest.component, pinRequest.from, pinRequest.to,
+          pinRequest.token);
+      const char* code = verdict == esp32core::LocalWifiControl::BlePinApplyResult::Applied
+          ? "PIN,OK," :
+          verdict == esp32core::LocalWifiControl::BlePinApplyResult::Replayed
+          ? "PIN,REPLAY," :
+          verdict == esp32core::LocalWifiControl::BlePinApplyResult::Busy
+          ? "PIN,BUSY," : "PIN,REJECT,";
+      const String response = String(code) + pinRequest.token;
+      publishControlReply(response.c_str());
       continue;
     }
     if (calibrationRequest) {
