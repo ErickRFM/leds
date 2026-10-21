@@ -48,6 +48,7 @@ class AndroidLocalAudioPlayer(private val context: Context) : AutoCloseable {
             }
             media.setOnCompletionListener {
                 if (player === it && !closed) {
+                    releasePlayer()
                     mutableState.value = State(Phase.IDLE, "Pista finalizada")
                     onCompleted()
                 }
@@ -73,6 +74,7 @@ class AndroidLocalAudioPlayer(private val context: Context) : AutoCloseable {
     }
 
     fun pause(): Boolean {
+        if (closed || mutableState.value.phase != Phase.PLAYING) return false
         val media = player ?: return false
         return try {
             if (!media.isPlaying) return false
@@ -83,6 +85,7 @@ class AndroidLocalAudioPlayer(private val context: Context) : AutoCloseable {
     }
 
     fun resume(): Boolean {
+        if (closed || mutableState.value.phase != Phase.PAUSED) return false
         val media = player ?: return false
         return try {
             media.start()
@@ -92,6 +95,7 @@ class AndroidLocalAudioPlayer(private val context: Context) : AutoCloseable {
     }
 
     fun setVolume(value: Float) {
+        if (!value.isFinite()) return
         volume = value.coerceIn(0f, 1f)
         try { player?.setVolume(volume, volume) } catch (_: IllegalStateException) {}
     }
