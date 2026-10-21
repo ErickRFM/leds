@@ -106,6 +106,23 @@ class LocalLabClient(private val context: Context) {
     suspend fun componentStatus(key: String): JSONObject =
         request("GET", "/v2/components/status", key)
 
+    /** Explicit user action; HTTP ACK confirms the driver ran, not physical pixels. */
+    suspend fun showOled(key: String, mode: String, value: String): JSONObject {
+        require(mode == "text" || mode == "face")
+        require(value.isNotEmpty() && value.length <= 39 &&
+            value.all { it.code in 32..126 })
+        if (mode == "face") {
+            require(value in setOf("happy", "sleepy", "angry", "surprised"))
+        }
+        val response = request("POST", "/v2/display/oled", key,
+            mapOf("mode" to mode, "value" to value))
+        check(response.optString("status") == "DISPLAYED" &&
+            response.optBoolean("runtimeOnly")) {
+            "El ESP32 no confirmó el comando OLED."
+        }
+        return response
+    }
+
     /** The LDR needs a real 3.3V divider and two distinct ADC1 references.
      * Calibration is runtime-only and requires the existing SoftAP authorization.
      */
