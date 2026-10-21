@@ -10,6 +10,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -18,6 +19,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.rgbcontroller.core.ble.BleConnectionState
+import com.rgbcontroller.core.ble.BleEnvironmentalProtocol
+import com.rgbcontroller.core.ble.BleManager
+import com.rgbcontroller.core.ble.BleSecurityState
 import com.rgbcontroller.core.wifi.CompiLabSession
 import com.rgbcontroller.core.wifi.LabConnectionState
 import com.rgbcontroller.core.wifi.LabTransport
@@ -26,41 +31,59 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** Acknowledged firmware mode, not a local animation or a fake RGB timer. */
+/** Reuses the same firmware environmental state machine on BLE and Wi-Fi.
+ * The UI NEVER treats a GATT write callback as environmental-mode acceptance.
+ */
 @Composable
-fun EnvironmentalRgbControlCard(session: CompiLabSession, client: LocalLabClient) {
+fun EnvironmentalRgbControlCard(
+    session: CompiLabSession, client: LocalLabClient, bleManager: BleManager
+) {
     val scope = rememberCoroutineScope()
-    val authorized = session.transport == LabTransport.WIFI_LAB &&
+    val transport = session.transport
+    val wifiMode = transport == LabTransport.WIFI_LAB
+    val bleConnection by bleManager.connectionState.collectAsState()
+    val bleSecurity by bleManager.securityState.collectAsState()
+    val bleEnabled by bleManager.environmentalRgbEnabled.collectAsState()
+    val bleReply by bleManager.environmentalRgbMessage.collectAsState()
+    val authorized = if (wifiMode) {
         session.connectionState == LabConnectionState.AUTHORIZED && session.wifiReady
-    var enabled by remember { mutableStateOf(false) }
+    } else {
+        bleConnection == BleConnectionState.Ready &&
+            bleSecurity == BleSecurityState.Authorized
+    }
+    var wifiEnabled by remember { mutableStateOf<Boolean?>(null) }
     var busy by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf("Consulta el estado ambiental por Wi-Fi.") }
+    var message by remember { mutableStateOf("Esperando estado ambiental del ESP32.") }
+    val enabled = if (wifiMode) wifiEnabled else bleEnabled
 
-    LaunchedEffect(authorized, session.revision) {
+    LaunchedEffect(authorized, wifiMode, session.revision) {
         if (!authorized) {
-            enabled = false
-            message = "Para automatizar el ESP32, conéctate al Wi-Fi local autorizado."
+            wifiEnabled = null
+            message = if (wifiMode) "Conecta al Wi-Fi autorizado del ESP32."
+                else "Conecta y autoriza al propietario Bluetooth para activar RGB ambiental."
             return@LaunchedEffect
         }
-        // Read back mode during this visible screen's lifetime: a manual BLE or
-        // Wi-Fi command can legitimately cancel automation behind this UI.
         while (true) {
             try {
                 if (!busy) {
-                    val version = session.revision
-                    val key = session.key
-                    val result = session.serialized { client.environmentalRgbStatus(key) }
-                    if (authorized && session.revision == version && !busy) {
-                        enabled = result.optBoolean("enabled")
-                        message = if (enabled)
-                            "Modo habilitado. Solo cambia colores con temperatura válida."
-                        else "Modo manual; puedes activar iluminación ambiental."
+                    if (wifiMode) {
+                        val version = session.revision
+                        val key = session.key
+                        val status = session.serialized { client.environmentalRgbStatus(key) }
+                        if (authorized && session.revision == version && !busy) {
+                            wifiEnabled = status.optBoolean("enabled")
+                            message = if (wifiEnabled == true)
+                                "ESP32 confirmó el modo ambiental activo."
+                            else "ESP32 confirmó el modo manual."
+                        }
+                    } else if (!bleManager.requestEnvironmentalRgb(BleEnvironmentalProtocol.Action.GET)) {
+                        message = "Bluetooth aún no autoriza consultas ambientales."
                     }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
-                enabled = false
+                if (wifiMode) wifiEnabled = null
                 message = "No se confirmó el modo ambiental: ${failure.message}"
             }
             delay(3_500L)
@@ -70,11 +93,20 @@ fun EnvironmentalRgbControlCard(session: CompiLabSession, client: LocalLabClient
     Card(Modifier.fillMaxWidth().testTag("environmental_rgb_control")) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("RGB ambiental", style = MaterialTheme.typography.titleMedium)
-            Text("El firmware cambia el color según temperatura y el brillo según " +
-                "la luz LDR calibrada. Si el DHT11 falla, suspende cambios; " +
-                "si falta luz válida, usa un brillo limitado.",
-                style = MaterialTheme.typography.bodySmall)
-            Text(message, style = MaterialTheme.typography.bodySmall)
+            Text(
+                "La temperatura determina el color y la LDR calibrada ajusta el brillo. " +
+                    "Si el DHT11 falla, el ESP32 suspende cambios automáticos.",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Text(
+                when {
+                    !authorized -> if (wifiMode) message
+                        else "Necesitas autorización BLE de propietario (cifrado solo no basta)."
+                    !wifiMode -> bleReply
+                    else -> message
+                },
+                style = MaterialTheme.typography.bodySmall
+            )
             Button(
                 enabled = authorized && !busy,
                 modifier = Modifier.fillMaxWidth().testTag("environmental_rgb_toggle"),
@@ -82,19 +114,28 @@ fun EnvironmentalRgbControlCard(session: CompiLabSession, client: LocalLabClient
                     scope.launch {
                         busy = true
                         try {
-                            check(authorized) { "Se perdió la conexión Wi-Fi." }
-                            val version = session.revision
-                            val key = session.key
-                            session.serialized {
-                                if (enabled) client.stopEnvironmentalRgb(key)
-                                else client.startEnvironmentalRgb(key)
+                            check(authorized) { "Perdiste la autorización con el ESP32." }
+                            if (wifiMode) {
+                                val version = session.revision
+                                val key = session.key
+                                session.serialized {
+                                    if (enabled == true) client.stopEnvironmentalRgb(key)
+                                    else client.startEnvironmentalRgb(key)
+                                }
+                                check(authorized && session.revision == version) {
+                                    "Cambió la sesión Wi-Fi; vuelve a verificar."
+                                }
+                                wifiEnabled = null  // await read-back, never assume success
+                                message = "Esperando la confirmación de estado del ESP32…"
+                            } else {
+                                val action = if (enabled == true)
+                                    BleEnvironmentalProtocol.Action.STOP
+                                else BleEnvironmentalProtocol.Action.START
+                                check(bleManager.requestEnvironmentalRgb(action)) {
+                                    "El ESP32 no aceptó encolar el comando BLE."
+                                }
+                                // BLE mode only changes with ENV,ON / ENV,OFF notification.
                             }
-                            check(authorized && session.revision == version) {
-                                "La sesión cambió; vuelve a consultar el estado."
-                            }
-                            enabled = !enabled
-                            message = if (enabled) "Automatización habilitada en ESP32 (solo RAM)."
-                                else "Automatización detenida. El LED conserva su último color."
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (failure: Exception) {
@@ -104,7 +145,9 @@ fun EnvironmentalRgbControlCard(session: CompiLabSession, client: LocalLabClient
                         }
                     }
                 }
-            ) { Text(if (enabled) "Detener modo ambiental" else "Activar modo ambiental") }
+            ) {
+                Text(if (enabled == true) "Detener modo ambiental" else "Activar modo ambiental")
+            }
         }
     }
 }
