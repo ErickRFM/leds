@@ -33,6 +33,7 @@
 #include "core/EnvironmentalRgbPolicy.h"
 #include "core/BleEnvironmentalCommand.h"
 #include "core/BleSnapshotFramer.h"
+#include "core/BleLdrCalibration.h"
 #include "modules/Dht22Module.h"
 #include "core/DhtFrameCodec.h"
 #include "core/DhtWireDiagnostics.h"
@@ -594,10 +595,12 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
     esp32core::RgbCommand parsed{};
     char kind = 0;
     uint16_t requestId = 0;
+    esp32core::BleLdrCalibration calibration{};
     const bool valid = esp32core::parseRgbCommand(command.c_str(), parsed) ||
                        esp32core::isBleEnvironmentalCommand(command.c_str()) ||
                        esp32core::parseBleSnapshotRequest(command.c_str(),
-                                                         kind, requestId);
+                                                         kind, requestId) ||
+                       esp32core::parseBleLdrCalibration(command.c_str(), calibration);
     portENTER_CRITICAL(&bleInboxMux);
     const bool accepted = valid && bleInbox.push(command.c_str());
     if (!accepted && bleRejected < 65535) ++bleRejected;
@@ -1046,8 +1049,11 @@ void processBleCommands() {
     const bool snapshotRequest = esp32core::parseBleSnapshotRequest(
         buffer, snapshotKind, snapshotId);
     const auto environmental = esp32core::parseBleEnvironmentalCommand(buffer);
+    esp32core::BleLdrCalibration calibration{};
+    const bool calibrationRequest = esp32core::parseBleLdrCalibration(
+        buffer, calibration);
     esp32core::RgbCommand parsed{};
-    if (!snapshotRequest &&
+    if (!snapshotRequest && !calibrationRequest &&
         environmental == esp32core::BleEnvironmentalAction::Invalid &&
         !esp32core::parseRgbCommand(buffer, parsed)) {
       reject();
@@ -1062,6 +1068,14 @@ void processBleCommands() {
     auto evaluation = commandArbiter.evaluate(channelSource, isStop);
     if (!evaluation.allowed) {
       reject();
+      continue;
+    }
+    if (calibrationRequest) {
+      const bool applied = wifiLab.calibrateLdr(calibration.darkRaw,
+                                                calibration.brightRaw);
+      const String ack = String(applied ? "LDR,OK," : "LDR,REJECT,") +
+                         String(calibration.requestId);
+      publishControlReply(ack.c_str());
       continue;
     }
     if (snapshotRequest) {
