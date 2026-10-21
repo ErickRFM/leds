@@ -22,7 +22,7 @@ import com.rgbcontroller.core.audio.EnvironmentalSpeechFormatter
 import com.rgbcontroller.core.components.status.ComponentDashboardState
 import com.rgbcontroller.core.components.status.ComponentStatusFreshness
 
-/** On-device speech, only from live current readings authorized over Wi-Fi. */
+/** On-device speech from live current measurements over authorized Wi-Fi or owner BLE. */
 @Composable
 fun EnvironmentalSpeechCard(state: ComponentDashboardState) {
     val context = LocalContext.current
@@ -43,7 +43,7 @@ fun EnvironmentalSpeechCard(state: ComponentDashboardState) {
             Text("Compi te informa", style = MaterialTheme.typography.titleMedium)
             Text(
                 when {
-                    !live -> "Conecta por Wi-Fi autorizado para escuchar lecturas actuales."
+                    !live -> "Conecta por Wi-Fi autorizado o Bluetooth de propietario para escuchar lecturas actuales."
                     !report.hasFreshData -> "No hay lecturas físicas actuales válidas para anunciar."
                     !voiceReady -> "Preparando voz en español; comprueba el motor TTS de Android."
                     else -> report.text

@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rgbcontroller.core.ble.BleConnectionState
+import com.rgbcontroller.core.ble.BleSecurityState
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.components.model.ComponentMeasurement
 import com.rgbcontroller.core.components.model.ComponentRuntimeStatus
@@ -87,6 +88,9 @@ fun ModuleWorkspaceScreen(
     val scope = rememberCoroutineScope()
     val bleConnection by bleManager.connectionState.collectAsState()
     val bleReady = bleConnection == BleConnectionState.Ready
+    val bleSecurity by bleManager.securityState.collectAsState()
+    val bleAuthorized = session.transport == LabTransport.BLUETOOTH &&
+        bleReady && bleSecurity == BleSecurityState.Authorized
     val wifiAuthorized = session.transport == LabTransport.WIFI_LAB &&
         session.connectionState == LabConnectionState.AUTHORIZED && session.wifiReady
     var showLibrary by rememberSaveable { mutableStateOf(false) }
@@ -105,13 +109,13 @@ fun ModuleWorkspaceScreen(
         vm.loadPersisted()
         vm.onConnectionChanged()
     }
-    LaunchedEffect(session.connectionState, session.transport, bleReady) {
+    LaunchedEffect(session.connectionState, session.transport, bleReady, bleSecurity) {
         vm.onConnectionChanged()
     }
     // Foreground only: refresh real sensor values while this destination is visible.
     // Cancellation on navigation avoids background Wi-Fi traffic/battery drain.
-    LaunchedEffect(wifiAuthorized) {
-        if (wifiAuthorized) {
+    LaunchedEffect(wifiAuthorized, bleAuthorized) {
+        if (wifiAuthorized || bleAuthorized) {
             while (true) {
                 delay(7_500L)
                 vm.refresh()
@@ -126,8 +130,8 @@ fun ModuleWorkspaceScreen(
     // is physically present. Never auto-create a user's module from them.
     val names = confirmed.filter { it.active || it.state != "catalog" }
         .map { ComponentCatalog.catalogIdForFirmwareId(it.id) }
-    // A BLE Ready state confirms access to the existing RGB protocol, not
-    // general sensor/GPIO firmware leases. Expose only the RGB module in BLE mode.
+    // BLE component status is authoritative only after a complete owner-
+    // authenticated, sequence-bound snapshot. Bonding alone proves nothing.
     val configured = ModuleWorkspaceGrouping.group(
         (state.desiredConfig.components.map { it.id } + names +
             (if (bleReady) listOf("led_rgb") else emptyList())).distinct()
@@ -316,14 +320,17 @@ fun ModuleWorkspaceScreen(
                             Spacer(Modifier.width(8.dp))
                             Text(when {
                                 wifiAuthorized -> "ESP32 · Wi-Fi autorizado"
-                                bleReady -> "ESP32 · Bluetooth conectado"
+                                bleAuthorized -> "ESP32 · Bluetooth propietario autorizado"
+                                bleReady -> "ESP32 · Bluetooth conectado (sin autorización)"
                                 else -> "ESP32 desconectado"
                             }, style = MaterialTheme.typography.titleMedium,
                                 modifier = Modifier.weight(1f))
                         }
                         Text(
                             if (wifiAuthorized) "GPIO y sensores: firmware."
-                            else if (bleReady) "RGB por BLE · sensores por Wi-Fi autorizado."
+                            else if (bleAuthorized)
+                                "Sensores y módulos: lectura BLE autenticada. Calibración/GPIO: Wi-Fi."
+                            else if (bleReady) "Bluetooth conectado; autoriza propietario para leer sensores."
                             else "Sin conexión · puedes preparar módulos.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant

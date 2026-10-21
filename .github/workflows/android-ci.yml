@@ -71,6 +71,10 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/environmental_rgb_policy_test.cpp -o /tmp/environmental_rgb_policy_test
           /tmp/environmental_rgb_policy_test
+      - name: BLE sensor snapshots and owner gate host tests
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/ble_snapshot_framer_test.cpp -o /tmp/ble_snapshot_framer_test
+          /tmp/ble_snapshot_framer_test
       - name: BLE environmental owner-gate host tests
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/ble_environmental_command_test.cpp -o /tmp/ble_environmental_command_test

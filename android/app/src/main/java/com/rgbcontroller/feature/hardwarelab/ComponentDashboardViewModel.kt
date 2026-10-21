@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.rgbcontroller.core.ble.BleManager
+import com.rgbcontroller.core.ble.BleConnectionState
+import com.rgbcontroller.core.ble.BleSecurityState
+import com.rgbcontroller.core.ble.BleSnapshotAssembler
 import com.rgbcontroller.core.components.alerts.AlertRule
 import com.rgbcontroller.core.components.automation.AutomationAction
 import com.rgbcontroller.core.components.automation.AutomationActionSink
@@ -310,11 +313,17 @@ class ComponentDashboardViewModel(
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val repository = ComponentStatusRepository(DataStoreComponentStatusStorage(context))
                 val client = LocalLabClient(context)
-                val authorized = {
+                val wifiAuthorized = {
                     session != null && session.transport == LabTransport.WIFI_LAB &&
                         session.wifiReady && LocalLabClient.validKey(session.key) &&
                         session.connectionState == LabConnectionState.AUTHORIZED
                 }
+                val bleAuthorized = {
+                    session != null && session.transport == LabTransport.BLUETOOTH &&
+                        bleManager?.connectionState?.value == BleConnectionState.Ready &&
+                        bleManager.securityState.value == BleSecurityState.Authorized
+                }
+                val authorized = { wifiAuthorized() || bleAuthorized() }
                 val deviceId = {
                     bleManager?.publicDeviceId?.value
                         ?: bleManager?.connectedAddress?.value
@@ -324,25 +333,41 @@ class ComponentDashboardViewModel(
                 // telemetry/status requests with acknowledged hardware commands.
                 // Discard a delayed answer if the control session has changed.
                 val fetch = suspend {
-                    if (!authorized()) null else {
-                        val activeSession = session!!
-                        val key = activeSession.key
-                        val revision = activeSession.revision
-                        val payload = activeSession.serialized {
-                            if (!authorized()) null else client.componentStatus(key).toString()
+                    when {
+                        bleAuthorized() -> bleManager?.readComponentSnapshot(
+                            BleSnapshotAssembler.Kind.STATUS
+                        )?.takeIf { bleAuthorized() }
+                        wifiAuthorized() -> {
+                            val activeSession = session!!
+                            val key = activeSession.key
+                            val revision = activeSession.revision
+                            val payload = activeSession.serialized {
+                                if (!wifiAuthorized()) null
+                                else client.componentStatus(key).toString()
+                            }
+                            payload?.takeIf { wifiAuthorized() &&
+                                activeSession.revision == revision }
                         }
-                        payload?.takeIf { authorized() && activeSession.revision == revision }
+                        else -> null
                     }
                 }
                 val fetchTelemetry = suspend {
-                    if (!authorized()) null else {
-                        val activeSession = session!!
-                        val key = activeSession.key
-                        val revision = activeSession.revision
-                        val payload = activeSession.serialized {
-                            if (!authorized()) null else client.componentTelemetry(key).toString()
+                    when {
+                        bleAuthorized() -> bleManager?.readComponentSnapshot(
+                            BleSnapshotAssembler.Kind.TELEMETRY
+                        )?.takeIf { bleAuthorized() }
+                        wifiAuthorized() -> {
+                            val activeSession = session!!
+                            val key = activeSession.key
+                            val revision = activeSession.revision
+                            val payload = activeSession.serialized {
+                                if (!wifiAuthorized()) null
+                                else client.componentTelemetry(key).toString()
+                            }
+                            payload?.takeIf { wifiAuthorized() &&
+                                activeSession.revision == revision }
                         }
-                        payload?.takeIf { authorized() && activeSession.revision == revision }
+                        else -> null
                     }
                 }
                 // Hardware automation actions reuse the EXISTING command path:
