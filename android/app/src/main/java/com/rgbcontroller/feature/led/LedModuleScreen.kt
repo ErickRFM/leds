@@ -242,6 +242,10 @@ fun LedModuleScreen(
             }
         }
 
+        if (isWifi) {
+            EnvironmentalRgbControlCard(labSession, wifiClient)
+        }
+
         if (isWifi && isDebug) {
             Card(
                 modifier = Modifier.fillMaxWidth(),

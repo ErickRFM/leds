@@ -68,6 +68,15 @@ class LocalWifiControl final {
     ldrCalibrationContext_ = context;
   }
 
+  // No extra RGB driver: the loop reads this opt-in mode and uses the existing
+  // authenticated RGB command path. Never persists a mode on reboot.
+  bool environmentalRgbEnabled() const { return environmentalRgbEnabled_; }
+  bool environmentalRgbMayRun() const {
+    return environmentalRgbEnabled_ && !script_.active() &&
+        !automation_.active() && !experiment_.active() && !hasManual();
+  }
+  void disableEnvironmentalRgb() { environmentalRgbEnabled_ = false; }
+
   // Independent LAB HTTP access key, printed only to physical serial.
   // This is NOT the BLE owner's X25519 enrollment identity or session key.
   String accessKey() const { return accessKey_; }
@@ -194,7 +203,8 @@ class LocalWifiControl final {
     server_.on("/v2/components/ldr/calibrate", HTTP_POST, [this]() {
       if (!authorized()) return;
       if (ldrCalibration_ == nullptr || script_.active() ||
-          experiment_.active() || automation_.active() || hasManual()) {
+          experiment_.active() || automation_.active() ||
+          environmentalRgbEnabled_ || hasManual()) {
         jsonError(409, "ldr_calibration_unavailable_or_busy");
         return;
       }
@@ -230,7 +240,7 @@ class LocalWifiControl final {
     server_.on("/v2/components/apply", HTTP_POST, [this]() {
       if (!authorized()) return;
       if (apply_ == nullptr || script_.active() || experiment_.active() ||
-          automation_.active() || hasManual()) {
+          automation_.active() || environmentalRgbEnabled_ || hasManual()) {
         jsonError(409, "component_apply_unavailable_or_busy"); return;
       }
       const String componentId = server_.arg("id");
@@ -518,6 +528,31 @@ class LocalWifiControl final {
       server_.send(200, "application/json", "{\"status\":\"STOPPED\"}");
     });
 
+    server_.on("/v2/environment/rgb/status", HTTP_GET, [this]() {
+      if (!authorized()) return;
+      String body = String("{\"version\":1,\"enabled\":") +
+          (environmentalRgbEnabled_ ? "true" : "false") +
+          ",\"runtimeOnly\":true}";
+      server_.send(200, "application/json", body);
+    });
+    server_.on("/v2/environment/rgb/start", HTTP_POST, [this]() {
+      if (!authorized()) return;
+      if (script_.active() || automation_.active() ||
+          experiment_.active() || hasManual()) {
+        jsonError(409, "environmental_rgb_busy");
+        return;
+      }
+      environmentalRgbEnabled_ = true;
+      server_.send(200, "application/json",
+                   "{\"status\":\"ENABLED\",\"runtimeOnly\":true}");
+    });
+    server_.on("/v2/environment/rgb/stop", HTTP_POST, [this]() {
+      if (!authorized()) return;
+      environmentalRgbEnabled_ = false;
+      server_.send(200, "application/json",
+                   "{\"status\":\"STOPPED\",\"runtimeOnly\":true}");
+    });
+
     server_.on("/v2/automation/status", HTTP_GET, [this]() {
       if (!authorized()) return;
       String body = "{\"version\":1,\"active\":" +
@@ -535,7 +570,8 @@ class LocalWifiControl final {
           !parseInt("startOn", 0, 1, startOn)) {
         jsonError(400, "invalid_automation"); return;
       }
-      if (script_.active() || experiment_.active() || hasManual() || automation_.active()) {
+      if (script_.active() || experiment_.active() || hasManual() ||
+          automation_.active() || environmentalRgbEnabled_) {
         jsonError(409, "another_operation_active"); return;
       }
       if (!automation_.configure(static_cast<uint32_t>(seconds) * 1000U,
@@ -563,7 +599,8 @@ class LocalWifiControl final {
 
     server_.on("/v2/script/run", HTTP_POST, [this]() {
       if (!authorized()) return;
-      if (script_.active() || experiment_.active() || automation_.active()) {
+      if (script_.active() || experiment_.active() || automation_.active() ||
+          environmentalRgbEnabled_) {
         jsonError(409, "script_or_gpio_experiment_active"); return;
       }
       const String source = server_.arg("source");
@@ -662,7 +699,8 @@ class LocalWifiControl final {
     }
   }
 
-  void stopScriptFromBle() { script_.stop(); automation_.stop(); automationEdges_ = 0; }
+  void stopScriptFromBle() { script_.stop(); automation_.stop(); automationEdges_ = 0;
+    environmentalRgbEnabled_ = false; }
 
   bool writeBlePinSnapshot(char (&output)[96]) const {
     return GpioTelemetryCodec::encode(pins_, manualLevels_, output, sizeof(output));
@@ -695,6 +733,7 @@ class LocalWifiControl final {
   void* applyContext_ = nullptr;
   LdrCalibration ldrCalibration_ = nullptr;
   void* ldrCalibrationContext_ = nullptr;
+  bool environmentalRgbEnabled_ = false;
   ComponentApplyReplayGuard replayGuard_;
   Preferences prefs_;
   WebServer server_{80};
