@@ -241,6 +241,10 @@ jobs:
           arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
           . ./config/esp32-board.env
           arduino-cli core install "esp32:esp32@$ARDUINO_ESP32_CORE" --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+      - name: Install OLED display libraries for actual firmware build
+        run: |
+          arduino-cli lib update-index
+          arduino-cli lib install "Adafruit BusIO" "Adafruit GFX Library" "Adafruit SSD1306"
       - name: Compile firmware
         run: |
           . ./config/esp32-board.env
