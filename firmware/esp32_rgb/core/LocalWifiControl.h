@@ -77,6 +77,40 @@ class LocalWifiControl final {
     return ldrCalibration_(dark, bright, ldrCalibrationContext_);
   }
 
+  enum class BlePinApplyResult { Applied, Replayed, Busy, Rejected };
+
+  // Executes only from the Arduino loop, after the caller has verified OWNER.
+  // Same hardware callback, component CAS and replay ledger as Wi-Fi.
+  BlePinApplyResult applySingleSensorPinBle(
+      const char* component, uint8_t from, uint8_t to,
+      const char* shortToken) {
+    if (!component || !shortToken ||
+        (std::strcmp(component, "dht11") != 0 &&
+         std::strcmp(component, "ldr_light") != 0) ||
+        apply_ == nullptr || script_.active() || experiment_.active() ||
+        automation_.active() || environmentalRgbEnabled_ || hasManual())
+      return BlePinApplyResult::Busy;
+    char requestId[17] = {};
+    const int n = std::snprintf(requestId, sizeof(requestId),
+                                "00000000%s", shortToken);
+    if (n != 16) return BlePinApplyResult::Rejected;
+    const ComponentApplyReplayGuard::Request request = {
+        requestId, component, from, 0, to, 0, 0, 0
+    };
+    const auto verdict = replayGuard_.inspect(request);
+    if (verdict == ComponentApplyReplayGuard::Verdict::IdenticalRetry)
+      return BlePinApplyResult::Replayed;
+    if (verdict != ComponentApplyReplayGuard::Verdict::New)
+      return BlePinApplyResult::Rejected;
+    // PinManager and applyComponentPins still validate ADC1, BOOT, LED leases
+    // and the expected current pin; every failure must roll back.
+    if (!apply_(component, from, 0, to, 0, 0, 0, applyContext_))
+      return BlePinApplyResult::Rejected;
+    if (!replayGuard_.commit(request))
+      return BlePinApplyResult::Rejected;
+    return BlePinApplyResult::Applied;
+  }
+
   // No extra RGB driver: the loop reads this opt-in mode and uses the existing
   // authenticated RGB command path. Never persists a mode on reboot.
   bool environmentalRgbEnabled() const { return environmentalRgbEnabled_; }
