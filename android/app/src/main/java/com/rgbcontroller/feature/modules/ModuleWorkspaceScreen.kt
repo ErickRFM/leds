@@ -219,27 +219,36 @@ fun ModuleWorkspaceScreen(
                     item(key = "module_metrics_$id") {
                         ModuleReadings(
                             id, state, onRefresh = { scope.launch { vm.refresh() } },
-                            canCalibrateLdr = wifiAuthorized,
+                            canCalibrateLdr = wifiAuthorized || bleAuthorized,
                             calibrationMessage = ldrCalibrationMessage,
                             onCalibrateLdr = { dark, bright ->
                                 scope.launch {
                                     ldrCalibrationMessage = "Aplicando calibración en el ESP32…"
                                     try {
-                                        check(wifiAuthorized) { "Conecta al Wi-Fi autorizado." }
                                         val revision = session.revision
-                                        val key = session.key
-                                        session.serialized {
-                                            check(wifiAuthorized && session.revision == revision) {
-                                                "Cambió la conexión antes de calibrar."
+                                        if (bleAuthorized) {
+                                            check(bleManager.calibrateLdrBle(dark, bright)) {
+                                                "El propietario BLE no recibió confirmación de calibración."
                                             }
-                                            labClient.calibrateLdr(key, dark, bright)
-                                        }
-                                        check(wifiAuthorized && session.revision == revision) {
-                                            "La sesión cambió; vuelve a comprobar la calibración."
+                                            check(bleAuthorized && session.revision == revision) {
+                                                "La sesión BLE cambió; vuelve a comprobar el estado."
+                                            }
+                                        } else {
+                                            check(wifiAuthorized) { "Conecta al Wi-Fi autorizado." }
+                                            val key = session.key
+                                            session.serialized {
+                                                check(wifiAuthorized && session.revision == revision) {
+                                                    "Cambió la conexión antes de calibrar."
+                                                }
+                                                labClient.calibrateLdr(key, dark, bright)
+                                            }
+                                            check(wifiAuthorized && session.revision == revision) {
+                                                "La sesión cambió; vuelve a comprobar la calibración."
+                                            }
                                         }
                                         delay(650L)
                                         vm.refresh()
-                                        ldrCalibrationMessage = "Calibración recibida por el ESP32. " +
+                                        ldrCalibrationMessage = "Calibración confirmada por el ESP32. " +
                                             "Se perderá al reiniciar; comprueba el porcentaje en vivo."
                                     } catch (cancelled: CancellationException) {
                                         throw cancelled
