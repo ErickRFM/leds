@@ -32,6 +32,7 @@
 #include "core/SensorTelemetryCodec.h"
 #include "core/EnvironmentalRgbPolicy.h"
 #include "core/BleEnvironmentalCommand.h"
+#include "core/BleSnapshotFramer.h"
 #include "modules/Dht22Module.h"
 #include "core/DhtFrameCodec.h"
 #include "core/DhtWireDiagnostics.h"
@@ -134,6 +135,9 @@ volatile bool restartBleAdvertising = false;
 volatile uint32_t bleDisconnectMs = 0;
 // Single source of truth for BLE link security and owner authorization.
 esp32core::BleSecurityPolicy bleSecurity;
+esp32core::BleSnapshotFramer bleSnapshot;
+uint16_t bleSnapshotSequence = 0;
+uint32_t lastBleSnapshotPartAt = 0;
 // SEG.1b-2b: the owner-enrollment session is the authority for privileged BLE
 // commands. It composes framing, the enrollment state machine, real mbedTLS
 // crypto and NVS persistence. No new UUIDs: it rides the existing WRITE
@@ -590,7 +594,8 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
     }
     esp32core::RgbCommand parsed{};
     const bool valid = esp32core::parseRgbCommand(command.c_str(), parsed) ||
-                       esp32core::isBleEnvironmentalCommand(command.c_str());
+                       esp32core::isBleEnvironmentalCommand(command.c_str()) ||
+                       command == "SNP,S" || command == "SNP,T";
     portENTER_CRITICAL(&bleInboxMux);
     const bool accepted = valid && bleInbox.push(command.c_str());
     if (!accepted && bleRejected < 65535) ++bleRejected;
@@ -1034,9 +1039,12 @@ void processBleCommands() {
     const bool found = bleInbox.pop(buffer);
     portEXIT_CRITICAL(&bleInboxMux);
     if (!found) break;
+    const bool snapshotRequest = std::strcmp(buffer, "SNP,S") == 0 ||
+                                 std::strcmp(buffer, "SNP,T") == 0;
     const auto environmental = esp32core::parseBleEnvironmentalCommand(buffer);
     esp32core::RgbCommand parsed{};
-    if (environmental == esp32core::BleEnvironmentalAction::Invalid &&
+    if (!snapshotRequest &&
+        environmental == esp32core::BleEnvironmentalAction::Invalid &&
         !esp32core::parseRgbCommand(buffer, parsed)) {
       reject();
       continue;
@@ -1050,6 +1058,24 @@ void processBleCommands() {
     auto evaluation = commandArbiter.evaluate(channelSource, isStop);
     if (!evaluation.allowed) {
       reject();
+      continue;
+    }
+    if (snapshotRequest) {
+      if (bleSnapshot.active()) {
+        publishControlReply("SNP,BUSY");
+      } else {
+        char json[esp32core::BleSnapshotFramer::kPayloadMax + 1] = {};
+        const bool statusRequest = buffer[4] == 'S';
+        const bool encoded = statusRequest
+            ? collectComponentStatus(json, sizeof(json), nullptr)
+            : collectComponentTelemetry(json, sizeof(json), nullptr);
+        if (!encoded || !bleSnapshot.start(statusRequest
+                ? esp32core::BleSnapshotFramer::Kind::Status
+                : esp32core::BleSnapshotFramer::Kind::Telemetry,
+                json, ++bleSnapshotSequence)) {
+          publishControlReply("SNP,ERROR");
+        }
+      }
       continue;
     }
     if (environmental != esp32core::BleEnvironmentalAction::Invalid) {
@@ -1348,6 +1374,17 @@ void loop() {
           String(decision.brightness);
       applyRgbRuntimeCommand(command);  // never persists a temporary color
     }
+  }
+  // Send one small owner-only snapshot chunk per loop interval. Never emit
+  // before cryptographic owner authorization or after disconnect/revocation.
+  if (!connected || !ownerSession.authenticated()) {
+    bleSnapshot.cancel();
+  } else if (bleSnapshot.active() &&
+             static_cast<uint32_t>(now - lastBleSnapshotPartAt) >= 45u) {
+    lastBleSnapshotPartAt = now;
+    bleSnapshot.tick([](const char* frame, void*) {
+      publishControlReply(frame);
+    }, nullptr);
   }
   persistRgbIfDue(now);
   // Read-only electrical/protocol evidence on the USB serial monitor (115200).
