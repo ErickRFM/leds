@@ -15,7 +15,7 @@ class AudioPlaylistQueueTest {
         assertFalse(q.enqueue("content://"))
         assertFalse(q.enqueue("content:///missing-authority"))
         assertFalse(q.enqueue("content://audio/with space"))
-        assertFalse(q.enqueue("content://audio/with\\nnewline"))
+        assertFalse(q.enqueue("content://audio/with\nnewline"))
         assertTrue(q.enqueue("content://audio/1"))
         assertFalse(q.enqueue("content://audio/1"))
         assertTrue(q.enqueue("content://audio/2"))
