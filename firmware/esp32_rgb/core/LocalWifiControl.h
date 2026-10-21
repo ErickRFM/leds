@@ -42,6 +42,7 @@ class LocalWifiControl final {
                                    uint8_t to3, void* context);
 
   using LdrCalibration = bool (*)(uint16_t darkRaw, uint16_t brightRaw, void* context);
+  using OledDisplay = bool (*)(const char* mode, const char* value, void* context);
 
   LocalWifiControl(PinManager& pins, RgbState state, RgbCommand manualCommand,
                    RgbCommand runtimeCommand, DeviceId deviceId)
@@ -66,6 +67,11 @@ class LocalWifiControl final {
   void setLdrCalibration(LdrCalibration calibrate, void* context) {
     ldrCalibration_ = calibrate;
     ldrCalibrationContext_ = context;
+  }
+
+  void setOledDisplay(OledDisplay display, void* context) {
+    oledDisplay_ = display;
+    oledContext_ = context;
   }
 
   // One authority for both authorized transports. No duplicate GPIO rules.
@@ -195,6 +201,36 @@ class LocalWifiControl final {
       body += ",\"secureBleWrites\":false,\"otaUploadEnabled\":false";
       body += ",\"runtime\":\"lab\"}";
       server_.send(200, "application/json", body);
+    });
+
+    server_.on("/v2/display/oled", HTTP_POST, [this]() {
+      if (!authorized()) return;
+      if (oledDisplay_ == nullptr) { jsonError(409, "oled_unavailable"); return; }
+      const String mode = server_.arg("mode");
+      const String value = server_.arg("value");
+      const bool face = mode == "face";
+      if ((!face && mode != "text") || value.isEmpty() || value.length() > 39) {
+        jsonError(400, "invalid_oled_command");
+        return;
+      }
+      if (face && value != "happy" && value != "sleepy" &&
+          value != "angry" && value != "surprised") {
+        jsonError(400, "invalid_oled_face");
+        return;
+      }
+      for (size_t i = 0; i < value.length(); ++i) {
+        const char ch = value[i];
+        if (ch < 32 || ch > 126) {
+          jsonError(400, "oled_ascii_only");
+          return;
+        }
+      }
+      if (!oledDisplay_(mode.c_str(), value.c_str(), oledContext_)) {
+        jsonError(409, "oled_not_ready");
+        return;
+      }
+      server_.send(200, "application/json",
+                   "{\\"status\\":\\"DISPLAYED\\",\\"runtimeOnly\\":true}");
     });
 
     server_.on("/v2/components/catalog", HTTP_GET, [this]() {
@@ -739,6 +775,8 @@ class LocalWifiControl final {
   void* statusContext_ = nullptr;
   ComponentApply apply_ = nullptr;
   void* applyContext_ = nullptr;
+  OledDisplay oledDisplay_ = nullptr;
+  void* oledContext_ = nullptr;
   LdrCalibration ldrCalibration_ = nullptr;
   void* ldrCalibrationContext_ = nullptr;
   bool environmentalRgbEnabled_ = false;
