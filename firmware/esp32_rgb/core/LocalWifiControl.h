@@ -75,6 +75,14 @@ class LocalWifiControl final {
     return environmentalRgbEnabled_ && !script_.active() &&
         !automation_.active() && !experiment_.active() && !hasManual();
   }
+  // Shared operational authority for BLE owner and authenticated local HTTP.
+  // The client transport never directly mutates automation state.
+  bool startEnvironmentalRgb() {
+    if (script_.active() || automation_.active() ||
+        experiment_.active() || hasManual()) return false;
+    environmentalRgbEnabled_ = true;
+    return true;
+  }
   void disableEnvironmentalRgb() { environmentalRgbEnabled_ = false; }
 
   // Independent LAB HTTP access key, printed only to physical serial.
@@ -537,12 +545,10 @@ class LocalWifiControl final {
     });
     server_.on("/v2/environment/rgb/start", HTTP_POST, [this]() {
       if (!authorized()) return;
-      if (script_.active() || automation_.active() ||
-          experiment_.active() || hasManual()) {
+      if (!startEnvironmentalRgb()) {
         jsonError(409, "environmental_rgb_busy");
         return;
       }
-      environmentalRgbEnabled_ = true;
       server_.send(200, "application/json",
                    "{\"status\":\"ENABLED\",\"runtimeOnly\":true}");
     });
