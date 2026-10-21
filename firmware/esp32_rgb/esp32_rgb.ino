@@ -96,7 +96,7 @@
 #define COMPI_LDR_PIN 36
 #endif
 #ifndef COMPI_ENABLE_OLED
-#define COMPI_ENABLE_OLED 0
+#define COMPI_ENABLE_OLED 1
 #endif
 #ifndef COMPI_OLED_SDA
 #define COMPI_OLED_SDA 21
@@ -332,6 +332,38 @@ bool oledPresent(uint8_t, const char* text, void*) {
 #define COMPI_OLED_LIBRARY 0
 #endif
 #endif  // COMPI_ENABLE_OLED
+
+#if COMPI_BUILD_OLED && COMPI_OLED_LIBRARY
+bool oledDisplayCommand(const char* mode, const char* value, void*) {
+  if (!oledModule.ready() || mode == nullptr || value == nullptr) return false;
+  if (std::strcmp(mode, "text") == 0) {
+    return oledModule.setText(value) && oledModule.refreshNow(millis());
+  }
+  if (std::strcmp(mode, "face") != 0) return false;
+  oledDriver.clearDisplay();
+  oledDriver.setTextColor(SSD1306_WHITE);
+  if (std::strcmp(value, "sleepy") == 0) {
+    oledDriver.drawLine(20, 35, 48, 35, SSD1306_WHITE);
+    oledDriver.drawLine(80, 35, 108, 35, SSD1306_WHITE);
+  } else if (std::strcmp(value, "angry") == 0) {
+    oledDriver.fillTriangle(19, 23, 51, 35, 51, 49, SSD1306_WHITE);
+    oledDriver.fillTriangle(109, 23, 77, 35, 77, 49, SSD1306_WHITE);
+  } else if (std::strcmp(value, "surprised") == 0) {
+    oledDriver.fillCircle(34, 34, 13, SSD1306_WHITE);
+    oledDriver.fillCircle(94, 34, 13, SSD1306_WHITE);
+    oledDriver.drawCircle(64, 56, 5, SSD1306_WHITE);
+  } else if (std::strcmp(value, "happy") == 0) {
+    oledDriver.fillRoundRect(19, 22, 29, 29, 12, SSD1306_WHITE);
+    oledDriver.fillRoundRect(80, 22, 29, 29, 12, SSD1306_WHITE);
+    oledDriver.drawLine(58, 55, 64, 58, SSD1306_WHITE);
+    oledDriver.drawLine(64, 58, 70, 55, SSD1306_WHITE);
+  } else {
+    return false;
+  }
+  oledDriver.display();
+  return true;
+}
+#endif
 
 esp32core::RgbSettingsStore rgbStorage;
 bool rgbDirty = false;
@@ -1247,6 +1279,9 @@ void setup() {
   Serial.println("BOOT: required modules started; optional components reported individually");
   wifiLab.setComponentTelemetry(collectComponentTelemetry, nullptr);
   wifiLab.setComponentStatus(collectComponentStatus, nullptr);
+#if COMPI_BUILD_OLED && COMPI_OLED_LIBRARY
+  wifiLab.setOledDisplay(oledDisplayCommand, nullptr);
+#endif
   wifiLab.setComponentApply(applyComponentPins, nullptr);
 #if COMPI_BUILD_LDR
   wifiLab.setLdrCalibration(calibrateLdr, nullptr);
