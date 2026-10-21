@@ -20,6 +20,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import androidx.core.content.ContextCompat
+import com.rgbcontroller.core.components.model.ComponentStatusCodec
+import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
 import com.rgbcontroller.core.model.RgbDeviceState
 import com.rgbcontroller.core.model.RgbDeviceCommand
 import com.rgbcontroller.core.model.BleGpioPin
@@ -31,6 +33,10 @@ import com.rgbcontroller.core.ble.enrollment.ownerEnrollmentErrorMessage
 import com.rgbcontroller.core.ble.enrollment.OwnerSessionStore
 import com.rgbcontroller.core.security.BouncyCastleSessionCrypto
 import com.rgbcontroller.core.security.Hex
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -91,6 +97,10 @@ class BleManager(private val context: Context) {
     val environmentalRgbEnabled: StateFlow<Boolean?> = _environmentalRgbEnabled.asStateFlow()
     private val _environmentalRgbMessage = MutableStateFlow("Sin estado BLE ambiental confirmado.")
     val environmentalRgbMessage: StateFlow<String> = _environmentalRgbMessage.asStateFlow()
+    private val snapshotMutex = Mutex()
+    private val snapshotAssembler = BleSnapshotAssembler()
+    private var snapshotRequestId = 0
+    private var pendingSnapshot: CompletableDeferred<BleSnapshotAssembler.Snapshot>? = null
     private val ownerCrypto = BouncyCastleSessionCrypto()
     private val ownerStore = OwnerSessionStore(context)
     private var ownerRecord: OwnerSessionStore.Record? = null
@@ -734,6 +744,31 @@ class BleManager(private val context: Context) {
 
     private fun acceptState(bytes: ByteArray?) {
         val text = bytes?.toString(Charsets.UTF_8) ?: return
+        if (text.startsWith("B,") || text.startsWith("D,") ||
+            text.startsWith("E,")) {
+            if (_connectionState.value == BleConnectionState.Ready &&
+                _securityState.value == BleSecurityState.Authorized) {
+                val snapshot = snapshotAssembler.accept(
+                    text, android.os.SystemClock.elapsedRealtime()
+                )
+                if (snapshot != null) {
+                    val valid = when (snapshot.kind) {
+                        BleSnapshotAssembler.Kind.STATUS ->
+                            ComponentStatusCodec.decode(snapshot.json) != null
+                        BleSnapshotAssembler.Kind.TELEMETRY ->
+                            ComponentTelemetryCodec.decode(snapshot.json) != null
+                    }
+                    if (valid) pendingSnapshot?.complete(snapshot)
+                }
+            }
+            return
+        }
+        if (text == "SNP,ERROR" || text == "SNP,BUSY") {
+            pendingSnapshot?.completeExceptionally(
+                IllegalStateException("ESP32 no puede entregar la instantánea BLE ($text).")
+            )
+            return
+        }
         val environment = BleEnvironmentalProtocol.parseReply(text)
         if (environment != null) {
             // Bonding is insufficient; a previous session's notification must
@@ -786,6 +821,40 @@ class BleManager(private val context: Context) {
             _stateRevision.value += 1
         }
     }
+
+    /** Reads an authoritative firmware snapshot from GATT, never local storage.
+     * One request at a time, with a 16-bit client nonce and bounded reassembly.
+     */
+    suspend fun readComponentSnapshot(kind: BleSnapshotAssembler.Kind): String? =
+        snapshotMutex.withLock {
+            if (_connectionState.value != BleConnectionState.Ready ||
+                _securityState.value != BleSecurityState.Authorized ||
+                enrollmentPhase != EnrollmentPhase.IDLE) return@withLock null
+            snapshotRequestId = snapshotRequestId % 65535 + 1
+            val request = snapshotRequestId
+            val deferred = CompletableDeferred<BleSnapshotAssembler.Snapshot>()
+            snapshotAssembler.begin(kind, request)
+            pendingSnapshot = deferred
+            val enqueued = synchronized(pending) {
+                if (pending.size >= 16) false
+                else {
+                    pending.addLast("SNP,${kind.code},$request")
+                    true
+                }
+            }
+            if (!enqueued) {
+                pendingSnapshot = null
+                snapshotAssembler.reset()
+                return@withLock null
+            }
+            drainQueue()
+            try {
+                withTimeoutOrNull(6_000L) { deferred.await() }?.json
+            } finally {
+                if (pendingSnapshot === deferred) pendingSnapshot = null
+                snapshotAssembler.reset()
+            }
+        }
 
     /**
      * Environmental mode uses the existing owner-authenticated GATT write path,
@@ -885,6 +954,9 @@ class BleManager(private val context: Context) {
         gpioReadInFlight = false
         gpioPollingDisabled = false
         _gpioPins.value = null
+        pendingSnapshot?.cancel()
+        pendingSnapshot = null
+        snapshotAssembler.reset()
         _environmentalRgbEnabled.value = null
         _environmentalRgbMessage.value = "Sin sesión BLE autenticada."
         mtuReady = false
