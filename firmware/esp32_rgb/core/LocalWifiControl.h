@@ -228,7 +228,7 @@ class LocalWifiControl final {
       }
       if (face && value != "happy" && value != "sleepy" &&
           value != "angry" && value != "surprised" &&
-          value != "pumpkin" && value != "cat") {
+          value != "pumpkin" && value != "cat" && value != "dance") {
         jsonError(400, "invalid_oled_face");
         return;
       }
