@@ -23,6 +23,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rgbcontroller.core.ble.BleManager
+import com.rgbcontroller.core.ble.BleConnectionState
+import com.rgbcontroller.core.ble.BleSecurityState
 import com.rgbcontroller.core.components.alerts.AlertComparison
 import com.rgbcontroller.core.components.calibration.SoilLiveCapturePolicy
 import com.rgbcontroller.core.components.alerts.AlertSeverity
@@ -104,12 +106,19 @@ fun HardwareLabScreen(
     }
 
     val sessionConnection = session?.connectionState
-    val authorized = sessionConnection == LabConnectionState.AUTHORIZED
+    val bleConnection by (bleManager?.connectionState ?: remember { kotlinx.coroutines.flow.MutableStateFlow(BleConnectionState.Disconnected) }).collectAsState()
+    val bleSecurity by (bleManager?.securityState ?: remember { kotlinx.coroutines.flow.MutableStateFlow<BleSecurityState>(BleSecurityState.Disconnected) }).collectAsState()
+    val authorized = (session?.transport == com.rgbcontroller.core.wifi.LabTransport.WIFI_LAB &&
+        sessionConnection == LabConnectionState.AUTHORIZED) ||
+        (session?.transport == com.rgbcontroller.core.wifi.LabTransport.BLUETOOTH &&
+            bleConnection == BleConnectionState.Ready && bleSecurity == BleSecurityState.Authorized)
 
     LaunchedEffect(Unit) { viewModel.loadPersisted() }
-    LaunchedEffect(sessionConnection) {
+    LaunchedEffect(sessionConnection, bleConnection, bleSecurity, session?.transport) {
         viewModel.onConnectionChanged()
-        syncMessage = if (authorized) "Estado sincronizado desde el firmware."
+        syncMessage = if (authorized && viewModel.uiState.value.freshness == ComponentStatusFreshness.LIVE)
+            "Estado sincronizado desde el firmware."
+        else if (authorized) "Enlace autorizado; esperando respuesta del firmware."
         else "Sin conexión autorizada: se muestra el último estado confirmado."
     }
 
@@ -646,7 +655,7 @@ private fun DesiredComponentCard(
 @Composable
 private fun Dht22TelemetryCard(state: ComponentDashboardState) {
     val live = state.telemetryFreshness == ComponentStatusFreshness.LIVE
-    val measurements = state.authoritativeTelemetry ?: state.persistedTelemetry
+    val measurements = if (live) state.authoritativeTelemetry else state.persistedTelemetry
     val humidity = ComponentTelemetryCodec.find(measurements.orEmpty(), "humidity")
     val temperature = ComponentTelemetryCodec.find(measurements.orEmpty(), "temperature")
     // Only firmware-validated numbers are ever shown; invalid/stale stay null.
@@ -668,6 +677,11 @@ private fun Dht22TelemetryCard(state: ComponentDashboardState) {
         lastUpdate = timestamp,
         live = live,
         status = status?.let { telemetryStatusLabel(it) },
+        model = when {
+            "sensor.dht11" in state.confirmedCatalogIds -> "DHT11"
+            "sensor.dht22" in state.confirmedCatalogIds -> "DHT22"
+            else -> "DHT (modelo sin confirmar)"
+        },
         modifier = Modifier.testTag("component_telemetry_dht22")
     )
 }
