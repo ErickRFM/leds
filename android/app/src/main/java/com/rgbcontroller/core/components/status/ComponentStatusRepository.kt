@@ -196,6 +196,14 @@ class ComponentStatusRepository(
         }
     }
 
+    /** A failed poll must never keep the previous reading labelled as live. */
+    fun invalidateLiveTelemetry(message: String) {
+        _state.value = _state.value.copy(
+            firmwareTelemetry = null,
+            authorityError = message
+        )
+    }
+
     fun reportError(message: String) {
         _state.value = _state.value.copy(authorityError = message)
     }
