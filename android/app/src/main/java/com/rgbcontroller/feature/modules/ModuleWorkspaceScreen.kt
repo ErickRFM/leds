@@ -443,6 +443,49 @@ fun ModuleWorkspaceScreen(
                         )
                         Text("DHT11 · GPIO16  ·  LDR · GPIO32  ·  OLED · I²C  ·  RGB",
                             style = MaterialTheme.typography.bodySmall)
+                        val stationLive = currentlyVerified &&
+                            state.telemetryFreshness == ComponentStatusFreshness.LIVE
+                        val stationMeasurements = if (stationLive)
+                            state.authoritativeTelemetry.orEmpty() else emptyList()
+                        val stationTemperature = ComponentTelemetryCodec.find(
+                            stationMeasurements, "temperature")?.takeIf { it.valid }?.value
+                        val stationHumidity = ComponentTelemetryCodec.find(
+                            stationMeasurements, "humidity")?.takeIf { it.valid }?.value
+                        val stationLight = ComponentTelemetryCodec.find(
+                            stationMeasurements, "ambient_light")?.takeIf { it.valid }?.value
+                        val stationRawLight = ComponentTelemetryCodec.find(
+                            stationMeasurements, "ambient_light_raw")?.takeIf { it.valid }?.value
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Temperatura", style = MaterialTheme.typography.labelSmall)
+                                Text(stationTemperature?.let {
+                                    "%.1f °C".format(java.util.Locale.ROOT, it)
+                                } ?: "—", style = MaterialTheme.typography.titleMedium)
+                            }
+                            Column(Modifier.weight(1f)) {
+                                Text("Humedad", style = MaterialTheme.typography.labelSmall)
+                                Text(stationHumidity?.let {
+                                    "%.0f %%".format(java.util.Locale.ROOT, it)
+                                } ?: "—", style = MaterialTheme.typography.titleMedium)
+                            }
+                            Column(Modifier.weight(1f)) {
+                                Text("Luz", style = MaterialTheme.typography.labelSmall)
+                                Text(when {
+                                    stationLight != null -> "%.0f %%".format(
+                                        java.util.Locale.ROOT, stationLight)
+                                    stationRawLight != null -> "ADC %.0f".format(
+                                        java.util.Locale.ROOT, stationRawLight)
+                                    else -> "—"
+                                }, style = MaterialTheme.typography.titleMedium)
+                            }
+                        }
+                        Text(
+                            if (stationLive) "Lecturas recientes confirmadas por ESP32"
+                            else "Sin lecturas actuales · consulta Hardware para diagnóstico",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Text(
                             "Abre Laboratorio de hardware para verificar lecturas, calibrar la luz " +
                                 "y controlar la OLED. El DFPlayer necesita microSD para reproducir; " +
