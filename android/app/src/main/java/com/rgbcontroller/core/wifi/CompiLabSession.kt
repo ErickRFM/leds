@@ -45,7 +45,7 @@ class CompiLabSession {
     fun updateNetworkRouteAvailable(available: Boolean) {
         if (isNetworkRouteAvailable != available) {
             isNetworkRouteAvailable = available
-            if (!available && wifiReady) {
+            if (!available && transport == LabTransport.WIFI_LAB) {
                 invalidate("Se perdió la ruta Wi-Fi; vuelve a verificar el ESP32.")
             } else {
                 reevaluateConnectionState()
@@ -81,6 +81,7 @@ class CompiLabSession {
      */
     suspend fun <T> userOperation(name: String, block: suspend () -> T): T {
         val id = ++latestOperationId
+        val startingRevision = revision
         operationStatus = LabOperationStatus(name, LabOperationPhase.QUEUED)
         return try {
             val value = serialized {
@@ -89,9 +90,12 @@ class CompiLabSession {
                 }
                 block()
             }
-            if (id == latestOperationId) {
+            if (id == latestOperationId && startingRevision == revision) {
                 operationStatus = LabOperationStatus(name, LabOperationPhase.CONFIRMED,
                     "El firmware respondió; verifica el hardware físico.")
+            } else if (id == latestOperationId) {
+                operationStatus = LabOperationStatus(name, LabOperationPhase.CANCELLED,
+                    "La sesión cambió; vuelve a verificar el dispositivo.")
             }
             value
         } catch (cancelled: CancellationException) {
