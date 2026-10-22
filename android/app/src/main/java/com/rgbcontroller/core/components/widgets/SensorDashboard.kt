@@ -30,8 +30,9 @@ fun SensorDashboard(
 ) {
     var minutes by rememberSaveable(id) { mutableIntStateOf(30) }
     val readings = if (live) state.authoritativeTelemetry else state.persistedTelemetry
+    val current = active && live && state.connected && state.authorityError == null
     fun metric(type: String): Float? {
-        if (!active) return null
+        if (!current) return null
         return ComponentTelemetryCodec.find(readings.orEmpty(), type)
             ?.takeIf { it.valid && it.status == "fresh" && it.value.isFinite() }?.value
     }
@@ -55,9 +56,9 @@ fun SensorDashboard(
             )
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            SensorMetric("Temperatura", temperature, "°C", live,
+            SensorMetric("Temperatura", temperature, "°C", current,
                 Modifier.weight(1f).testTag("sensor_temperature_$id"))
-            SensorMetric("Humedad relativa", humidity, "%", live,
+            SensorMetric("Humedad relativa", humidity, "%", current,
                 Modifier.weight(1f).testTag("sensor_humidity_$id"))
         }
         Card(shape = RoundedCornerShape(20.dp)) {
@@ -68,7 +69,7 @@ fun SensorDashboard(
                 Text(
                     when {
                         !state.connected ->
-                            "Sin Wi-Fi autorizado. El enlace BLE RGB no envía las lecturas DHT."
+                            "Sin conexión autorizada con telemetría en vivo."
                         !active -> "El driver ${id.uppercase()} no tiene un GPIO activo verificado."
                         state.authorityError != null ->
                             "No se confirmó la telemetría: ${state.authorityError}"
