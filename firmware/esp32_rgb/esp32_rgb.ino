@@ -93,7 +93,7 @@
 #define COMPI_ENABLE_LDR 0
 #endif
 #ifndef COMPI_LDR_PIN
-#define COMPI_LDR_PIN 36
+#define COMPI_LDR_PIN 32
 #endif
 #ifndef COMPI_ENABLE_OLED
 // Lab profile: enable the attached I2C SSD1306 at boot. The OLED remains

@@ -17,6 +17,11 @@ class PinAssignmentPolicyTest {
         }
     }
 
+    @Test fun ldrUsesAvailableGpio32ByDefault() {
+        assertEquals(listOf(32), PinAssignmentPolicy.profile("ldr_light")!!.defaults)
+        assertTrue(PinAssignmentPolicy.validate("ldr_light", listOf(32)).isEmpty())
+    }
+
     @Test fun rgbUsesThreeDistinctPwmOutputs() {
         assertEquals(listOf(27, 25, 26), PinAssignmentPolicy.profile("led_rgb")!!.defaults)
         assertTrue(PinAssignmentPolicy.validate("led_rgb", listOf(27, 25, 26)).isEmpty())
