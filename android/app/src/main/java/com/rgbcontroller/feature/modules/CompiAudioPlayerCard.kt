@@ -106,7 +106,6 @@ fun CompiAudioPlayerCard() {
 
     var revision by remember { mutableIntStateOf(0) }
     var volume by remember { mutableFloatStateOf(0.6f) }
-    var dfplayerMessage by remember { mutableStateOf("DFPlayer: estado físico sin confirmar. Requiere respuesta real del ESP32 y del módulo.") }
 
     // 24 Tracks Map from firmware specification
     val quickTrackGroups = listOf(
@@ -298,11 +297,7 @@ fun CompiAudioPlayerCard() {
                                 Surface(
                                     shape = RoundedCornerShape(8.dp),
                                     color = group.color.copy(alpha = 0.15f),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clickable {
-                                            dfplayerMessage = "Pista $trackNum seleccionada ($label). Control físico UART no conectado a este botón; reproducción sin confirmar."
-                                        }
+                                    modifier = Modifier.weight(1f)
                                 ) {
                                     Text(
                                         text = label.substringAfter(": "),
@@ -320,7 +315,7 @@ fun CompiAudioPlayerCard() {
         }
 
         Text(
-            text = dfplayerMessage,
+            text = "Catálogo previsto: estas pistas aún no están disponibles para reproducir desde la app.",
             style = MaterialTheme.typography.bodySmall,
             color = CompiTokens.Colors.PrimaryViolet
         )
