@@ -98,6 +98,7 @@ fun ModuleWorkspaceScreen(
     var editingId by remember { mutableStateOf<String?>(null) }
     var applyMessage by remember { mutableStateOf<String?>(null) }
     var ldrCalibrationMessage by remember { mutableStateOf<String?>(null) }
+    var oledActionMessage by remember { mutableStateOf<String?>(null) }
     var applying by remember { mutableStateOf(false) }
     // Physical Back should close a nested component editor/detail before leaving Modules.
     BackHandler(enabled = editingId != null || openedId != null) {
@@ -225,6 +226,7 @@ fun ModuleWorkspaceScreen(
                             canCalibrateLdr = wifiAuthorized || bleAuthorized,
                             calibrationMessage = ldrCalibrationMessage,
                             canControlOled = wifiAuthorized,
+                            oledActionMessage = oledActionMessage,
                             onOledFace = { face ->
                                 scope.launch {
                                     ldrCalibrationMessage = null
@@ -238,11 +240,11 @@ fun ModuleWorkspaceScreen(
                                             }
                                             labClient.showOled(key, "face", face)
                                         }
-                                        applyMessage = "Carita $face confirmada por el ESP32."
+                                        oledActionMessage = "Carita $face confirmada por el ESP32."
                                     } catch (cancelled: CancellationException) {
                                         throw cancelled
                                     } catch (failure: Exception) {
-                                        applyMessage = "OLED: ${failure.message}"
+                                        oledActionMessage = "OLED: ${failure.message}"
                                     }
                                 }
                             },
@@ -721,6 +723,7 @@ private fun ModuleReadings(
     canCalibrateLdr: Boolean = false,
     calibrationMessage: String? = null,
     canControlOled: Boolean = false,
+    oledActionMessage: String? = null,
     onOledFace: (String) -> Unit = {},
     onCalibrateLdr: (Int, Int) -> Unit = { _, _ -> }
 ) {
@@ -873,6 +876,11 @@ private fun ModuleReadings(
                         style = MaterialTheme.typography.bodySmall
                     )
                     Text("Expresiones físicas", style = MaterialTheme.typography.titleMedium)
+                    if (oledActionMessage != null) {
+                        Text(oledActionMessage, style = MaterialTheme.typography.bodySmall,
+                            color = if (oledActionMessage.startsWith("OLED:")) MaterialTheme.colorScheme.error
+                                    else MaterialTheme.colorScheme.primary)
+                    }
                     Text("Se envían a la OLED mediante Wi-Fi autorizado. Las caritas manuales se muestran temporalmente antes de recuperar la vista ambiental.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall)
