@@ -875,9 +875,22 @@ private fun ModuleReadings(
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.testTag("ldr_light_raw"))
                         OutlinedButton(onClick = onRefresh) { Text("Actualizar lectura") }
-                        Text("Calibración relativa: cubre el sensor, captura oscuridad; " +
-                            "después ilumínalo y captura claridad. Requiere Wi-Fi autorizado.",
+                        HorizontalDivider()
+                        Text("Calibración de luz", style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold)
+                        Text("1 · Cubre el LDR y actualiza la lectura antes de capturar oscuridad. " +
+                            "2 · Ilumínalo, actualiza otra vez y captura claridad. " +
+                            "Envía la calibración por BLE propietario o Wi-Fi autorizado.",
                             style = MaterialTheme.typography.bodySmall)
+                        if (raw != null) {
+                            LinearProgressIndicator(
+                                progress = { raw.coerceIn(0, 4095) / 4095f },
+                                modifier = Modifier.fillMaxWidth().testTag("ldr_adc_level")
+                            )
+                            Text("Señal ADC: $raw / 4095 · señal cruda, no porcentaje de luz",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(
                                 onClick = { darkReference = raw },
@@ -892,6 +905,20 @@ private fun ModuleReadings(
                         }
                         Text("Referencia oscura: ${darkReference ?: "—"} · clara: ${brightReference ?: "—"}",
                              style = MaterialTheme.typography.bodySmall)
+                        val referenceSpan = if (darkReference != null && brightReference != null)
+                            brightReference!! - darkReference!! else null
+                        Text(
+                            when {
+                                referenceSpan == null -> "Actualiza y captura ambas referencias por separado."
+                                referenceSpan <= 0 -> "Referencias iguales o invertidas: cambia la luz y vuelve a actualizar."
+                                referenceSpan < 32 -> "Cambio ADC insuficiente (${referenceSpan}); se requieren al menos 32 puntos."
+                                else -> "Separación válida: ${referenceSpan} puntos. Puedes aplicar la calibración."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (referenceSpan != null && referenceSpan < 32)
+                                MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.testTag("ldr_calibration_guidance")
+                        )
                         Button(
                             enabled = canCalibrateLdr && darkReference != null &&
                                 brightReference != null &&
