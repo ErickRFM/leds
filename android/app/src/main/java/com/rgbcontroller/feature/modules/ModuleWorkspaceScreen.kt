@@ -208,13 +208,13 @@ fun ModuleWorkspaceScreen(
                             state.telemetryFreshness == ComponentStatusFreshness.LIVE)
                             state.authoritativeTelemetry.orEmpty() else emptyList()
                         val temp = ComponentTelemetryCodec.find(readings, "temperature")
-                            ?.takeIf { it.valid }?.value
+                            ?.takeIf { it.valid && it.status == "fresh" && it.value.isFinite() }?.value
                         val humid = ComponentTelemetryCodec.find(readings, "humidity")
-                            ?.takeIf { it.valid }?.value
+                            ?.takeIf { it.valid && it.status == "fresh" && it.value.isFinite() }?.value
                         val light = ComponentTelemetryCodec.find(readings, "ambient_light")
-                            ?.takeIf { it.valid }?.value
+                            ?.takeIf { it.valid && it.status == "fresh" && it.value.isFinite() }?.value
                         val raw = ComponentTelemetryCodec.find(readings, "ambient_light_raw")
-                            ?.takeIf { it.valid }?.value
+                            ?.takeIf { it.valid && it.status == "fresh" && it.value.isFinite() }?.value
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             StationMetric("Temperatura",
                                 temp?.let { "%.1f°".format(java.util.Locale.ROOT, it) } ?: "—",
@@ -224,8 +224,13 @@ fun ModuleWorkspaceScreen(
                                 Icons.Default.WaterDrop, Modifier.weight(1f))
                             StationMetric("Luz", light?.let {
                                 "%.0f%%".format(java.util.Locale.ROOT, it)
-                            } ?: raw?.let { "%.0f ADC".format(java.util.Locale.ROOT, it) } ?: "—",
+                            } ?: raw?.let { "%.0f".format(java.util.Locale.ROOT, it) } ?: "—",
                                 Icons.Default.Lightbulb, Modifier.weight(1f))
+                        }
+                        if (light == null && raw != null) {
+                            Text("LDR sin calibrar · lectura ADC cruda (0–4095)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     item {
