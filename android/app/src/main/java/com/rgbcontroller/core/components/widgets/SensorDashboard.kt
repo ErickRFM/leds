@@ -29,6 +29,7 @@ fun SensorDashboard(
     onRefresh: () -> Unit
 ) {
     var minutes by rememberSaveable(id) { mutableIntStateOf(30) }
+    var showDiagnostics by rememberSaveable(id) { mutableStateOf(false) }
     val readings = if (live) state.authoritativeTelemetry else state.persistedTelemetry
     fun metric(type: String): Float? {
         if (!active) return null
@@ -60,7 +61,11 @@ fun SensorDashboard(
             SensorMetric("Humedad relativa", humidity, "%", live,
                 Modifier.weight(1f).testTag("sensor_humidity_$id"))
         }
-        Card(shape = RoundedCornerShape(20.dp)) {
+        OutlinedButton(onClick = { showDiagnostics = !showDiagnostics },
+            modifier = Modifier.testTag("sensor_diagnostics_toggle_$id")) {
+            Text(if (showDiagnostics) "Ocultar diagnóstico" else "Detalles y diagnóstico")
+        }
+        if (showDiagnostics) Card(shape = RoundedCornerShape(20.dp)) {
             Column(Modifier.fillMaxWidth().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Diagnóstico de la lectura", style = MaterialTheme.typography.titleSmall,
@@ -68,7 +73,7 @@ fun SensorDashboard(
                 Text(
                     when {
                         !state.connected ->
-                            "Sin Wi-Fi autorizado. El enlace BLE RGB no envía las lecturas DHT."
+                            "No se confirmó una conexión con telemetría ambiental."
                         !active -> "El driver ${id.uppercase()} no tiene un GPIO activo verificado."
                         state.authorityError != null ->
                             "No se confirmó la telemetría: ${state.authorityError}"
@@ -118,7 +123,7 @@ fun SensorDashboard(
                 }
             }
         }
-        Text("Historial de mediciones", style = MaterialTheme.typography.titleMedium,
+        Text("Evolución en tiempo real", style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             for (window in listOf(5, 15, 30)) {
@@ -160,9 +165,9 @@ private fun SensorMetric(
                 ?: "-- $unit", style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold)
             Text(when {
-                value == null -> "Esperando dato"
-                live -> "Lectura en vivo"
-                else -> "Última lectura guardada"
+                value == null -> "Sin lectura válida"
+                live -> "● En vivo"
+                else -> "Histórico"
             },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)

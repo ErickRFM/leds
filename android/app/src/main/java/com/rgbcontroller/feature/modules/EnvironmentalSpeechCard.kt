@@ -1,6 +1,12 @@
 package com.rgbcontroller.feature.modules
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Arrangement
@@ -38,9 +44,14 @@ fun EnvironmentalSpeechCard(state: ComponentDashboardState) {
         includeDht = "sensor.dht11" in activeIds || "sensor.dht22" in activeIds,
         includeLight = "sensor.ldr_light" in activeIds
     )
-    Card(Modifier.fillMaxWidth().testTag("compi_environmental_voice")) {
+    Card(Modifier.fillMaxWidth().testTag("compi_environmental_voice"), shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Compi te informa", style = MaterialTheme.typography.titleMedium)
+            Row(verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(Icons.Default.VolumeUp, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary)
+                Text("Voz ambiental", style = MaterialTheme.typography.titleMedium)
+            }
             Text(
                 when {
                     !live -> "Conecta por Wi-Fi autorizado o Bluetooth de propietario para escuchar lecturas actuales."
@@ -54,7 +65,7 @@ fun EnvironmentalSpeechCard(state: ComponentDashboardState) {
                 onClick = { speaker.speak(report.text) },
                 enabled = live && voiceReady && report.hasFreshData,
                 modifier = Modifier.fillMaxWidth().testTag("compi_environmental_speak")
-            ) { Text("Anunciar mediciones") }
+            ) { Text("Escuchar ambiente") }
         }
     }
 }
