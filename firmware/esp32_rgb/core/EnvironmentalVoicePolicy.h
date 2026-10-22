@@ -18,6 +18,13 @@ class EnvironmentalVoicePolicy {
   // Minimum pause between actual play requests. Avoids looping voice prompts
   // when sensors oscillate around thresholds or the player is busy.
   VoiceCue evaluate(const VoiceSample& sample, uint32_t nowMs) {
+    // One delayed greeting at boot, only when the player loop is ticking.
+    if (!greeted_ && nowMs >= 3000u) {
+      greeted_ = true;
+      lastPlayAt_ = nowMs;
+      hasPlayed_ = true;
+      return VoiceCue::Hello;
+    }
     if (sample.temperatureFresh) {
       if (sample.temperatureC >= 31.0f) hot_ = true;
       else if (sample.temperatureC <= 29.0f) hot_ = false;
@@ -29,8 +36,10 @@ class EnvironmentalVoicePolicy {
       else if (sample.lightPercent >= 30.0f) dark_ = false;
     }
     VoiceCue requested = VoiceCue::None;
-    if (sample.temperatureFresh && hot_ && !announcedHot_) requested = VoiceCue::Hot;
-    else if (sample.temperatureFresh && cold_ && !announcedCold_) requested = VoiceCue::Cold;
+    if (sample.temperatureFresh && hot_ &&
+        (!announcedHot_ || elapsed(nowMs, lastHotAt_) >= repeatIntervalMs_)) requested = VoiceCue::Hot;
+    else if (sample.temperatureFresh && cold_ &&
+        (!announcedCold_ || elapsed(nowMs, lastColdAt_) >= repeatIntervalMs_)) requested = VoiceCue::Cold;
     else if (sample.lightFresh && dark_ && !announcedDark_) requested = VoiceCue::Dark;
     else if (sample.lightFresh && !dark_ && announcedDark_) requested = VoiceCue::LightRestored;
     if (requested == VoiceCue::None) {
@@ -43,8 +52,8 @@ class EnvironmentalVoicePolicy {
     lastPlayAt_ = nowMs;
     hasPlayed_ = true;
     switch (requested) {
-      case VoiceCue::Hot: announcedHot_ = true; break;
-      case VoiceCue::Cold: announcedCold_ = true; break;
+      case VoiceCue::Hot: announcedHot_ = true; lastHotAt_ = nowMs; break;
+      case VoiceCue::Cold: announcedCold_ = true; lastColdAt_ = nowMs; break;
       case VoiceCue::Dark: announcedDark_ = true; break;
       case VoiceCue::LightRestored: announcedDark_ = false; break;
       default: break;
@@ -52,6 +61,10 @@ class EnvironmentalVoicePolicy {
     return requested;
   }
  private:
+  static uint32_t elapsed(uint32_t now, uint32_t then) { return now - then; }
+  static constexpr uint32_t repeatIntervalMs_ = 300000u;
+  bool greeted_ = false;
+  uint32_t lastHotAt_ = 0, lastColdAt_ = 0;
   bool hot_ = false, cold_ = false, dark_ = false;
   bool announcedHot_ = false, announcedCold_ = false, announcedDark_ = false;
   bool hasPlayed_ = false;
