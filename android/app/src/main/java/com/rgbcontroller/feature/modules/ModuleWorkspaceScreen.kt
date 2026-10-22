@@ -97,6 +97,7 @@ fun ModuleWorkspaceScreen(
         session.connectionState == LabConnectionState.AUTHORIZED && session.wifiReady
     var showLibrary by rememberSaveable { mutableStateOf(false) }
     var openedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var previousOpenedId by rememberSaveable { mutableStateOf<String?>(null) }
     var editingId by remember { mutableStateOf<String?>(null) }
     var applyMessage by remember { mutableStateOf<String?>(null) }
     var ldrCalibrationMessage by remember { mutableStateOf<String?>(null) }
@@ -104,7 +105,10 @@ fun ModuleWorkspaceScreen(
     var applying by remember { mutableStateOf(false) }
     // Physical Back should close a nested component editor/detail before leaving Modules.
     BackHandler(enabled = editingId != null || openedId != null) {
-        if (editingId != null) editingId = null else openedId = null
+        if (editingId != null) editingId = null else {
+            openedId = previousOpenedId
+            previousOpenedId = null
+        }
     }
     val labClient = remember(context) { LocalLabClient(context.applicationContext) }
 
@@ -153,7 +157,10 @@ fun ModuleWorkspaceScreen(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { openedId = null }, modifier = Modifier.testTag("module_back")) {
+                IconButton(onClick = {
+                    openedId = previousOpenedId
+                    previousOpenedId = null
+                }, modifier = Modifier.testTag("module_back")) {
                     Icon(Icons.Default.ArrowBack, contentDescription = "Volver a módulos")
                 }
                 Text(if (id == ModuleWorkspaceGrouping.ENVIRONMENT) "Sensor ambiental"
@@ -314,7 +321,10 @@ fun ModuleWorkspaceScreen(
                         }
                         item(key = "environmental_audio_library") {
                             OutlinedCard(
-                                onClick = { openedId = "compi_dfplayer" },
+                                onClick = {
+                                    previousOpenedId = openedId
+                                    openedId = "compi_dfplayer"
+                                },
                                 modifier = Modifier.fillMaxWidth().testTag("environment_open_audio"),
                                 shape = RoundedCornerShape(18.dp)
                             ) {
