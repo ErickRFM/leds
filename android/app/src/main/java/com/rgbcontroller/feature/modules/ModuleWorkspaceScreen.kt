@@ -1157,7 +1157,7 @@ private fun ModuleReadings(
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.testTag("ldr_light_percent")
                                 )
-                                Text(if (light != null) "Luz relativa calibrada" else "Sin calibración válida",
+                                Text(if (light != null) "Luz relativa calibrada" else if (!live) "Sin conexión en vivo" else "Sin lectura calibrada",
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
