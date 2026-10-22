@@ -251,8 +251,8 @@ fun ModuleWorkspaceScreen(
                                         }
                                         delay(650L)
                                         vm.refresh()
-                                        ldrCalibrationMessage = "Calibración confirmada por el ESP32. " +
-                                            "Se perderá al reiniciar; comprueba el porcentaje en vivo."
+                                        ldrCalibrationMessage = "Calibración guardada por el ESP32 en memoria persistente. " +
+                                            "Verifica el porcentaje en vivo y tras reiniciar."
                                     } catch (cancelled: CancellationException) {
                                         throw cancelled
                                     } catch (failure: Exception) {
