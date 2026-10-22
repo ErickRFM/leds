@@ -105,8 +105,9 @@ fun CompiAudioPlayerCard() {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text("Reproductor de audio", style = MaterialTheme.typography.titleMedium)
-            Text("Salida: bocina del teléfono. Para la bocina física de 8 Ω y 0.5 W " +
-                "necesitamos un módulo reproductor y amplificación limitada.",
+            Text("Salida: teléfono Android. El DFPlayer MP3-TF-16P conectado a la bocina Samsung 4 Ω / 3 W " +
+                "reproduce pistas desde microSD; sin tarjeta, esa salida no puede reproducir música. " +
+                "Este reproductor NO transmite audio Bluetooth al ESP32.",
                 style = MaterialTheme.typography.bodySmall)
             Text(message, style = MaterialTheme.typography.bodySmall)
             Button(onClick = { importer.launch(arrayOf("audio/*")) },
