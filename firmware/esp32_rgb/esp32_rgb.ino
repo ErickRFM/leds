@@ -690,6 +690,7 @@ esp32core::OledSsd1306Module oledModule(COMPI_OLED_ADDRESS, COMPI_OLED_SDA,
     COMPI_OLED_SCL, oledInit, oledPresent, nullptr, 250);
 #endif
 
+#if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
 bool oledDisplayCommand(const char* mode, const char* value, void*) {
   if (!oledModule.ready() || mode == nullptr || value == nullptr) return false;
   if (std::strcmp(mode, "text") == 0) {
