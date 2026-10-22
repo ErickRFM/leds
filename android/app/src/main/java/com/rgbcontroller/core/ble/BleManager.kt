@@ -876,7 +876,7 @@ class BleManager(private val context: Context) {
                 enrollmentPhase != EnrollmentPhase.IDLE) return@withLock false
             if (mode == "face" && value !in setOf("happy", "sleepy", "surprised",
                     "angry", "pumpkin", "cat", "dance")) return@withLock false
-            if (mode == "contrast" && value.toIntOrNull() !in 8..255)
+            if (mode == "contrast" && (value.toIntOrNull() ?: -1) !in 8..255)
                 return@withLock false
             if (mode != "face" && mode != "contrast") return@withLock false
             snapshotRequestId = snapshotRequestId % 65535 + 1
