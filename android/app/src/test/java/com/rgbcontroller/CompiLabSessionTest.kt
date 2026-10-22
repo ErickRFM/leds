@@ -201,6 +201,33 @@ class CompiLabSessionTest {
         assertTrue(session.verified(newEpoch, newKey, red))
     }
 
+    @Test fun routeFlapDuringVerificationRejectsOldResponse() {
+        val session = CompiLabSession()
+        session.selectTransport(LabTransport.WIFI_LAB)
+        session.updateNetworkRouteAvailable(true)
+        session.updateKey("1234567890abcdef")
+        val (epoch, key) = session.beginVerification()
+        session.updateNetworkRouteAvailable(false)
+        session.updateNetworkRouteAvailable(true)
+        assertFalse(session.verified(epoch, key, red))
+        assertFalse(session.wifiReady)
+        val (newEpoch, newKey) = session.beginVerification()
+        assertTrue(session.verified(newEpoch, newKey, red))
+    }
+
+    @Test fun operationFinishingAfterSessionChangeCannotClaimConfirmed() = runBlocking {
+        val session = CompiLabSession()
+        session.selectTransport(LabTransport.WIFI_LAB)
+        session.updateNetworkRouteAvailable(true)
+        val value = session.userOperation("RGB") {
+            session.updateNetworkRouteAvailable(false)
+            42
+        }
+        assertEquals(42, value)
+        assertEquals(com.rgbcontroller.core.wifi.LabOperationPhase.CANCELLED,
+            session.operationStatus.phase)
+    }
+
     @Test fun noRouteCannotBeAuthorizedEvenWithAResponse() {
         val session = CompiLabSession()
         session.selectTransport(LabTransport.WIFI_LAB)
