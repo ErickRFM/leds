@@ -504,6 +504,36 @@ fun ModuleWorkspaceScreen(
                             Text("Sensores · OLED · luces · automatización",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            val stationLive = currentlyVerified &&
+                                state.telemetryFreshness == ComponentStatusFreshness.LIVE
+                            val readings = if (stationLive)
+                                state.authoritativeTelemetry.orEmpty() else emptyList()
+                            val temperature = ComponentTelemetryCodec.find(readings, "temperature")
+                                ?.takeIf { it.valid }?.value
+                            val humidity = ComponentTelemetryCodec.find(readings, "humidity")
+                                ?.takeIf { it.valid }?.value
+                            val light = ComponentTelemetryCodec.find(readings, "ambient_light")
+                                ?.takeIf { it.valid }?.value
+                            val rawLight = ComponentTelemetryCodec.find(readings, "ambient_light_raw")
+                                ?.takeIf { it.valid }?.value
+                            Text(
+                                listOf(
+                                    "T " + (temperature?.let { "%.1f°C".format(java.util.Locale.ROOT, it) } ?: "—"),
+                                    "H " + (humidity?.let { "%.0f%%".format(java.util.Locale.ROOT, it) } ?: "—"),
+                                    "L " + when {
+                                        light != null -> "%.0f%%".format(java.util.Locale.ROOT, light)
+                                        rawLight != null -> "ADC %.0f".format(java.util.Locale.ROOT, rawLight)
+                                        else -> "—"
+                                    }
+                                ).joinToString("  ·  "),
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier.testTag("station_live_metrics")
+                            )
+                            if (!stationLive) {
+                                Text("Esperando lecturas confirmadas",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                             Text("Abrir panel de hardware",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary)
