@@ -43,6 +43,24 @@ class TelemetryChartTest {
         assertEquals(1f, chart.points[1].fractionY, 0.001f)
     }
 
+    @Test fun shortSessionExpandsAcrossViewportWithoutInventingSamples() {
+        val now = 1_800_000L
+        val chart = TelemetryChart.build(
+            "dht11", "temperature",
+            listOf(
+                sample(value = 23.6f, recordedAtMs = now - 120_000L),
+                sample(value = 24.0f, recordedAtMs = now)
+            ),
+            nowMs = now,
+            windowMs = 30 * 60 * 1000L
+        )
+        assertEquals(2, chart.validCount)
+        assertTrue(chart.visibleDurationMs < chart.requestedWindowMs)
+        assertTrue(chart.points.first().fractionX < 0.2f)
+        assertTrue(chart.points.last().fractionX >= 0.99f)
+        assertTrue(chart.points.last().fractionY - chart.points.first().fractionY < 0.3f)
+    }
+
     @Test fun invalidSampleInterruptsTheLine() {
         val chart = TelemetryChart.build(
             "dht22", "temperature",
