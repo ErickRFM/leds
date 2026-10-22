@@ -1483,17 +1483,57 @@ void loop() {
       (lastOledTelemetryAt == 0 ||
        static_cast<uint32_t>(now - lastOledTelemetryAt) >= 3000U)) {
     lastOledTelemetryAt = now;
-    char oledLines[esp32core::OledSsd1306Module::kMaxTextBytes] = {};
+    // Mixed view: a friendly face AND live measurements on the physical
+    // 128x64 OLED. Raw ADC is labelled RAW until the LDR is calibrated;
+    // never present raw samples as invented percent/lux values.
     const auto& temperature = dht11Module.temperatureReading();
     const auto& humidity = dht11Module.humidityReading();
-    if (temperature.valid && humidity.valid) {
-      std::snprintf(oledLines, sizeof(oledLines), "COMPI - DHT11\nT: %.1f C\nH: %.0f %%",
-                    static_cast<double>(temperature.value),
-                    static_cast<double>(humidity.value));
+    oledDriver.clearDisplay();
+    oledDriver.setTextColor(SSD1306_WHITE);
+    oledDriver.setTextSize(1);
+    oledDriver.setCursor(2, 0);
+    oledDriver.print("COMPI");
+    // Eye blink is deterministic and independent of sensor sampling.
+    const bool blink = (now % 5100U) < 150U;
+    if (blink) {
+      oledDriver.drawLine(13, 24, 26, 24, SSD1306_WHITE);
+      oledDriver.drawLine(42, 24, 55, 24, SSD1306_WHITE);
     } else {
-      std::snprintf(oledLines, sizeof(oledLines), "COMPI - DHT11\nEsperando lectura");
+      oledDriver.fillRoundRect(13, 19, 13, 12, 5, SSD1306_WHITE);
+      oledDriver.fillRoundRect(42, 19, 13, 12, 5, SSD1306_WHITE);
     }
-    if (oledModule.setText(oledLines)) oledModule.refreshNow(now);
+    oledDriver.drawLine(24, 39, 30, 43, SSD1306_WHITE);
+    oledDriver.drawLine(30, 43, 37, 43, SSD1306_WHITE);
+    oledDriver.drawLine(37, 43, 44, 39, SSD1306_WHITE);
+    oledDriver.drawLine(69, 0, 69, 52, SSD1306_WHITE);
+    oledDriver.setCursor(75, 2);
+    if (temperature.valid) {
+      oledDriver.printf("T %.1fC", static_cast<double>(temperature.value));
+    } else {
+      oledDriver.print("T --");
+    }
+    oledDriver.setCursor(75, 17);
+    if (humidity.valid) {
+      oledDriver.printf("H %.0f%%", static_cast<double>(humidity.value));
+    } else {
+      oledDriver.print("H --");
+    }
+    oledDriver.setCursor(75, 32);
+#if COMPI_BUILD_LDR
+    if (ldrModule.ready() && ldrModule.lightReading().valid) {
+      oledDriver.printf("L %.0f%%", static_cast<double>(ldrModule.lightReading().value));
+    } else if (ldrModule.ready() && ldrModule.rawReading().valid) {
+      oledDriver.printf("RAW %.0f", static_cast<double>(ldrModule.rawReading().value));
+    } else {
+      oledDriver.print("L --");
+    }
+#else
+    oledDriver.print("L --");
+#endif
+    oledDriver.drawLine(0, 54, 127, 54, SSD1306_WHITE);
+    oledDriver.setCursor(3, 56);
+    oledDriver.print("OLED + AMBIENTE");
+    oledDriver.display();
   }
 #endif
   // Modules activated at runtime are not in the boot-time registry; tick them
