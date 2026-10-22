@@ -89,8 +89,33 @@ class ComponentDashboardViewModelTest {
         h.failure = IllegalStateException("timeout")
         h.viewModel.refresh()
         val after = h.viewModel.uiState.value
-        assertEquals(before, after.firmwareStatus)
+        assertNull(after.firmwareStatus)
+        assertEquals(before?.components, after.persisted)
+        assertEquals(ComponentStatusFreshness.LAST_KNOWN, after.freshness)
         assertNotNull(after.authorityError)
+    }
+
+    @Test fun missingStatusResponseInvalidatesPreviousLiveStatus() = runBlocking {
+        val h = Harness().apply { response = validPayload; telemetryResponse = validTelemetry }
+        h.viewModel.refresh()
+        h.response = null
+        h.viewModel.refresh()
+        val state = h.viewModel.uiState.value
+        assertEquals(ComponentStatusFreshness.LAST_KNOWN, state.freshness)
+        assertEquals(ComponentStatusFreshness.LAST_KNOWN, state.telemetryFreshness)
+        assertNull(state.authoritative)
+        assertNotNull(state.authorityError)
+    }
+
+    @Test fun invalidStatusResponseStopsTelemetryFetchAndClearsLiveEvidence() = runBlocking {
+        val h = Harness().apply { response = validPayload; telemetryResponse = validTelemetry }
+        h.viewModel.refresh()
+        h.response = "{invalid"
+        h.viewModel.refresh()
+        val state = h.viewModel.uiState.value
+        assertEquals(ComponentStatusFreshness.LAST_KNOWN, state.freshness)
+        assertEquals(ComponentStatusFreshness.LAST_KNOWN, state.telemetryFreshness)
+        assertNull(state.authoritative)
     }
 
     @Test fun invalidPayloadDoesNotFabricateLiveState() = runBlocking {
