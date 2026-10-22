@@ -187,7 +187,7 @@ fun CompiAudioPlayerCard() {
                         }
                     }
 
-                    CompiBadge(label = "24 pistas previstas", type = CompiBadgeType.INFO)
+                    Text("24 pistas previstas", style = MaterialTheme.typography.labelSmall, color = Color.White)
                 }
 
                 Row(
