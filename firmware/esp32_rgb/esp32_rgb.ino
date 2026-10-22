@@ -1404,6 +1404,7 @@ void setup() {
   Serial.println("WARN: falta instalar Adafruit SSD1306 y Adafruit GFX en Arduino IDE");
 #endif
 
+  Serial.println("BOOT: Compi OLED clean face + metrics (no ambient banner), 2026-10-22");
   Serial.println("BOOT: required modules started; optional components reported individually");
   wifiLab.setComponentTelemetry(collectComponentTelemetry, nullptr);
   wifiLab.setComponentStatus(collectComponentStatus, nullptr);
@@ -1581,9 +1582,8 @@ void loop() {
 #else
     oledDriver.print("L --");
 #endif
-    oledDriver.drawLine(0, 54, 127, 54, SSD1306_WHITE);
-    oledDriver.setCursor(3, 56);
-    oledDriver.print("SENSORES EN VIVO");
+    // No static footer: the user-facing 128x64 canvas is for the face
+    // and actual measurements, not repeated OLED/ambient labels.
     oledDriver.display();
   }
 #endif
