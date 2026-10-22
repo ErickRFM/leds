@@ -214,7 +214,7 @@ fun MainAppNavHost(
                 composable(Screen.Modules.route) {
                     ModuleWorkspaceScreen(
                         bleManager, preferencesRepository, session,
-                        onConnect = { navController.navigate(Screen.Connect.route) },
+                        onConnect = { navController.navigateNested(Screen.Connect.route) },
                         onHardware = { navController.navigateTopLevel(Screen.Hub) }
                     )
                 }
@@ -238,7 +238,7 @@ fun MainAppNavHost(
                 }
                 composable(Screen.Devices.route) {
                     DevicesScreen(bleManager, preferencesRepository,
-                        onInspectSecurity = { navController.navigate(Screen.Hub.route) })
+                        onInspectSecurity = { navController.navigateTopLevel(Screen.Hub) })
                 }
                 composable(Screen.Hub.route) {
                     HardwareLabScreen(
