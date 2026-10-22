@@ -155,6 +155,7 @@ fun ModuleWorkspaceScreen(
                     Icon(Icons.Default.ArrowBack, contentDescription = "Volver a módulos")
                 }
                 Text(if (id == ModuleWorkspaceGrouping.ENVIRONMENT) "Sensor ambiental"
+                     else if (id == "compi_dfplayer") "Reproductor MP3 · DFPlayer"
                      else ComponentCatalog.get(id)?.name ?: id,
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.weight(1f))
@@ -163,7 +164,33 @@ fun ModuleWorkspaceScreen(
                     modifier = Modifier.testTag("module_edit_pins")
                 ) { Icon(Icons.Default.Tune, null); Text("GPIO") }
             }
-            if (id == "led_rgb") {
+            if (id == "compi_dfplayer") {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().testTag("dfplayer_module_detail"),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item {
+                        Text("DFPlayer Mini MP3-TF-16P · reproducción física",
+                            style = MaterialTheme.typography.titleMedium)
+                    }
+                    item {
+                        Text("Conexión: 5 V regulados y GND compartida; " +
+                            "GPIO17 (ESP32 TX) a RX del DFPlayer mediante 1 kΩ; " +
+                            "TX del DFPlayer a GPIO18 (ESP32 RX) solo con señal de hasta 3.3 V. " +
+                            "Bocina Samsung 4 Ω / 3 W entre SPK1 y SPK2.",
+                            style = MaterialTheme.typography.bodyMedium)
+                    }
+                    item {
+                        Text("Necesita microSD con pistas compatibles para reproducir. " +
+                            "El firmware puede enviar comandos y avisos ambientales, " +
+                            "pero todavía no confirma reproducción real mediante BUSY/status. " +
+                            "No incluye recepción de audio Bluetooth A2DP.",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    item { CompiAudioPlayerCard() }
+                }
+            } else if (id == "led_rgb") {
                 // Reuse the *real* V16 BLE/Wi-Fi control path; no fake RGB widget.
                 Box(Modifier.weight(1f)) {
                     LedModuleScreen(bleManager, preferencesRepository, session,
@@ -413,6 +440,29 @@ fun ModuleWorkspaceScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text("Abrir Laboratorio de hardware →",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+            item(key = "compi_dfplayer_module") {
+                Card(
+                    onClick = { openedId = "compi_dfplayer" },
+                    modifier = Modifier.fillMaxWidth().testTag("module_card_compi_dfplayer"),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Reproductor MP3 · DFPlayer Mini",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold)
+                        Text("Módulo físico · UART GPIO17/18 · bocina 4 Ω / 3 W",
+                            style = MaterialTheme.typography.bodySmall)
+                        Text("Sin microSD: reproducción física no disponible. " +
+                            "El audio local del teléfono funciona por separado.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Ver reproductor y conexión →",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary)
                     }
