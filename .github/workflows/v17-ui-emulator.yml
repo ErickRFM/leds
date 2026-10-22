@@ -1,0 +1,56 @@
+name: V17 Android emulator UX regression
+
+on:
+  pull_request:
+    paths:
+      - 'android/**'
+      - '.github/workflows/v17-ui-emulator.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mobile-ux-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [30, 35]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Enable KVM access
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Instrumented module and navigation UX (real Android emulator)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-boot-timeout: 600
+          script: cd android && gradle connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.rgbcontroller.HardwareDashboardScrollTest,com.rgbcontroller.ModuleWiringRegressionTest,com.rgbcontroller.HomeNavigationTest' --stacktrace
+      - name: Upload emulator instrumentation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compi-v17-mobile-ux-api${{ matrix.api-level }}-results
+          if-no-files-found: ignore
+          path: |
+            android/app/build/reports/androidTests/
+            android/app/build/outputs/androidTest-results/
+            android/app/build/outputs/connected_android_test_additional_output/
