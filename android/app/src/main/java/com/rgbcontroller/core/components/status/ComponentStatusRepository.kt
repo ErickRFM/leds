@@ -196,6 +196,15 @@ class ComponentStatusRepository(
         }
     }
 
+    /** Status request failed: preserve only persisted evidence, never stale live status. */
+    fun invalidateLiveStatus(message: String) {
+        _state.value = _state.value.copy(
+            firmwareStatus = null,
+            firmwareTelemetry = null,
+            authorityError = message
+        )
+    }
+
     /** A failed poll must never keep the previous reading labelled as live. */
     fun invalidateLiveTelemetry(message: String) {
         _state.value = _state.value.copy(

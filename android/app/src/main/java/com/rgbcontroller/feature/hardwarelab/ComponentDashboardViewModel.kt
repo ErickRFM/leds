@@ -87,14 +87,17 @@ class ComponentDashboardViewModel(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
-            repository.reportError(failure.message ?: "Error de comunicación con el ESP32.")
+            repository.invalidateLiveStatus(failure.message ?: "Error de comunicación con el ESP32.")
             return
         }
         if (raw == null) {
-            repository.reportError("El firmware no respondió con un estado de componentes.")
+            repository.invalidateLiveStatus("El firmware no respondió con un estado de componentes.")
             return
         }
-        repository.ingest(raw)
+        if (!repository.ingest(raw)) {
+            repository.invalidateLiveStatus("El firmware entregó un estado de componentes inválido.")
+            return
+        }
         // Telemetry is secondary: a failure must never discard confirmed status,
         // and absent readings must never be invented.
         val telemetry = try {

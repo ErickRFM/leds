@@ -689,7 +689,7 @@ private fun Dht22TelemetryCard(state: ComponentDashboardState) {
 @Composable
 private fun SoilTelemetryCard(state: ComponentDashboardState) {
     val live = state.telemetryFreshness == ComponentStatusFreshness.LIVE
-    val measurements = state.authoritativeTelemetry ?: state.persistedTelemetry
+    val measurements = if (live) state.authoritativeTelemetry else state.persistedTelemetry
     val moisture = measurements?.let { ComponentTelemetryCodec.find(it, "soil_moisture") }
     val raw = measurements?.let { ComponentTelemetryCodec.find(it, "adc_raw") }
     // A percentage is only shown for a calibrated, fresh, valid moisture reading.
@@ -782,7 +782,7 @@ private fun OledStatusCard(state: ComponentDashboardState, session: CompiLabSess
     OledDisplayWidget(
         detected = oled.detected,
         configured = oled.configured,
-        operative = oled.operative,
+        operative = live && oled.operative,
         sda = oled.sda,
         scl = oled.scl,
         address = if (oled.detected) OledRuntime.DEFAULT_ADDRESS else null,
@@ -791,7 +791,7 @@ private fun OledStatusCard(state: ComponentDashboardState, session: CompiLabSess
         live = live,
         modifier = Modifier.testTag("component_oled_status")
     )
-    val canSend = oled.operative && live && session?.wifiReady == true &&
+    val canSend = oled.operative && live && session?.transport == com.rgbcontroller.core.wifi.LabTransport.WIFI_LAB && session.wifiReady == true &&
         session.connectionState == LabConnectionState.AUTHORIZED
     Column(Modifier.fillMaxWidth().padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
