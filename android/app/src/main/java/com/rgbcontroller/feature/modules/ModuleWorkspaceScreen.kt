@@ -193,11 +193,11 @@ fun ModuleWorkspaceScreen(
                                     style = MaterialTheme.typography.bodySmall)
                             }
                             Surface(
-                                color = if (currentlyVerified) MaterialTheme.colorScheme.primaryContainer
+                                color = if (currentlyVerified && state.telemetryFreshness == ComponentStatusFreshness.LIVE) MaterialTheme.colorScheme.primaryContainer
                                     else MaterialTheme.colorScheme.surfaceVariant,
                                 shape = RoundedCornerShape(12.dp)
                             ) {
-                                Text(if (currentlyVerified) "En vivo" else "Sin datos en vivo",
+                                Text(if (currentlyVerified && state.telemetryFreshness == ComponentStatusFreshness.LIVE) "En vivo" else "Sin datos en vivo",
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                     style = MaterialTheme.typography.labelMedium)
                             }
