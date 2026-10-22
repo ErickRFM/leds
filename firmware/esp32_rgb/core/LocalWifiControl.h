@@ -220,12 +220,34 @@ class LocalWifiControl final {
       const String mode = server_.arg("mode");
       const String value = server_.arg("value");
       const bool face = mode == "face";
-      if ((!face && mode != "text") || value.isEmpty() || value.length() > 39) {
+      const bool contrast = mode == "contrast";
+      if ((!face && mode != "text" && !contrast) ||
+          value.isEmpty() || value.length() > 39) {
         jsonError(400, "invalid_oled_command");
         return;
       }
+      if (contrast) {
+        unsigned int level = 0;
+        for (size_t i = 0; i < value.length(); ++i) {
+          const char digit = value[i];
+          if (digit < '0' || digit > '9') {
+            jsonError(400, "invalid_oled_contrast");
+            return;
+          }
+          level = level * 10u + static_cast<unsigned int>(digit - '0');
+          if (level > 255u) {
+            jsonError(400, "invalid_oled_contrast");
+            return;
+          }
+        }
+        if (level < 8u) {
+          jsonError(400, "invalid_oled_contrast");
+          return;
+        }
+      }
       if (face && value != "happy" && value != "sleepy" &&
-          value != "angry" && value != "surprised") {
+          value != "angry" && value != "surprised" &&
+          value != "pumpkin" && value != "cat") {
         jsonError(400, "invalid_oled_face");
         return;
       }
