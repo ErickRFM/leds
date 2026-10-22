@@ -102,11 +102,17 @@ class ComponentDashboardViewModel(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
-            repository.reportError(failure.message ?: "Error al leer la telemetría del ESP32.")
+            repository.invalidateLiveTelemetry(failure.message ?: "Error al leer la telemetría del ESP32.")
             return
         }
-        if (telemetry != null && repository.ingestTelemetry(telemetry)) {
+        if (telemetry == null) {
+            repository.invalidateLiveTelemetry("El firmware no respondió con telemetría actual.")
+            return
+        }
+        if (repository.ingestTelemetry(telemetry)) {
             repository.runAutomations(automationSink, isLinkAuthorized())
+        } else {
+            repository.invalidateLiveTelemetry("El firmware entregó telemetría inválida.")
         }
     }
 
