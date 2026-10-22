@@ -38,7 +38,9 @@ data class TelemetryChartGeometry(
     val validCount: Int,
     val invalidCount: Int,
     val staleCount: Int,
-    val disconnected: Boolean
+    val disconnected: Boolean,
+    val visibleDurationMs: Long = 0L,
+    val requestedWindowMs: Long = 0L
 ) {
     val points: List<ChartPoint> get() = segments.flatten()
     val hasData: Boolean get() = segments.any { it.isNotEmpty() }
@@ -74,9 +76,15 @@ object TelemetryChart {
         val inWindow = samples
             .filter { it.recordedAtMs in from..nowMs }
             .sortedBy { it.recordedAtMs }
-        val spanX = (nowMs - from).toFloat()
+        // Zoom to actual available history until the selected window fills up.
+        // The original selected duration remains visible in the chart caption.
+        val earliest = inWindow.minOfOrNull { it.recordedAtMs } ?: from
+        val observedMs = (nowMs - earliest).coerceAtLeast(0L)
+        val paddingMs = (observedMs / 15L).coerceAtLeast(10_000L)
+        val viewportFrom = if (inWindow.isEmpty()) from else maxOf(from, earliest - paddingMs)
+        val spanX = (nowMs - viewportFrom).toFloat()
         fun fractionXFor(recordedAtMs: Long): Float =
-            if (spanX > 0f) ((recordedAtMs - from).toFloat() / spanX).coerceIn(0f, 1f) else 0f
+            if (spanX > 0f) ((recordedAtMs - viewportFrom).toFloat() / spanX).coerceIn(0f, 1f) else 0f
         val classified = inWindow.map {
             ClassifiedSample(it, classify(it, nowMs, staleAfterMs), fractionXFor(it.recordedAtMs))
         }
@@ -118,7 +126,9 @@ object TelemetryChart {
             validCount = classified.count { it.quality == SampleQuality.VALID },
             invalidCount = classified.count { it.quality == SampleQuality.INVALID },
             staleCount = classified.count { it.quality == SampleQuality.STALE },
-            disconnected = disconnected
+            disconnected = disconnected,
+            visibleDurationMs = (nowMs - viewportFrom).coerceAtLeast(0L),
+            requestedWindowMs = windowMs
         )
     }
 }
