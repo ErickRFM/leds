@@ -2,6 +2,7 @@
 // GPIO R=27 G=25 B=26 (separate 220-330 ohm resistors).
 // LAB PROTOTYPE: BLE GATT is protected via fail-closed channel authorization.
 #include <Arduino.h>
+#include <Preferences.h>
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
@@ -1049,12 +1050,46 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
 }
 
 #if COMPI_BUILD_LDR
+bool saveLdrCalibration(uint16_t darkRaw, uint16_t brightRaw) {
+  Preferences prefs;
+  if (!prefs.begin("compi_ldr", false)) return false;
+  const uint32_t packed = (static_cast<uint32_t>(darkRaw) << 16) | brightRaw;
+  const bool saved = prefs.putUInt("cal_v1", packed) == sizeof(uint32_t);
+  prefs.end();
+  return saved;
+}
+
+void restoreLdrCalibration() {
+  if (!ldrModule.ready()) return;
+  Preferences prefs;
+  if (!prefs.begin("compi_ldr", true)) {
+    Serial.println("WARN: LDR NVS unavailable; calibration required");
+    return;
+  }
+  const uint32_t packed = prefs.getUInt("cal_v1", 0);
+  prefs.end();
+  const uint16_t darkRaw = static_cast<uint16_t>(packed >> 16);
+  const uint16_t brightRaw = static_cast<uint16_t>(packed & 0xffff);
+  if (packed != 0 && ldrModule.setCalibration(darkRaw, brightRaw)) {
+    Serial.println("BOOT: LDR calibration restored from NVS");
+  } else {
+    Serial.println("BOOT: LDR uncalibrated; capture dark and bright ADC levels");
+  }
+}
+
 bool calibrateLdr(uint16_t darkRaw, uint16_t brightRaw, void*) {
   // GPIO ownership and actual ADC sampling are required for calibration.
-  return ldrModule.ready() &&
-         pinManager.belongsTo(ldrModule.pin(), ldrModule.id()) &&
-         ldrModule.rawReading().valid &&
-         ldrModule.setCalibration(darkRaw, brightRaw);
+  if (!ldrModule.ready() ||
+      !pinManager.belongsTo(ldrModule.pin(), ldrModule.id()) ||
+      !ldrModule.rawReading().valid ||
+      !ldrModule.setCalibration(darkRaw, brightRaw)) return false;
+  // Persist only explicit calibration, never periodic ADC samples.
+  if (!saveLdrCalibration(darkRaw, brightRaw)) {
+    ldrModule.clearCalibration();
+    Serial.println("ERROR: LDR NVS write failed");
+    return false;
+  }
+  return true;
 }
 #endif
 
@@ -1338,6 +1373,9 @@ void setup() {
     Serial.println("ERROR: required RGB module start failed; control services disabled");
     while (true) delay(1000);
   }
+#if COMPI_ENABLE_LDR && COMPI_BUILD_LDR
+  restoreLdrCalibration();
+#endif
   if (moduleRegistry.unavailableAtBoot() > 0) {
     Serial.print("WARN: optional modules inactive at boot: ");
     Serial.println(moduleRegistry.unavailableAtBoot());
