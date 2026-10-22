@@ -19,7 +19,7 @@ int main() {
   auto result = policy.evaluate(reading);
   assert(result.apply && !result.suspended);
   assert(result.band == EnvironmentalRgbBand::Cold);
-  assert(result.blue == 237 && result.brightness == 80);
+  assert(result.blue == 255 && result.brightness == 80);
   assert(!result.lightWasUsed);
 
   // Hysteresis: jitter around 20°C does not flash between blue/green.
@@ -39,6 +39,8 @@ int main() {
   assert(policy.evaluate(reading).band == EnvironmentalRgbBand::Warm);
   reading.temperatureC = 31.0f;
   assert(policy.evaluate(reading).band == EnvironmentalRgbBand::Hot);
+  reading.temperatureC = 36.0f;
+  assert(policy.evaluate(reading).band == EnvironmentalRgbBand::Extreme);
 
   // Calibrated darkness raises brightness; no lux or raw ADC assumptions.
   reading.lightFresh = true;
