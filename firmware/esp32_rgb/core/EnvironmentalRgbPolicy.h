@@ -22,6 +22,9 @@ struct EnvironmentalRgbInput {
   float temperatureC = 0.0f;
   bool temperatureFresh = false;
   uint32_t temperatureAgeMs = 0;
+  float humidityPercent = 0.0f;
+  bool humidityFresh = false;
+  uint32_t humidityAgeMs = 0;
   float lightPercent = 0.0f;  // calibrated 0..100; never treat raw ADC as %
   bool lightFresh = false;
   uint32_t lightAgeMs = 0;
@@ -35,6 +38,7 @@ struct EnvironmentalRgbResult {
   bool apply = false;
   bool suspended = true;
   bool lightWasUsed = false;
+  bool humidityWasUsed = false;
   EnvironmentalRgbBand band = EnvironmentalRgbBand::Comfort;
   uint8_t red = 0, green = 0, blue = 0, brightness = 0;
 };
@@ -91,6 +95,22 @@ class EnvironmentalRgbPolicy final {
       case EnvironmentalRgbBand::Comfort: out.red=54; out.green=186; out.blue=116; break;
       case EnvironmentalRgbBand::Warm: out.red=246; out.green=184; out.blue=63; break;
       case EnvironmentalRgbBand::Hot: out.red=230; out.green=75; out.blue=75; break;
+    }
+    // Temperature owns the four base bands. Valid humidity adds a restrained
+    // tint without changing band thresholds or LDR-driven brightness.
+    if (sample.humidityFresh && sample.humidityAgeMs <= config_.maxSampleAgeMs &&
+        finite(sample.humidityPercent) && sample.humidityPercent >= 0.0f &&
+        sample.humidityPercent <= 100.0f) {
+      out.humidityWasUsed = true;
+      if (sample.humidityPercent >= 70.0f) {
+        // Humid air: gently shift toward blue, independent of temperature.
+        out.blue = static_cast<uint8_t>(
+            (static_cast<unsigned>(out.blue) * 3u + 255u) / 4u);
+      } else if (sample.humidityPercent <= 30.0f) {
+        // Dry air: warm the same base band with a subtle red accent.
+        out.red = static_cast<uint8_t>(
+            (static_cast<unsigned>(out.red) * 3u + 255u) / 4u);
+      }
     }
     out.brightness = config_.fallbackBrightness;
     if (sample.lightFresh && sample.lightAgeMs <= config_.maxSampleAgeMs &&
