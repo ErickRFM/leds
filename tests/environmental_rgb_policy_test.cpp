@@ -38,6 +38,8 @@ int main() {
   reading.temperatureC = 28.0f;
   assert(policy.evaluate(reading).band == EnvironmentalRgbBand::Warm);
   reading.temperatureC = 31.0f;
+  assert(policy.evaluate(reading).band == EnvironmentalRgbBand::Warm); // hysteresis holds until 31.5 C
+  reading.temperatureC = 31.6f;
   assert(policy.evaluate(reading).band == EnvironmentalRgbBand::Hot);
 
   // Humidity adjusts color only when the same DHT reports usable humidity.
