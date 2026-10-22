@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <cstring>
 #include "../core/ModuleRegistry.h"
-#include "../../compi/audio/CompiAudioPolicy.h"
+#include "../../../compi/audio/CompiAudioPolicy.h"
 
 namespace esp32core {
 
