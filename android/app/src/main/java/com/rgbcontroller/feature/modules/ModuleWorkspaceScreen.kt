@@ -239,6 +239,57 @@ fun ModuleWorkspaceScreen(
                         }
                     }
                     item {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Caritas OLED", style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold)
+                            Text("Expresiones temporales en la pantalla física",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                for ((face, label) in listOf("happy" to "Feliz",
+                                        "sleepy" to "Sueño", "surprised" to "Sorpresa")) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            scope.launch {
+                                                val epoch = session.revision
+                                                val authorizedKey = session.key
+                                                try {
+                                                    check(wifiAuthorized) { "Autoriza Wi-Fi para controlar OLED." }
+                                                    session.serialized {
+                                                        check(wifiAuthorized && epoch == session.revision) {
+                                                            "Cambió la conexión antes de enviar la carita."
+                                                        }
+                                                        labClient.showOled(authorizedKey, "face", face)
+                                                    }
+                                                    check(epoch == session.revision) {
+                                                        "La conexión cambió; no se confirmó la expresión."
+                                                    }
+                                                    oledActionMessage = "Carita $label enviada."
+                                                } catch (cancelled: CancellationException) {
+                                                    throw cancelled
+                                                } catch (error: Exception) {
+                                                    oledActionMessage = "OLED: ${error.message}"
+                                                }
+                                            }
+                                        },
+                                        enabled = wifiAuthorized,
+                                        modifier = Modifier.weight(1f).testTag("station_oled_$face"),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 10.dp)
+                                    ) { Text(label, maxLines = 1) }
+                                }
+                            }
+                            if (!wifiAuthorized) {
+                                Text("Las expresiones requieren Wi-Fi autorizado.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            oledActionMessage?.let {
+                                Text(it, style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
+                    item {
                         Text("Automatización RGB", style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold)
                         EnvironmentalRgbControlCard(session, labClient, bleManager)
