@@ -6,6 +6,8 @@ import com.rgbcontroller.core.wifi.LabHttpException
 import com.rgbcontroller.core.wifi.LabTransport
 import com.rgbcontroller.core.wifi.LabConnectionState
 import org.junit.Assert.*
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -224,6 +226,44 @@ class CompiLabSessionTest {
             42
         }
         assertEquals(42, value)
+        assertEquals(com.rgbcontroller.core.wifi.LabOperationPhase.CANCELLED,
+            session.operationStatus.phase)
+    }
+
+    @Test fun queuedCommandDoesNotExecuteAfterWifiSessionChanges() = runBlocking {
+        val session = CompiLabSession()
+        session.selectTransport(LabTransport.WIFI_LAB)
+        session.updateNetworkRouteAvailable(true)
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        var executed = false
+        coroutineScope {
+            val blocker = launch {
+                session.serialized {
+                    entered.complete(Unit)
+                    release.await()
+                }
+            }
+            entered.await()
+            val command = launch {
+                try {
+                    session.userOperation("RGB") { executed = true }
+                    fail("A queued command must not run against a changed session")
+                } catch (_: CancellationException) {
+                    // Expected: command was queued before route loss.
+                }
+            }
+            // Wait until userOperation announces its queued state.
+            while (session.operationStatus.phase !=
+                com.rgbcontroller.core.wifi.LabOperationPhase.QUEUED) {
+                kotlinx.coroutines.yield()
+            }
+            session.updateNetworkRouteAvailable(false)
+            release.complete(Unit)
+            blocker.join()
+            command.join()
+        }
+        assertFalse(executed)
         assertEquals(com.rgbcontroller.core.wifi.LabOperationPhase.CANCELLED,
             session.operationStatus.phase)
     }
