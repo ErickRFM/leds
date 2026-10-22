@@ -63,7 +63,7 @@ class HomeNavigationTest {
     @Test
     fun homeReturnsFromNestedBluetoothDevices() {
         composeRule.onNodeWithTag("open_led").performClick()
-        composeRule.onNodeWithTag("modules_connect").performClick()
+        composeRule.onNodeWithTag("modules_connection").performClick()
         composeRule.onNodeWithText("Dispositivos cercanos").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.onNodeWithText("Compi").assertExists()
@@ -182,7 +182,7 @@ class HomeNavigationTest {
     @Test
     fun switchingTabsDoesNotReviveAnOldConnectionOrModuleDetail() {
         composeRule.onNodeWithTag("nav_modules").performClick()
-        composeRule.onNodeWithTag("modules_connect").performClick()
+        composeRule.onNodeWithTag("modules_connection").performClick()
         composeRule.onNodeWithText("Dispositivos cercanos").assertExists()
 
         composeRule.onNodeWithTag("nav_code").performClick()
@@ -225,7 +225,7 @@ class HomeNavigationTest {
         repeat(3) {
             composeRule.onNodeWithTag("nav_modules").performClick()
             composeRule.onNodeWithTag("module_workspace_list").assertExists()
-            composeRule.onNodeWithTag("modules_connect").performClick()
+            composeRule.onNodeWithTag("modules_connection").performClick()
             composeRule.onNodeWithTag("connect_bluetooth").assertExists()
             composeRule.onNodeWithTag("nav_back").performClick()
             composeRule.onNodeWithTag("module_workspace_list").assertExists()
