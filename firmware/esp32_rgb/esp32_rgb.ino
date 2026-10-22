@@ -1645,6 +1645,11 @@ void loop() {
           measure.status == esp32core::MeasurementStatus::Fresh;
       input.temperatureC = measure.value;
       input.temperatureAgeMs = static_cast<uint32_t>(now - measure.timestampMs);
+      const auto& humidity = dht11Module.humidityReading();
+      input.humidityFresh = humidity.valid &&
+          humidity.status == esp32core::MeasurementStatus::Fresh;
+      input.humidityPercent = humidity.value;
+      input.humidityAgeMs = static_cast<uint32_t>(now - humidity.timestampMs);
     }
 #endif
 #if COMPI_BUILD_DHT22
@@ -1654,6 +1659,12 @@ void loop() {
           measure.status == esp32core::MeasurementStatus::Fresh;
       input.temperatureC = measure.value;
       input.temperatureAgeMs = static_cast<uint32_t>(now - measure.timestampMs);
+      // Never combine temperature from DHT22 with humidity from DHT11.
+      const auto& humidity = dht22Module.humidityReading();
+      input.humidityFresh = humidity.valid &&
+          humidity.status == esp32core::MeasurementStatus::Fresh;
+      input.humidityPercent = humidity.value;
+      input.humidityAgeMs = static_cast<uint32_t>(now - humidity.timestampMs);
     }
 #endif
 #if COMPI_BUILD_LDR
