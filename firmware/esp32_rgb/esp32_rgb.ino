@@ -1081,12 +1081,17 @@ bool calibrateLdr(uint16_t darkRaw, uint16_t brightRaw, void*) {
   // GPIO ownership and actual ADC sampling are required for calibration.
   if (!ldrModule.ready() ||
       !pinManager.belongsTo(ldrModule.pin(), ldrModule.id()) ||
-      !ldrModule.rawReading().valid ||
-      !ldrModule.setCalibration(darkRaw, brightRaw)) return false;
+      !ldrModule.rawReading().valid) return false;
+  // Keep the last confirmed calibration if the NVS write fails.
+  const bool previousValid = ldrModule.calibrated();
+  const uint16_t previousDark = ldrModule.darkRaw();
+  const uint16_t previousBright = ldrModule.brightRaw();
+  if (!ldrModule.setCalibration(darkRaw, brightRaw)) return false;
   // Persist only explicit calibration, never periodic ADC samples.
   if (!saveLdrCalibration(darkRaw, brightRaw)) {
-    ldrModule.clearCalibration();
-    Serial.println("ERROR: LDR NVS write failed");
+    if (previousValid) ldrModule.setCalibration(previousDark, previousBright);
+    else ldrModule.clearCalibration();
+    Serial.println("ERROR: LDR NVS write failed; previous calibration restored");
     return false;
   }
   return true;
