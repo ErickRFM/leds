@@ -1276,22 +1276,20 @@ private fun ModuleReadings(
                             else -> "—"
                         }
                     )
-                    Text(
-                        "Esta carita es una representación de Compi, no una captura de los píxeles físicos. " +
-                            "La OLED muestra localmente las lecturas disponibles. " +
-                            "El indicador de sonido requiere un sensor o fuente de audio confirmada.",
+                    Text("Vista ilustrativa · la OLED física puede mostrar otra expresión",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                        style = MaterialTheme.typography.labelSmall)
                     Text("Expresiones físicas", style = MaterialTheme.typography.titleMedium)
                     if (oledActionMessage != null) {
                         Text(oledActionMessage, style = MaterialTheme.typography.bodySmall,
                             color = if (oledActionMessage.startsWith("OLED:")) MaterialTheme.colorScheme.error
                                     else MaterialTheme.colorScheme.primary)
                     }
-                    Text("Se envían a la OLED mediante Wi-Fi autorizado. Las caritas manuales se muestran temporalmente antes de recuperar la vista ambiental.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall)
+                    if (!canControlOled) {
+                        Text("Para cambiar expresiones, conecta y autoriza Wi-Fi.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelMedium)
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         for ((face, label) in listOf("happy" to "Feliz", "sleepy" to "Sueño")) {
                             OutlinedButton(onClick = { onOledFace(face) }, enabled = canControlOled,
@@ -1306,7 +1304,7 @@ private fun ModuleReadings(
                         }
                     }
                     OutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) {
-                        Text("Actualizar sensores")
+                        Text("Actualizar lecturas")
                     }
                 }
             }
