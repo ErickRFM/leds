@@ -103,8 +103,6 @@ class BleManager(private val context: Context) {
     private var pendingSnapshot: CompletableDeferred<BleSnapshotAssembler.Snapshot>? = null
     private var pendingLdrCalibration: CompletableDeferred<Boolean>? = null
     private var pendingLdrCalibrationId = 0
-    private var pendingOled: CompletableDeferred<Boolean>? = null
-    private var pendingOledId = 0
     private val ownerCrypto = BouncyCastleSessionCrypto()
     private val ownerStore = OwnerSessionStore(context)
     private var ownerRecord: OwnerSessionStore.Record? = null
@@ -789,15 +787,6 @@ class BleManager(private val context: Context) {
             }
             return
         }
-        if (text.startsWith("OLED,OK,") || text.startsWith("OLED,ERR,")) {
-            val id = text.substringAfterLast(',').toIntOrNull()
-            if (_connectionState.value == BleConnectionState.Ready &&
-                _securityState.value == BleSecurityState.Authorized &&
-                id != null && id == pendingOledId) {
-                pendingOled?.complete(text.startsWith("OLED,OK,"))
-            }
-            return
-        }
         val calibrationReply = BleLdrCalibrationProtocol.reply(text)
         if (calibrationReply != null) {
             if (_connectionState.value == BleConnectionState.Ready &&
@@ -867,40 +856,6 @@ class BleManager(private val context: Context) {
             _stateRevision.value += 1
         }
     }
-
-    /** Owner-authenticated OLED control; only firmware ACK confirms success. */
-    suspend fun controlOledBle(mode: String, value: String): Boolean =
-        snapshotMutex.withLock {
-            if (_connectionState.value != BleConnectionState.Ready ||
-                _securityState.value != BleSecurityState.Authorized ||
-                enrollmentPhase != EnrollmentPhase.IDLE) return@withLock false
-            if (mode == "face" && value !in setOf("happy", "sleepy", "surprised",
-                    "angry", "pumpkin", "cat", "dance")) return@withLock false
-            if (mode == "contrast" && (value.toIntOrNull() ?: -1) !in 8..255)
-                return@withLock false
-            if (mode != "face" && mode != "contrast") return@withLock false
-            snapshotRequestId = snapshotRequestId % 65535 + 1
-            val id = snapshotRequestId
-            val deferred = CompletableDeferred<Boolean>()
-            val enqueued = synchronized(pending) {
-                if (pending.size >= 16) false else {
-                    pending.addLast("OLED,$id,$mode,$value")
-                    true
-                }
-            }
-            if (!enqueued) return@withLock false
-            pendingOledId = id
-            pendingOled = deferred
-            drainQueue()
-            try {
-                withTimeoutOrNull(5_000L) { deferred.await() } == true
-            } finally {
-                if (pendingOled === deferred) {
-                    pendingOled = null
-                    pendingOledId = 0
-                }
-            }
-        }
 
     /** Runtime-only LDR calibration over cryptographic owner GATT.
      * True means the firmware acknowledged applying it, not physical lux accuracy.
