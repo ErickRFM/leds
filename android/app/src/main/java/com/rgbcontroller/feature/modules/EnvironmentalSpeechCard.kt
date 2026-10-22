@@ -1,5 +1,7 @@
 package com.rgbcontroller.feature.modules
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.Alignment
@@ -44,13 +46,18 @@ fun EnvironmentalSpeechCard(state: ComponentDashboardState) {
         includeDht = "sensor.dht11" in activeIds || "sensor.dht22" in activeIds,
         includeLight = "sensor.ldr_light" in activeIds
     )
-    Card(Modifier.fillMaxWidth().testTag("compi_environmental_voice"), shape = RoundedCornerShape(20.dp)) {
+    Card(Modifier.fillMaxWidth().animateContentSize(animationSpec = tween(220)).testTag("compi_environmental_voice"), shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Icon(Icons.Default.VolumeUp, contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary)
-                Text("Voz ambiental", style = MaterialTheme.typography.titleMedium)
+                Column(Modifier.weight(1f)) {
+                    Text("Voz ambiental", style = MaterialTheme.typography.titleMedium)
+                    Text("Reproduce en el teléfono · TTS Android",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             Text(
                 when {
@@ -61,6 +68,9 @@ fun EnvironmentalSpeechCard(state: ComponentDashboardState) {
                 },
                 style = MaterialTheme.typography.bodySmall
             )
+            Text("Los avisos de la bocina DFPlayer son independientes y requieren microSD.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
             Button(
                 onClick = { speaker.speak(report.text) },
                 enabled = live && voiceReady && report.hasFreshData,
