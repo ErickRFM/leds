@@ -258,6 +258,8 @@ jobs:
           . ./config/esp32-board.env
           mkdir -p build/full-lab-sketch
           cp -a firmware/esp32_rgb build/full-lab-sketch/esp32_rgb
+          mkdir -p build/full-lab-sketch/compi/audio
+          cp compi/audio/CompiAudioPolicy.h build/full-lab-sketch/compi/audio/CompiAudioPolicy.h
           sed -i "s/^#define COMPI_FULL_LAB_PROFILE 0$/#define COMPI_FULL_LAB_PROFILE 1/" build/full-lab-sketch/esp32_rgb/esp32_rgb.ino
           grep -q "^#define COMPI_FULL_LAB_PROFILE 1$" build/full-lab-sketch/esp32_rgb/esp32_rgb.ino
           arduino-cli compile --fqbn "$ARDUINO_FQBN" --output-dir build/firmware-full-lab build/full-lab-sketch/esp32_rgb
