@@ -249,6 +249,28 @@ jobs:
         run: |
           . ./config/esp32-board.env
           arduino-cli compile --fqbn "$ARDUINO_FQBN" --output-dir build/firmware firmware/esp32_rgb
+      - name: Compile connected full-lab firmware (DHT11 + LDR + OLED + DFPlayer)
+        run: |
+          . ./config/esp32-board.env
+          mkdir -p build/full-lab-sketch
+          cp -a firmware/esp32_rgb build/full-lab-sketch/esp32_rgb
+          sed -i "s/^#define COMPI_FULL_LAB_PROFILE 0$/#define COMPI_FULL_LAB_PROFILE 1/" build/full-lab-sketch/esp32_rgb/esp32_rgb.ino
+          grep -q "^#define COMPI_FULL_LAB_PROFILE 1$" build/full-lab-sketch/esp32_rgb/esp32_rgb.ino
+          arduino-cli compile --fqbn "$ARDUINO_FQBN" --output-dir build/firmware-full-lab build/full-lab-sketch/esp32_rgb
+          python3 scripts/check-firmware-budget.py build/firmware-full-lab
+          echo "Git commit: $GITHUB_SHA" > build/firmware-full-lab/build-info.txt
+          echo "COMPI_FULL_LAB_PROFILE=1 (GPIO16 DHT11, GPIO32 LDR, OLED 21/22, DFPlayer 17/18)" >> build/firmware-full-lab/build-info.txt
+          echo "LAB ONLY — confirm speaker, UART voltage levels and power before flashing" >> build/firmware-full-lab/build-info.txt
+          (cd build/firmware-full-lab && sha256sum ./*.bin > SHA256SUMS.txt)
+      - name: Upload connected full-lab binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp32-full-lab-dht11-ldr-oled-dfplayer
+          if-no-files-found: error
+          path: |
+            build/firmware-full-lab/*.bin
+            build/firmware-full-lab/SHA256SUMS.txt
+            build/firmware-full-lab/build-info.txt
       - name: Compile standalone DHT11 diagnostic (no Wi-Fi/BLE/app)
         run: |
           . ./config/esp32-board.env

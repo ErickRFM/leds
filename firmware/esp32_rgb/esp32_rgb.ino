@@ -53,6 +53,11 @@
 // ---------------------------------------------------------------------------
 // Drivers may be built without taking pins. COMPI_ENABLE_* continues to
 // mean "start at boot" for backward compatibility with opt-in firmware.
+// User's physical test build: set to 1 only after wiring all sensors,
+// DFPlayer and suitable 3W/4ohm speaker. Default 0 preserves safe rollout.
+#ifndef COMPI_FULL_LAB_PROFILE
+#define COMPI_FULL_LAB_PROFILE 0
+#endif
 #ifndef COMPI_BUILD_DHT11
 #define COMPI_BUILD_DHT11 1
 #endif
@@ -91,7 +96,7 @@
 #ifndef COMPI_ENABLE_LDR
 // An ADC lease alone does not prove a physical LDR is connected.
 // Start only after explicit authorized configuration via /components/apply.
-#define COMPI_ENABLE_LDR 0
+#define COMPI_ENABLE_LDR COMPI_FULL_LAB_PROFILE
 #endif
 #ifndef COMPI_LDR_PIN
 #define COMPI_LDR_PIN 32
@@ -114,7 +119,7 @@
 // Activate only after checking electrical speaker output and UART wiring.
 // GPIO16 is already occupied by DHT11; never reuse it for this player.
 #ifndef COMPI_ENABLE_DFPLAYER
-#define COMPI_ENABLE_DFPLAYER 0
+#define COMPI_ENABLE_DFPLAYER COMPI_FULL_LAB_PROFILE
 #endif
 #ifndef COMPI_DFPLAYER_RX
 #define COMPI_DFPLAYER_RX 18
@@ -690,6 +695,42 @@ esp32core::OledSsd1306Module oledModule(COMPI_OLED_ADDRESS, COMPI_OLED_SDA,
     COMPI_OLED_SCL, oledInit, oledPresent, nullptr, 250);
 #endif
 
+#if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
+uint32_t lastOledUserCommandAt = 0;
+bool oledDisplayCommand(const char* mode, const char* value, void*) {
+  if (!oledModule.ready() || mode == nullptr || value == nullptr) return false;
+  if (std::strcmp(mode, "text") == 0) {
+    const bool shown = oledModule.setText(value) && oledModule.refreshNow(millis());
+    if (shown) lastOledUserCommandAt = millis();
+    return shown;
+  }
+  if (std::strcmp(mode, "face") != 0) return false;
+  oledDriver.clearDisplay();
+  oledDriver.setTextColor(SSD1306_WHITE);
+  if (std::strcmp(value, "sleepy") == 0) {
+    oledDriver.drawLine(20, 35, 48, 35, SSD1306_WHITE);
+    oledDriver.drawLine(80, 35, 108, 35, SSD1306_WHITE);
+  } else if (std::strcmp(value, "angry") == 0) {
+    oledDriver.fillTriangle(19, 23, 51, 35, 51, 49, SSD1306_WHITE);
+    oledDriver.fillTriangle(109, 23, 77, 35, 77, 49, SSD1306_WHITE);
+  } else if (std::strcmp(value, "surprised") == 0) {
+    oledDriver.fillCircle(34, 34, 13, SSD1306_WHITE);
+    oledDriver.fillCircle(94, 34, 13, SSD1306_WHITE);
+    oledDriver.drawCircle(64, 56, 5, SSD1306_WHITE);
+  } else if (std::strcmp(value, "happy") == 0) {
+    oledDriver.fillRoundRect(19, 22, 29, 29, 12, SSD1306_WHITE);
+    oledDriver.fillRoundRect(80, 22, 29, 29, 12, SSD1306_WHITE);
+    oledDriver.drawLine(58, 55, 64, 58, SSD1306_WHITE);
+    oledDriver.drawLine(64, 58, 70, 55, SSD1306_WHITE);
+  } else {
+    return false;
+  }
+  oledDriver.display();
+  lastOledUserCommandAt = millis();
+  return true;
+}
+#endif
+
 // Collects the freshest measurement from every active component. Returns false
 // only when the codec cannot fit the payload; an empty (but valid) list is a
 // legitimate response while no component is active.
@@ -1250,6 +1291,12 @@ void setup() {
   } else {
     Serial.println("GPIO16 disponible en perfil sin PSRAM; requiere prueba electrica real.");
   }
+#if COMPI_ENABLE_DFPLAYER
+  // Reserve transport pins against runtime lab reconfiguration while UART2
+  // is enabled. These pins are not free user GPIO in the full lab profile.
+  pinManager.registerSystemPin(COMPI_DFPLAYER_TX, "audio.dfplayer");
+  pinManager.registerSystemPin(COMPI_DFPLAYER_RX, "audio.dfplayer");
+#endif
   pinManager.registerSystemPin(LED_R, "led.rgb");
   pinManager.registerSystemPin(LED_G, "led.rgb");
   pinManager.registerSystemPin(LED_B, "led.rgb");
@@ -1315,6 +1362,9 @@ void setup() {
   Serial.println("BOOT: required modules started; optional components reported individually");
   wifiLab.setComponentTelemetry(collectComponentTelemetry, nullptr);
   wifiLab.setComponentStatus(collectComponentStatus, nullptr);
+#if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
+  wifiLab.setOledDisplay(oledDisplayCommand, nullptr);
+#endif
   wifiLab.setComponentApply(applyComponentPins, nullptr);
 #if COMPI_BUILD_LDR
   wifiLab.setLdrCalibration(calibrateLdr, nullptr);
@@ -1428,6 +1478,8 @@ void loop() {
   // the network. Start after the greeting, then refresh every 3 seconds.
   static uint32_t lastOledTelemetryAt = 0;
   if (oledModule.ready() && now >= 8000U &&
+      (lastOledUserCommandAt == 0 ||
+       static_cast<uint32_t>(now - lastOledUserCommandAt) >= 30000u) &&
       (lastOledTelemetryAt == 0 ||
        static_cast<uint32_t>(now - lastOledTelemetryAt) >= 3000U)) {
     lastOledTelemetryAt = now;
