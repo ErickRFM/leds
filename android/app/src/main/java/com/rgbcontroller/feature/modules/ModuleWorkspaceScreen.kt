@@ -804,6 +804,56 @@ private fun ModuleReadings(
                 TelemetryChartCard("Historial de luz relativa", geometry, live)
             }
         }
+        "ssd1306_oled" -> {
+            // The display consumes the shared DHT11/LDR snapshots; it is not
+            // itself a sensor. Never invent frames, measurements or audio input.
+            val temp = if (live) reading("temperature")?.value else null
+            val humidity = if (live) reading("humidity")?.value else null
+            val light = if (live) reading("ambient_light")?.value else null
+            val raw = if (live) reading("ambient_light_raw")?.value else null
+            Card(Modifier.fillMaxWidth().testTag("oled_environment_dashboard")) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Compi · Pantalla y ambiente", style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        if (live && active) "OLED conectada · telemetría en vivo"
+                        else "Sin confirmación actual de la pantalla y sus datos",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF07111A))) {
+                        Column(
+                            Modifier.fillMaxWidth().padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("◕ ᴗ ◕", style = MaterialTheme.typography.displayMedium,
+                                color = Color(0xFF9EE6FF))
+                            Text("COMPI · vista ilustrativa", color = Color(0xFF9EE6FF),
+                                style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                    Text("Temperatura: " + (temp?.let { "%.1f °C".format(java.util.Locale.ROOT, it) } ?: "—"))
+                    Text("Humedad: " + (humidity?.let { "%.0f %%".format(java.util.Locale.ROOT, it) } ?: "—"))
+                    Text(
+                        "Luz: " + when {
+                            light != null -> "%.0f %% (calibrada)".format(java.util.Locale.ROOT, light)
+                            raw != null -> "%.0f ADC (sin calibrar)".format(java.util.Locale.ROOT, raw)
+                            else -> "—"
+                        }
+                    )
+                    Text(
+                        "Esta carita es una representación de Compi, no una captura de los píxeles físicos. " +
+                            "La OLED muestra localmente las lecturas disponibles. " +
+                            "El indicador de sonido requiere un sensor o fuente de audio confirmada.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) {
+                        Text("Actualizar sensores")
+                    }
+                }
+            }
+        }
         else -> Card(Modifier.fillMaxWidth()) {
             Text("Este componente todavía no reporta lecturas compatibles con la app.",
                 modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall)
