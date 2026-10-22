@@ -257,6 +257,7 @@ jobs:
         run: |
           . ./config/esp32-board.env
           mkdir -p build/full-lab-sketch
+          cmp <(tail -n +3 firmware/esp32_rgb/core/CompiAudioPolicy.h) compi/audio/CompiAudioPolicy.h
           cp -a firmware/esp32_rgb build/full-lab-sketch/esp32_rgb
           sed -i "s/^#define COMPI_FULL_LAB_PROFILE 0$/#define COMPI_FULL_LAB_PROFILE 1/" build/full-lab-sketch/esp32_rgb/esp32_rgb.ino
           grep -q "^#define COMPI_FULL_LAB_PROFILE 1$" build/full-lab-sketch/esp32_rgb/esp32_rgb.ino
