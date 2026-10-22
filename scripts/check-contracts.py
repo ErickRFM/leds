@@ -9,6 +9,17 @@ android = (root / "android/app/src/main/java/com/rgbcontroller/core/ble/BleManag
 effects = (root / "android/app/src/main/java/com/rgbcontroller/feature/effects/EffectsScreen.kt").read_text(encoding="utf-8")
 protocol = (root / "docs/PROTOCOLO_BLE.md").read_text(encoding="utf-8")
 
+# Keep the visible OLED actions aligned with the authorized HTTP handler
+# and the actual SSD1306 renderer. A UI-only face is a broken control.
+oled_http = (root / "firmware/esp32_rgb/core/LocalWifiControl.h").read_text(encoding="utf-8")
+station_ui = (root / "android/app/src/main/java/com/rgbcontroller/feature/modules/ModuleWorkspaceScreen.kt").read_text(encoding="utf-8")
+for face in ("happy", "sleepy", "surprised", "pumpkin", "cat", "dance"):
+    assert f'"{face}"' in oled_http, f"OLED HTTP route rejects {face}"
+    assert f'"{face}"' in firmware, f"OLED firmware cannot render {face}"
+    assert f'"{face}"' in station_ui, f"Android station cannot select {face}"
+assert 'std::strcmp(value, "dance") == 0' in firmware
+assert "drawCatDanceFrame" in firmware
+
 uuid_pattern = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 uuids = set(re.findall(uuid_pattern, firmware.lower()))
 uuids.discard("00002902-0000-1000-8000-00805f9b34fb")
