@@ -678,8 +678,8 @@ private fun Dht22TelemetryCard(state: ComponentDashboardState) {
         live = live,
         status = status?.let { telemetryStatusLabel(it) },
         model = when {
-            "sensor.dht11" in state.confirmedCatalogIds -> "DHT11"
-            "sensor.dht22" in state.confirmedCatalogIds -> "DHT22"
+            "dht11" in state.confirmedCatalogIds -> "DHT11"
+            "dht22" in state.confirmedCatalogIds -> "DHT22"
             else -> "DHT (modelo sin confirmar)"
         },
         modifier = Modifier.testTag("component_telemetry_dht22")
