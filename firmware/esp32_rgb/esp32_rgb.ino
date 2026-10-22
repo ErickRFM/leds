@@ -53,6 +53,11 @@
 // ---------------------------------------------------------------------------
 // Drivers may be built without taking pins. COMPI_ENABLE_* continues to
 // mean "start at boot" for backward compatibility with opt-in firmware.
+// User's physical test build: set to 1 only after wiring all sensors,
+// DFPlayer and suitable 3W/4ohm speaker. Default 0 preserves safe rollout.
+#ifndef COMPI_FULL_LAB_PROFILE
+#define COMPI_FULL_LAB_PROFILE 0
+#endif
 #ifndef COMPI_BUILD_DHT11
 #define COMPI_BUILD_DHT11 1
 #endif
@@ -91,7 +96,7 @@
 #ifndef COMPI_ENABLE_LDR
 // An ADC lease alone does not prove a physical LDR is connected.
 // Start only after explicit authorized configuration via /components/apply.
-#define COMPI_ENABLE_LDR 0
+#define COMPI_ENABLE_LDR COMPI_FULL_LAB_PROFILE
 #endif
 #ifndef COMPI_LDR_PIN
 #define COMPI_LDR_PIN 32
@@ -114,7 +119,7 @@
 // Activate only after checking electrical speaker output and UART wiring.
 // GPIO16 is already occupied by DHT11; never reuse it for this player.
 #ifndef COMPI_ENABLE_DFPLAYER
-#define COMPI_ENABLE_DFPLAYER 0
+#define COMPI_ENABLE_DFPLAYER COMPI_FULL_LAB_PROFILE
 #endif
 #ifndef COMPI_DFPLAYER_RX
 #define COMPI_DFPLAYER_RX 18
