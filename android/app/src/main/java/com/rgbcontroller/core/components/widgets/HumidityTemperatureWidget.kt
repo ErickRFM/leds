@@ -1,6 +1,8 @@
 package com.rgbcontroller.core.components.widgets
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -27,48 +29,41 @@ fun HumidityTemperatureWidget(
     model: String = "DHT22",
     modifier: Modifier = Modifier
 ) {
-    Card(modifier = modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("$model - Humedad y Temperatura", style = MaterialTheme.typography.titleMedium)
-            if (!hasData || humidity == null || temperature == null) {
-                Text(
-                    "Sin datos - Sensor no detectado, desconectado o con lectura inválida",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("Humedad: ${format(humidity)} %", style = MaterialTheme.typography.bodyLarge)
-                    Text("Temp: ${format(temperature)} C", style = MaterialTheme.typography.bodyLarge)
+    Card(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Ambiente · $model", style = MaterialTheme.typography.titleMedium)
+                Text(if (live && hasData) "● En vivo" else "Sin lectura en vivo",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (live && hasData) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text("Temperatura", style = MaterialTheme.typography.labelMedium)
+                    Text(if (hasData && temperature?.isFinite() == true) "${format(temperature)} °C" else "— °C",
+                        style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 }
-                if (!calibrated) {
-                    Text(
-                        "Advertencia: lecturas no validadas",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
+                Column(Modifier.weight(1f)) {
+                    Text("Humedad", style = MaterialTheme.typography.labelMedium)
+                    Text(if (hasData && humidity?.isFinite() == true) "${format(humidity)} %" else "— %",
+                        style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 }
             }
-            if (!live) {
-                Text(
-                    "Último estado confirmado, no en vivo",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.tertiary
-                )
+            if (!hasData || humidity?.isFinite() != true || temperature?.isFinite() != true) {
+                Text("Esperando mediciones válidas del sensor",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            if (status != null) {
-                Text(
-                    "Estado del sensor: $status",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            if (lastUpdate != null && lastUpdate > 0L) {
-                Text(
-                    "Lectura: ${formatTime(lastUpdate)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            if (!calibrated) Text("Lectura pendiente de validación",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.labelSmall)
+            if (!live && hasData) Text("Valores guardados · no son lecturas actuales",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (status != null || lastUpdate != null) {
+                Text(listOfNotNull(status, lastUpdate?.takeIf { it > 0L }?.let { formatTime(it) })
+                    .joinToString(" · "), style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
