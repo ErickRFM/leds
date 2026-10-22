@@ -245,13 +245,12 @@ fun ModuleWorkspaceScreen(
                             Text("Expresiones temporales en la pantalla física",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            androidx.compose.foundation.layout.FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                for ((face, label) in listOf("happy" to "Feliz",
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                for (faces in listOf("happy" to "Feliz",
                                         "sleepy" to "Sueño", "surprised" to "Sorpresa",
-                                        "pumpkin" to "Calabaza", "cat" to "Gato")) {
+                                        "pumpkin" to "Calabaza", "cat" to "Gato").chunked(3)) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        for ((face, label) in faces) {
                                     OutlinedButton(
                                         onClick = {
                                             scope.launch {
@@ -277,9 +276,11 @@ fun ModuleWorkspaceScreen(
                                             }
                                         },
                                         enabled = wifiAuthorized,
-                                        modifier = Modifier.testTag("station_oled_$face"),
+                                        modifier = Modifier.weight(1f).testTag("station_oled_$face"),
                                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 10.dp)
                                     ) { Text(label, maxLines = 1) }
+                                        }
+                                    }
                                 }
                             }
                             if (!wifiAuthorized) {
