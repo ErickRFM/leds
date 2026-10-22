@@ -155,7 +155,7 @@ fun ModuleWorkspaceScreen(
                     Icon(Icons.Default.ArrowBack, contentDescription = "Volver a módulos")
                 }
                 Text(if (id == ModuleWorkspaceGrouping.ENVIRONMENT) "Sensor ambiental"
-                     else if (id == "compi_dfplayer") "Reproductor MP3 · DFPlayer"
+                     else if (id == "compi_dfplayer") "Música"
                      else ComponentCatalog.get(id)?.name ?: id,
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.weight(1f))
@@ -261,14 +261,26 @@ fun ModuleWorkspaceScreen(
                 ) {
                     if (id == ModuleWorkspaceGrouping.ENVIRONMENT) {
                         item {
-                            Text("${environmentSensor.uppercase()} + sensor de suelo ADC1",
-                                style = MaterialTheme.typography.titleMedium)
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Surface(color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = RoundedCornerShape(16.dp)) {
+                                    Icon(Icons.Default.Thermostat, contentDescription = null,
+                                        modifier = Modifier.padding(14.dp),
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                                }
+                                Column(Modifier.weight(1f)) {
+                                    Text("Ambiente en tiempo real",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold)
+                                    Text("Temperatura · humedad · suelo",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
                         }
                         item(key = "environmental_voice_summary") {
                             EnvironmentalSpeechCard(state)
-                        }
-                        item(key = "environmental_audio_library") {
-                            CompiAudioPlayerCard()
                         }
                         for (child in listOf(environmentSensor, "soil_moisture")) {
                             item(key = "env_status_$child") {
@@ -297,6 +309,9 @@ fun ModuleWorkspaceScreen(
                                     Text("Reasignar GPIO de ${ComponentCatalog.get(child)?.name ?: child}")
                                 }
                             }
+                        }
+                        item(key = "environmental_audio_library") {
+                            CompiAudioPlayerCard()
                         }
                     } else {
                     item {
