@@ -286,6 +286,32 @@ class CompiLabSessionTest {
             session.operationStatus.phase)
     }
 
+    @Test fun sessionLossImmediatelyRevokesRunningOperationStatus() = runBlocking {
+        val session = CompiLabSession()
+        session.selectTransport(LabTransport.WIFI_LAB)
+        session.updateNetworkRouteAvailable(true)
+        val release = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val started = kotlinx.coroutines.CompletableDeferred<Unit>()
+        coroutineScope {
+            val operation = launch {
+                session.userOperation("RGB") {
+                    started.complete(Unit)
+                    release.await()
+                }
+            }
+            started.await()
+            assertEquals(com.rgbcontroller.core.wifi.LabOperationPhase.RUNNING,
+                session.operationStatus.phase)
+            session.updateNetworkRouteAvailable(false)
+            assertEquals(com.rgbcontroller.core.wifi.LabOperationPhase.CANCELLED,
+                session.operationStatus.phase)
+            release.complete(Unit)
+            operation.join()
+        }
+        assertNotEquals(com.rgbcontroller.core.wifi.LabOperationPhase.CONFIRMED,
+            session.operationStatus.phase)
+    }
+
     @Test fun noRouteCannotBeAuthorizedEvenWithAResponse() {
         val session = CompiLabSession()
         session.selectTransport(LabTransport.WIFI_LAB)
