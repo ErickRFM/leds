@@ -80,10 +80,7 @@ fun CompiAudioPlayerCard() {
         val started = player.play(uri) {
             // Stop at the end of the queue instead of looping forever when a
             // single track is present. Advancing is always explicit and bounded.
-            val current = queue.currentIndex
-            val last = queue.tracks().lastIndex
-            if (current in 0 until last) {
-                queue.next()
+            if (queue.advanceOrNull() != null) {
                 revision++
                 playCurrent()
             } else {

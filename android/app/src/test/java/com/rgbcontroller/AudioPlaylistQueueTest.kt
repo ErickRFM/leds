@@ -23,6 +23,20 @@ class AudioPlaylistQueueTest {
         assertEquals(listOf("content://audio/1", "content://audio/2"), q.tracks())
     }
 
+    @Test fun automaticAdvanceStopsAtEndWithoutRepeating() {
+        val q = AudioPlaylistQueue()
+        assertNull(q.advanceOrNull())
+        assertTrue(q.enqueue("content://audio/one"))
+        assertNull(q.advanceOrNull())
+        assertEquals("content://audio/one", q.current())
+        assertTrue(q.enqueue("content://audio/two"))
+        assertEquals("content://audio/two", q.advanceOrNull())
+        assertNull(q.advanceOrNull())
+        assertEquals("content://audio/two", q.current())
+        assertTrue(q.remove(1))
+        assertNull(q.advanceOrNull())
+    }
+
     @Test fun controlsAndDeletionNeverAccessOutsidePlaylist() {
         val q = AudioPlaylistQueue()
         assertNull(q.next())
