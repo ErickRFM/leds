@@ -93,7 +93,14 @@ object TelemetryChart {
             .mapNotNull { it.sample.value }
         val minV = values.minOrNull() ?: 0f
         val maxV = values.maxOrNull() ?: 1f
-        val span = maxV - minV
+        // Keep small DHT fluctuations from becoming a misleading full-height spike.
+        val minimumSpan = when (measurementType) {
+            "temperature" -> 2f
+            "humidity" -> 5f
+            else -> 1f
+        }
+        val displaySpan = maxOf(maxV - minV, minimumSpan)
+        val displayMin = (minV + maxV) / 2f - displaySpan / 2f
 
         val segments = ArrayList<List<ChartPoint>>()
         var current = ArrayList<ChartPoint>()
@@ -109,7 +116,7 @@ object TelemetryChart {
                 recordedAtMs = cs.sample.recordedAtMs,
                 value = value,
                 fractionX = cs.fractionX,
-                fractionY = if (span > 0f) ((value - minV) / span).coerceIn(0f, 1f) else 0.5f
+                fractionY = if (displaySpan > 0f) ((value - displayMin) / displaySpan).coerceIn(0f, 1f) else 0.5f
             )
             previousIndex = index
         }
