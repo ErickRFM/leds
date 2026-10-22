@@ -43,6 +43,8 @@ class LocalWifiControl final {
 
   using LdrCalibration = bool (*)(uint16_t darkRaw, uint16_t brightRaw, void* context);
 
+  using OledDisplay = bool (*)(const char* mode, const char* value, void* context);
+
   LocalWifiControl(PinManager& pins, RgbState state, RgbCommand manualCommand,
                    RgbCommand runtimeCommand, DeviceId deviceId)
       : pins_(pins), rgbState_(state), rgbCommand_(manualCommand),
@@ -66,6 +68,11 @@ class LocalWifiControl final {
   void setLdrCalibration(LdrCalibration calibrate, void* context) {
     ldrCalibration_ = calibrate;
     ldrCalibrationContext_ = context;
+  }
+
+  void setOledDisplay(OledDisplay display, void* context) {
+    oledDisplay_ = display;
+    oledContext_ = context;
   }
 
   // One authority for both authorized transports. No duplicate GPIO rules.
@@ -739,6 +746,8 @@ class LocalWifiControl final {
   void* statusContext_ = nullptr;
   ComponentApply apply_ = nullptr;
   void* applyContext_ = nullptr;
+  OledDisplay oledDisplay_ = nullptr;
+  void* oledContext_ = nullptr;
   LdrCalibration ldrCalibration_ = nullptr;
   void* ldrCalibrationContext_ = nullptr;
   bool environmentalRgbEnabled_ = false;
