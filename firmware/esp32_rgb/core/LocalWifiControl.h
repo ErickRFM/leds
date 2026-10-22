@@ -214,6 +214,36 @@ class LocalWifiControl final {
       server_.send(200, "application/json", body);
     });
 
+    server_.on("/v2/display/oled", HTTP_POST, [this]() {
+      if (!authorized()) return;
+      if (oledDisplay_ == nullptr) { jsonError(409, "oled_unavailable"); return; }
+      const String mode = server_.arg("mode");
+      const String value = server_.arg("value");
+      const bool face = mode == "face";
+      if ((!face && mode != "text") || value.isEmpty() || value.length() > 39) {
+        jsonError(400, "invalid_oled_command");
+        return;
+      }
+      if (face && value != "happy" && value != "sleepy" &&
+          value != "angry" && value != "surprised") {
+        jsonError(400, "invalid_oled_face");
+        return;
+      }
+      for (size_t i = 0; i < value.length(); ++i) {
+        const char ch = value[i];
+        if (ch < 32 || ch > 126) {
+          jsonError(400, "oled_ascii_only");
+          return;
+        }
+      }
+      if (!oledDisplay_(mode.c_str(), value.c_str(), oledContext_)) {
+        jsonError(409, "oled_not_ready");
+        return;
+      }
+      server_.send(200, "application/json",
+                   "{\"status\":\"DISPLAYED\",\"runtimeOnly\":true}");
+    });
+
     server_.on("/v2/components/telemetry", HTTP_GET, [this]() {
       if (!authorized()) return;
       char body[1024];
