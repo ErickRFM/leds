@@ -40,6 +40,27 @@ int main() {
   reading.temperatureC = 31.0f;
   assert(policy.evaluate(reading).band == EnvironmentalRgbBand::Hot);
 
+  // Humidity adjusts color only when the same DHT reports usable humidity.
+  reading.humidityFresh = true;
+  reading.humidityAgeMs = 100;
+  reading.humidityPercent = 75.0f;
+  result = policy.evaluate(reading);
+  assert(result.humidityWasUsed);
+  assert(result.band == EnvironmentalRgbBand::Hot);
+  assert(result.blue == 120);  // (75 * 3 + 255) / 4
+  reading.humidityPercent = 25.0f;
+  result = policy.evaluate(reading);
+  assert(result.humidityWasUsed && result.red == 236);
+  reading.humidityAgeMs = 7000;
+  result = policy.evaluate(reading);
+  assert(!result.humidityWasUsed && result.red == 230);
+  reading.humidityAgeMs = 0;
+  reading.humidityPercent = std::nanf("");
+  assert(!policy.evaluate(reading).humidityWasUsed);
+  reading.humidityPercent = 50.0f;
+  reading.humidityFresh = false;
+  assert(!policy.evaluate(reading).humidityWasUsed);
+
   // Calibrated darkness raises brightness; no lux or raw ADC assumptions.
   reading.lightFresh = true;
   reading.lightAgeMs = 200;
