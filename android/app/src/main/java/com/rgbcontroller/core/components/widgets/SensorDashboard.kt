@@ -31,8 +31,9 @@ fun SensorDashboard(
     var minutes by rememberSaveable(id) { mutableIntStateOf(30) }
     var showDiagnostics by rememberSaveable(id) { mutableStateOf(false) }
     val readings = if (live) state.authoritativeTelemetry else state.persistedTelemetry
+    val current = active && live && state.connected && state.authorityError == null
     fun metric(type: String): Float? {
-        if (!active) return null
+        if (!current) return null
         return ComponentTelemetryCodec.find(readings.orEmpty(), type)
             ?.takeIf { it.valid && it.status == "fresh" && it.value.isFinite() }?.value
     }
@@ -56,9 +57,9 @@ fun SensorDashboard(
             )
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            SensorMetric("Temperatura", temperature, "°C", live,
+            SensorMetric("Temperatura", temperature, "°C", current,
                 Modifier.weight(1f).testTag("sensor_temperature_$id"))
-            SensorMetric("Humedad relativa", humidity, "%", live,
+            SensorMetric("Humedad relativa", humidity, "%", current,
                 Modifier.weight(1f).testTag("sensor_humidity_$id"))
         }
         OutlinedButton(onClick = { showDiagnostics = !showDiagnostics },
