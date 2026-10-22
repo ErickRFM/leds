@@ -1475,13 +1475,13 @@ void loop() {
 
 #if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY && COMPI_BUILD_DHT11
   // Small independent OLED dashboard: never writes PWM and never blocks
-  // the network. Start after the greeting, then refresh every 3 seconds.
+  // the network. Start after the greeting, then redraw only when due.
   static uint32_t lastOledTelemetryAt = 0;
   if (oledModule.ready() && now >= 8000U &&
       (lastOledUserCommandAt == 0 ||
        static_cast<uint32_t>(now - lastOledUserCommandAt) >= 30000u) &&
       (lastOledTelemetryAt == 0 ||
-       static_cast<uint32_t>(now - lastOledTelemetryAt) >= 3000U)) {
+       static_cast<uint32_t>(now - lastOledTelemetryAt) >= 250U)) {
     lastOledTelemetryAt = now;
     // Mixed view: a friendly face AND live measurements on the physical
     // 128x64 OLED. Raw ADC is labelled RAW until the LDR is calibrated;
@@ -1494,7 +1494,7 @@ void loop() {
     oledDriver.setCursor(2, 0);
     oledDriver.print("COMPI");
     // Eye blink is deterministic and independent of sensor sampling.
-    const bool blink = (now % 5100U) < 150U;
+    const bool blink = (now % 5000U) < 400U;
     if (blink) {
       oledDriver.drawLine(13, 24, 26, 24, SSD1306_WHITE);
       oledDriver.drawLine(42, 24, 55, 24, SSD1306_WHITE);
