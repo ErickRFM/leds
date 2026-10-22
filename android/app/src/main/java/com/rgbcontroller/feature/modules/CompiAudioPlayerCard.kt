@@ -77,15 +77,21 @@ fun CompiAudioPlayerCard() {
     }
     fun playCurrent() {
         val uri = queue.current()?.let(Uri::parse) ?: return
-        if (!player.play(uri) {
+        val started = player.play(uri) {
+            // Stop at the end of the queue instead of looping forever when a
+            // single track is present. Advancing is always explicit and bounded.
+            val current = queue.currentIndex
+            val last = queue.tracks().lastIndex
+            if (current in 0 until last) {
                 queue.next()
                 revision++
                 playCurrent()
-            }) {
-            message = "No se pudo abrir la pista. Verifica permisos o formato."
-        } else {
-            message = "Audio enviado al reproductor Android; no al altavoz del ESP32."
+            } else {
+                message = "Terminó la lista de reproducción."
+            }
         }
+        message = if (started) "Reproducción local en Android."
+            else "No se pudo abrir la pista. Verifica permisos o formato."
     }
 
     val importer = rememberLauncherForActivityResult(
@@ -168,7 +174,8 @@ fun CompiAudioPlayerCard() {
                     if (playerState.phase == AndroidLocalAudioPlayer.Phase.PAUSED) player.resume()
                     else if (playerState.phase == AndroidLocalAudioPlayer.Phase.PLAYING) player.pause()
                     else playCurrent()
-                }, enabled = tracks.isNotEmpty(),
+                }, enabled = tracks.isNotEmpty() &&
+                    playerState.phase != AndroidLocalAudioPlayer.Phase.PREPARING,
                     modifier = Modifier.weight(1.5f).testTag("compi_audio_play")) {
                     Text(when (playerState.phase) {
                         AndroidLocalAudioPlayer.Phase.PLAYING -> "Pausar"
@@ -193,7 +200,9 @@ fun CompiAudioPlayerCard() {
                 modifier = Modifier.fillMaxWidth().testTag("compi_audio_import")) {
                 Text("+ Añadir canciones")
             }
-            if (playerState.phase != AndroidLocalAudioPlayer.Phase.IDLE) {
+            if (playerState.phase == AndroidLocalAudioPlayer.Phase.PLAYING ||
+                playerState.phase == AndroidLocalAudioPlayer.Phase.PAUSED ||
+                playerState.phase == AndroidLocalAudioPlayer.Phase.PREPARING) {
                 TextButton(onClick = { player.stop() },
                     modifier = Modifier.fillMaxWidth()) { Text("Detener reproducción") }
             }
