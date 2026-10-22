@@ -468,60 +468,58 @@ fun ModuleWorkspaceScreen(
                 }
             }
             item(key = "compi_station_hardware_shortcut") {
-                Card(
-                    onClick = onHardware,
+                Card(onClick = onHardware,
                     modifier = Modifier.fillMaxWidth().testTag("compi_station_hardware_shortcut"),
-                    shape = RoundedCornerShape(20.dp)
-                ) {
-                    Column(
-                        Modifier.fillMaxWidth().padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                    shape = RoundedCornerShape(22.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(18.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Surface(color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(16.dp)) {
                             Icon(Icons.Default.DeviceHub, contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.width(10.dp))
-                            Text("Estación Compi · hardware integrado",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.weight(1f))
-                            Icon(Icons.Default.ChevronRight, contentDescription = null)
+                                modifier = Modifier.padding(14.dp),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer)
                         }
-                        Text("DHT11 · GPIO16  |  Luz LDR · GPIO32  |  OLED · GPIO21/22  |  RGB · 27/25/26",
-                            style = MaterialTheme.typography.bodySmall)
-                        Text(
-                            "Abre Laboratorio de hardware para verificar lecturas, calibrar la luz " +
-                                "y controlar la OLED. El DFPlayer necesita microSD para reproducir; " +
-                                "sin tarjeta no bloquea los sensores ni la pantalla.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text("Abrir Laboratorio de hardware →",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary)
+                        Column(Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Estación Compi", style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold)
+                            Text("Sensores · OLED · luces · automatización",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Abrir panel de hardware",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary)
+                        }
+                        Icon(Icons.Default.ChevronRight, contentDescription = null)
                     }
                 }
             }
             item(key = "compi_dfplayer_module") {
-                Card(
-                    onClick = { openedId = "compi_dfplayer" },
+                Card(onClick = { openedId = "compi_dfplayer" },
                     modifier = Modifier.fillMaxWidth().testTag("module_card_compi_dfplayer"),
-                    shape = RoundedCornerShape(20.dp)
-                ) {
-                    Column(Modifier.fillMaxWidth().padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Reproductor MP3 · DFPlayer Mini",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold)
-                        Text("Módulo físico · UART GPIO17/18 · bocina 4 Ω / 3 W",
-                            style = MaterialTheme.typography.bodySmall)
-                        Text("Sin microSD: reproducción física no disponible. " +
-                            "El audio local del teléfono funciona por separado.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("Ver reproductor y conexión →",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary)
+                    shape = RoundedCornerShape(22.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(18.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Surface(color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = RoundedCornerShape(16.dp)) {
+                            Icon(Icons.Default.Widgets, contentDescription = null,
+                                modifier = Modifier.padding(14.dp),
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                        }
+                        Column(Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Música y DFPlayer", style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold)
+                            Text("Biblioteca local · módulo MP3 físico",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Abrir reproductor",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary)
+                        }
+                        Icon(Icons.Default.ChevronRight, contentDescription = null)
                     }
                 }
             }
