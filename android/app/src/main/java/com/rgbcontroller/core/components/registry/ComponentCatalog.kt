@@ -41,7 +41,7 @@ object ComponentCatalog {
             interfaces = setOf(HardwareInterface.ADC),
             capabilities = setOf("ambient_light", "analog", "calibrated"),
             requiredPins = setOf(32, 33, 34, 35, 36, 39),
-            description = "Fotorresistencia LDR en divisor de tensión 10k (ADC1, GPIO36)",
+            description = "Sensor LDR conectado a AO por ADC1 GPIO32; calibración con oscuridad y luz",
             category = "sensors"
         ),
         HardwareComponentDescriptor(
