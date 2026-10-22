@@ -96,7 +96,7 @@
 #ifndef COMPI_ENABLE_LDR
 // An ADC lease alone does not prove a physical LDR is connected.
 // Start only after explicit authorized configuration via /components/apply.
-#define COMPI_ENABLE_LDR COMPI_FULL_LAB_PROFILE
+#define COMPI_ENABLE_LDR 1
 #endif
 #ifndef COMPI_LDR_PIN
 #define COMPI_LDR_PIN 32
