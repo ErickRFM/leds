@@ -8,8 +8,8 @@ namespace esp32core {
 // applying the returned color through the existing LedRgbModule.
 struct EnvironmentalRgbConfig {
   float coldMaxC = 20.0f;
-  float comfortMaxC = 26.0f;
-  float warmMaxC = 30.0f;
+  float comfortMaxC = 28.0f;
+  float warmMaxC = 31.0f;
   float hysteresisC = 0.5f;
   uint8_t minBrightness = 25;
   uint8_t maxBrightness = 180;
