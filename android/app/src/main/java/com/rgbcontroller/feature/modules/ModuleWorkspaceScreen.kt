@@ -2,6 +2,8 @@ package com.rgbcontroller.feature.modules
 
 import androidx.activity.compose.BackHandler
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -415,7 +417,7 @@ fun ModuleWorkspaceScreen(
             item(key = "compi_station_hardware_shortcut") {
                 Card(
                     onClick = onHardware,
-                    modifier = Modifier.fillMaxWidth().testTag("compi_station_hardware_shortcut"),
+                    modifier = Modifier.fillMaxWidth().animateContentSize(animationSpec = tween(250)).testTag("compi_station_hardware_shortcut"),
                     shape = RoundedCornerShape(20.dp)
                 ) {
                     Column(
@@ -432,7 +434,14 @@ fun ModuleWorkspaceScreen(
                                 modifier = Modifier.weight(1f))
                             Icon(Icons.Default.ChevronRight, contentDescription = null)
                         }
-                        Text("DHT11 · GPIO16  |  Luz LDR · GPIO32  |  OLED · GPIO21/22  |  RGB · 27/25/26",
+                        Text(
+                            if (currentlyVerified) "ESP32 conectado · estado confirmado"
+                            else "Datos de firmware pendientes · conecta para verificar",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (currentlyVerified) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text("DHT11 · GPIO16  ·  LDR · GPIO32  ·  OLED · I²C  ·  RGB",
                             style = MaterialTheme.typography.bodySmall)
                         Text(
                             "Abre Laboratorio de hardware para verificar lecturas, calibrar la luz " +
@@ -852,7 +861,8 @@ private fun ModuleReadings(
             val status = ComponentTelemetryCodec.find(measurements.orEmpty(), "ambient_light")?.status
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Card(Modifier.fillMaxWidth().testTag("ldr_light_readings")) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.padding(16.dp).animateContentSize(animationSpec = tween(250)),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Luz ambiental · LDR", style = MaterialTheme.typography.titleMedium)
                         Text(
                             if (light != null) "Iluminación relativa: %.1f %%".format(java.util.Locale.ROOT, light)
@@ -874,7 +884,9 @@ private fun ModuleReadings(
                         Text("ADC1 crudo: ${raw?.toString() ?: "—"} (0–4095)",
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.testTag("ldr_light_raw"))
-                        OutlinedButton(onClick = onRefresh) { Text("Actualizar lectura") }
+                        OutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) {
+                            Text("Actualizar lectura del ESP32")
+                        }
                         HorizontalDivider()
                         Text("Calibración de luz", style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold)
