@@ -157,7 +157,7 @@ fun ModuleWorkspaceScreen(
                     Icon(Icons.Default.ArrowBack, contentDescription = "Volver a módulos")
                 }
                 Text(if (id == ModuleWorkspaceGrouping.ENVIRONMENT) "Sensor ambiental"
-                     else if (id == "compi_dfplayer") "Reproductor MP3 · DFPlayer"
+                     else if (id == "compi_dfplayer") "Música"
                      else ComponentCatalog.get(id)?.name ?: id,
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.weight(1f))
@@ -169,30 +169,85 @@ fun ModuleWorkspaceScreen(
                 }
             }
             if (id == "compi_dfplayer") {
+                var showWiring by rememberSaveable { mutableStateOf(false) }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize().testTag("dfplayer_module_detail"),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 40.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     item {
-                        Text("DFPlayer Mini MP3-TF-16P · reproducción física",
-                            style = MaterialTheme.typography.titleMedium)
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Tu música, en un solo lugar",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold)
+                            Text("Reproduce audios del teléfono y consulta tu módulo físico por separado.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Surface(
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("Salida actual · Teléfono",
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer)
+                            }
+                        }
                     }
-                    item {
-                        Text("Conexión: 5 V regulados y GND compartida; " +
-                            "GPIO17 (ESP32 TX) a RX del DFPlayer mediante 1 kΩ; " +
-                            "TX del DFPlayer a GPIO18 (ESP32 RX) solo con señal de hasta 3.3 V. " +
-                            "Bocina Samsung 4 Ω / 3 W entre SPK1 y SPK2.",
-                            style = MaterialTheme.typography.bodyMedium)
+                    item(key = "dfplayer_audio_controls") { CompiAudioPlayerCard() }
+                    item(key = "dfplayer_hardware_status") {
+                        Card(shape = RoundedCornerShape(22.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                            Column(Modifier.fillMaxWidth().padding(18.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text("DFPlayer Mini", style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold)
+                                Text("Reproducción por bocina externa",
+                                    style = MaterialTheme.typography.bodyMedium)
+                                Text("Requiere una microSD con pistas compatibles. El estado de reproducción física aún no se confirma mediante BUSY.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("El audio del teléfono no se transmite al DFPlayer por Bluetooth.",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
                     }
-                    item {
-                        Text("Necesita microSD con pistas compatibles para reproducir. " +
-                            "El firmware puede enviar comandos y avisos ambientales, " +
-                            "pero todavía no confirma reproducción real mediante BUSY/status. " +
-                            "No incluye recepción de audio Bluetooth A2DP.",
-                            style = MaterialTheme.typography.bodySmall)
+                    item(key = "dfplayer_wiring") {
+                        OutlinedCard(
+                            onClick = { showWiring = !showWiring },
+                            modifier = Modifier.fillMaxWidth().testTag("dfplayer_wiring_toggle"),
+                            shape = RoundedCornerShape(20.dp)
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text("Conexión y especificaciones",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold)
+                                        Text("ESP32 · UART · bocina 4 Ω / 3 W",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Icon(Icons.Default.ChevronRight,
+                                        contentDescription = if (showWiring) "Ocultar conexión" else "Mostrar conexión")
+                                }
+                                if (showWiring) {
+                                    HorizontalDivider()
+                                    Text("Alimentación: 5 V regulados y GND compartida.",
+                                        style = MaterialTheme.typography.bodyMedium)
+                                    Text("GPIO17 (TX ESP32) → RX DFPlayer, con resistencia de 1 kΩ.",
+                                        style = MaterialTheme.typography.bodyMedium)
+                                    Text("TX DFPlayer → GPIO18 (RX ESP32), solo si la señal es de hasta 3.3 V.",
+                                        style = MaterialTheme.typography.bodyMedium)
+                                    Text("Bocina Samsung 4 Ω / 3 W → SPK1 y SPK2.",
+                                        style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+                        }
                     }
-                    item { CompiAudioPlayerCard() }
                 }
             } else if (id == "led_rgb") {
                 // Reuse the *real* V16 BLE/Wi-Fi control path; no fake RGB widget.
@@ -208,14 +263,26 @@ fun ModuleWorkspaceScreen(
                 ) {
                     if (id == ModuleWorkspaceGrouping.ENVIRONMENT) {
                         item {
-                            Text("${environmentSensor.uppercase()} + sensor de suelo ADC1",
-                                style = MaterialTheme.typography.titleMedium)
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Surface(color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = RoundedCornerShape(16.dp)) {
+                                    Icon(Icons.Default.Thermostat, contentDescription = null,
+                                        modifier = Modifier.padding(14.dp),
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                                }
+                                Column(Modifier.weight(1f)) {
+                                    Text("Ambiente en tiempo real",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold)
+                                    Text("Temperatura · humedad · suelo",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
                         }
                         item(key = "environmental_voice_summary") {
                             EnvironmentalSpeechCard(state)
-                        }
-                        item(key = "environmental_audio_library") {
-                            CompiAudioPlayerCard()
                         }
                         for (child in listOf(environmentSensor, "soil_moisture")) {
                             item(key = "env_status_$child") {
@@ -244,6 +311,9 @@ fun ModuleWorkspaceScreen(
                                     Text("Reasignar GPIO de ${ComponentCatalog.get(child)?.name ?: child}")
                                 }
                             }
+                        }
+                        item(key = "environmental_audio_library") {
+                            CompiAudioPlayerCard()
                         }
                     } else {
                     item {
@@ -415,67 +485,58 @@ fun ModuleWorkspaceScreen(
                 }
             }
             item(key = "compi_station_hardware_shortcut") {
-                Card(
-                    onClick = onHardware,
-                    modifier = Modifier.fillMaxWidth().animateContentSize(animationSpec = tween(250)).testTag("compi_station_hardware_shortcut"),
-                    shape = RoundedCornerShape(20.dp)
-                ) {
-                    Column(
-                        Modifier.fillMaxWidth().padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                Card(onClick = onHardware,
+                    modifier = Modifier.fillMaxWidth().testTag("compi_station_hardware_shortcut"),
+                    shape = RoundedCornerShape(22.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(18.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Surface(color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(16.dp)) {
                             Icon(Icons.Default.DeviceHub, contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.width(10.dp))
-                            Text("Estación Compi · hardware integrado",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.weight(1f))
-                            Icon(Icons.Default.ChevronRight, contentDescription = null)
+                                modifier = Modifier.padding(14.dp),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer)
                         }
-                        Text(
-                            if (currentlyVerified) "ESP32 conectado · estado confirmado"
-                            else "Datos de firmware pendientes · conecta para verificar",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (currentlyVerified) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text("DHT11 · GPIO16  ·  LDR · GPIO32  ·  OLED · I²C  ·  RGB",
-                            style = MaterialTheme.typography.bodySmall)
-                        Text(
-                            "Abre Laboratorio de hardware para verificar lecturas, calibrar la luz " +
-                                "y controlar la OLED. El DFPlayer necesita microSD para reproducir; " +
-                                "sin tarjeta no bloquea los sensores ni la pantalla.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text("Abrir Laboratorio de hardware →",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary)
+                        Column(Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Estación Compi", style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold)
+                            Text("Sensores · OLED · luces · automatización",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Abrir panel de hardware",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary)
+                        }
+                        Icon(Icons.Default.ChevronRight, contentDescription = null)
                     }
                 }
             }
             item(key = "compi_dfplayer_module") {
-                Card(
-                    onClick = { openedId = "compi_dfplayer" },
+                Card(onClick = { openedId = "compi_dfplayer" },
                     modifier = Modifier.fillMaxWidth().testTag("module_card_compi_dfplayer"),
-                    shape = RoundedCornerShape(20.dp)
-                ) {
-                    Column(Modifier.fillMaxWidth().padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Reproductor MP3 · DFPlayer Mini",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold)
-                        Text("Módulo físico · UART GPIO17/18 · bocina 4 Ω / 3 W",
-                            style = MaterialTheme.typography.bodySmall)
-                        Text("Sin microSD: reproducción física no disponible. " +
-                            "El audio local del teléfono funciona por separado.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("Ver reproductor y conexión →",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary)
+                    shape = RoundedCornerShape(22.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(18.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Surface(color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = RoundedCornerShape(16.dp)) {
+                            Icon(Icons.Default.Widgets, contentDescription = null,
+                                modifier = Modifier.padding(14.dp),
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                        }
+                        Column(Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Música y DFPlayer", style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold)
+                            Text("Biblioteca local · módulo MP3 físico",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Abrir reproductor",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary)
+                        }
+                        Icon(Icons.Default.ChevronRight, contentDescription = null)
                     }
                 }
             }
