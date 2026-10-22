@@ -1,0 +1,771 @@
+package com.rgbcontroller.feature.hub
+
+import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.provider.Settings
+import android.os.SystemClock
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.dp
+import com.rgbcontroller.core.data.PreferencesRepository
+import com.rgbcontroller.core.lab.LabExperimentLibrary
+import com.rgbcontroller.core.lab.RgbAutomationPolicy
+import com.rgbcontroller.core.model.DeviceIdentityInfo
+import com.rgbcontroller.core.sensors.AdcSample
+import com.rgbcontroller.core.sensors.AdcTelemetry
+import com.rgbcontroller.core.hardware.Esp32BoardPinout
+import com.rgbcontroller.core.hardware.PinKind
+import com.rgbcontroller.core.qa.LabSnapshot
+import com.rgbcontroller.core.qa.LabSelfCheck
+import com.rgbcontroller.core.lab.LabStep
+import com.rgbcontroller.core.ui.SectionHeader
+import com.rgbcontroller.core.ui.CompiV9
+import com.rgbcontroller.core.ui.CompiV9Segment
+import com.rgbcontroller.core.ui.CompiInlineMessage
+import com.rgbcontroller.core.wifi.LocalLabClient
+import com.rgbcontroller.core.wifi.CompiLabSession
+import com.rgbcontroller.core.ble.BleManager
+import com.rgbcontroller.core.ble.BleConnectionState
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
+import org.json.JSONArray
+import org.json.JSONObject
+
+private enum class LabSection(val title: String) {
+    CONNECTION("Conexión"),
+    DIAGNOSTICS("Diagnóstico"),
+    GPIO("GPIO"),
+    SENSORS("Sensores"),
+    EXPERIMENTS("Experimentos"),
+    AUTOMATIONS("Automatizar")
+}
+
+@Composable
+fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
+    val context = LocalContext.current
+    val debug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    val client = remember(context) { LocalLabClient(context.applicationContext) }
+    val preferences = remember(context) { PreferencesRepository(context.applicationContext) }
+    val savedProjects by preferences.experimentProjects.collectAsState(initial = emptyList())
+    val scope = rememberCoroutineScope()
+    val secret = labSession.key // Shared volatile session; never saved or exported.
+    val blePins = bleManager?.gpioPins?.collectAsState()?.value
+    val bleConnection = bleManager?.connectionState?.collectAsState()?.value
+    var status by remember { mutableStateOf<JSONObject?>(null) }
+    var automationStatus by remember { mutableStateOf<JSONObject?>(null) }
+    var automationAvailable by remember { mutableStateOf(false) }
+    var automationInterval by rememberSaveable { mutableStateOf("2") }
+    var automationCycles by rememberSaveable { mutableStateOf("3") }
+    var automationStartOn by rememberSaveable { mutableStateOf(true) }
+    var firmware by remember { mutableStateOf<JSONObject?>(null) }
+    var diagnostics by remember { mutableStateOf<JSONObject?>(null) }
+    var qaReport by remember { mutableStateOf<String?>(null) }
+    var deviceIdentity by remember { mutableStateOf<DeviceIdentityInfo?>(null) }
+    var networks by remember { mutableStateOf<JSONArray?>(null) }
+    var ssid by remember { mutableStateOf("") }
+    var wifiPassword by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf("Conéctate a ESP32-Control-Lab para comenzar.") }
+    var busy by remember { mutableStateOf(false) }
+    var selectedPin by remember { mutableIntStateOf(18) }
+    var gpioSnapshot by remember { mutableStateOf<JSONObject?>(null) }
+    var gpioPolling by remember { mutableStateOf(false) }
+    var gpioError by remember { mutableStateOf<String?>(null) }
+    var showPinReference by rememberSaveable { mutableStateOf(false) }
+    var adcValue by remember { mutableStateOf<Int?>(null) }
+    var adcHistory by remember { mutableStateOf(emptyList<AdcSample>()) }
+    var samplingAdc by remember { mutableStateOf(false) }
+    var steps by remember { mutableStateOf("1:500,0:500,1:500,0:500") }
+    var nextHigh by remember { mutableStateOf(true) }
+    var nextDuration by remember { mutableStateOf("500") }
+    var projectName by remember { mutableStateOf("") }
+    var section by rememberSaveable { mutableStateOf(LabSection.CONNECTION) }
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(message) {
+        if (message != "Conéctate a ESP32-Control-Lab para comenzar.") {
+            snackbar.showSnackbar(message, duration = SnackbarDuration.Short)
+        }
+    }
+
+    // Sampling belongs to this Composable lifecycle; navigation away cancels the job.
+    // No GPS, no background process, no unbounded retention and no device secrets in CSV.
+    LaunchedEffect(samplingAdc, section, secret) {
+        if (!samplingAdc || section != LabSection.SENSORS) {
+            if (samplingAdc && section != LabSection.SENSORS) samplingAdc = false
+            return@LaunchedEffect
+        }
+        val started = SystemClock.elapsedRealtime()
+        try {
+            for (i in 0 until 40) {
+                val elapsed = SystemClock.elapsedRealtime() - started
+                if (elapsed >= 20_000L) break
+                val reading = labSession.serialized { client.readAnalog(secret, 34) }.optInt("raw", -1)
+                adcHistory = AdcTelemetry.append(adcHistory, AdcSample(elapsed, reading))
+                adcValue = reading
+                delay(500L)
+            }
+            message = "Muestreo ADC1 finalizado. Valores brutos sin calibrar."
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            message = error.message ?: "Muestreo ADC1 interrumpido."
+        } finally {
+            samplingAdc = false
+        }
+    }
+
+    // Firmware truth, never a simulated GPIO board map. Cancel polling when leaving the
+    // GPIO section or when the control key changes; clear stale data on network errors.
+    LaunchedEffect(section, secret) {
+        gpioSnapshot = null
+        gpioError = null
+        if (section != LabSection.GPIO || !debug || !LocalLabClient.validKey(secret)) return@LaunchedEffect
+        while (true) {
+            gpioPolling = true
+            try {
+                val response = labSession.serialized { client.gpioStatus(secret) }
+                if (response.optInt("version") != 1 ||
+                    response.optString("source") != "firmware-runtime") {
+                    error("El firmware no admite telemetría GPIO en vivo. Actualiza Compi V9.")
+                }
+                gpioSnapshot = response
+                gpioError = null
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                gpioSnapshot = null
+                gpioError = error.message ?: "No se pudo consultar GPIO reales."
+            } finally {
+                gpioPolling = false
+            }
+            delay(3000)
+        }
+    }
+
+    LaunchedEffect(section, secret) {
+        automationStatus = null
+        automationAvailable = false
+        if (section != LabSection.AUTOMATIONS || !debug || !LocalLabClient.validKey(secret))
+            return@LaunchedEffect
+        try {
+            val state = labSession.serialized { client.automationStatus(secret) }
+            if (state.optInt("version") == 1) {
+                automationStatus = state
+                automationAvailable = true
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Firmware V9 and older lack the bounded automation endpoint.
+            automationAvailable = false
+        }
+    }
+
+    fun action(block: suspend () -> Unit) {
+        if (!debug || busy) return
+        busy = true
+        scope.launch {
+            try { labSession.userOperation("Hardware Lab") { block() } }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (e: Exception) { message = e.message ?: "No hay respuesta del ESP32." }
+            finally { busy = false }
+        }
+    }
+
+    Box(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding()
+        .padding(horizontal = 18.dp, vertical = 20.dp)) {
+        Text("Hardware Lab", style = MaterialTheme.typography.headlineLarge, color = CompiV9.title)
+        Spacer(Modifier.height(12.dp))
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(LabSection.entries) { item ->
+                CompiV9Segment(
+                    text = item.title,
+                    selected = section == item,
+                    onClick = { section = item }
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        if (busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        if (labSession.operationStatus.name.isNotBlank()) {
+            val progress = labSession.operationStatus
+            Text("${progress.name}: ${progress.phase.name.lowercase()}" +
+                (if (progress.details.isBlank()) "" else " · ${progress.details}"),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        CompiInlineMessage(message, isError =
+            message.startsWith("Error", ignoreCase = true) ||
+            message.startsWith("No hay", ignoreCase = true) ||
+            message.contains("rechazó", ignoreCase = true))
+        if (section != LabSection.CONNECTION && !LocalLabClient.validKey(secret)) {
+            CompiInlineMessage("Configura primero la clave local del ESP32 en Conexión. " +
+                "Puedes explorar estas herramientas sin conectarte.")
+            TextButton(onClick = { section = LabSection.CONNECTION }) {
+                Text("Configurar conexión")
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        if (section == LabSection.CONNECTION) {
+        Card(Modifier.fillMaxWidth(), colors =
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+            Column(Modifier.padding(16.dp)) {
+                Text(if (debug) "Modo laboratorio: solo APK debug"
+                    else "Control Wi-Fi deshabilitado en release",
+                    style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(6.dp))
+                Text("Conecta a ESP32-Control-Lab y acepta usar Wi-Fi sin Internet. Su contraseña y la clave de control " +
+                    "están en el monitor serie USB (115200). Este transporte no usa TLS; solo pruebas.",
+                    style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(onClick = {
+                    context.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
+                }) { Text("Abrir ajustes Wi-Fi") }
+                Text("SoftAP · 192.168.4.1", style = MaterialTheme.typography.labelMedium)
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(value = secret, onValueChange = { labSession.updateKey(it) },
+                    label = { Text("Clave de control del dispositivo") },
+                    singleLine = true, visualTransformation = PasswordVisualTransformation(),
+                    enabled = debug, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(10.dp))
+                Button(onClick = {
+                    action {
+                        val fresh = client.status(secret)
+                        status = fresh
+                        message = "Estado recibido del ESP32."
+                    }
+                }, enabled = debug && !busy && LocalLabClient.validKey(secret)) {
+                    Text("Consultar estado")
+                }
+                status?.let { data ->
+                    Spacer(Modifier.height(10.dp))
+                    Text("Wi-Fi del router: " + if (data.optBoolean("wifiConnected")) "Conectado" else "No conectado")
+                    Text("IP estación: " + data.optString("stationIp"))
+                    Text("RAM disponible: " + data.optInt("freeHeap") + " B")
+                    Text("Tiempo activo: " + data.optLong("uptimeMs") + " ms")
+                    Text("RGB: " + data.optString("rgb"), style = MaterialTheme.typography.bodySmall)
+                    Text("Recursos ocupados: " + data.optInt("leasedPins"))
+                    Text("Experimento: " + if (data.optBoolean("experimentActive")) "Activo" else "Inactivo")
+                }
+            }
+        }
+        }
+        if (section == LabSection.DIAGNOSTICS) {
+        Spacer(Modifier.height(20.dp))
+        Text("Identidad V4 del ESP32", style = MaterialTheme.typography.titleMedium)
+        Text("ID público persistente, NO es contraseña, QR de vinculación ni prueba de propiedad.",
+            style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
+            onClick = { action {
+                deviceIdentity = null
+                val info = client.identity(secret)
+                deviceIdentity = DeviceIdentityInfo(
+                    schemaVersion = info.optInt("schemaVersion", -1),
+                    deviceId = info.optString("deviceId"),
+                    secureProvisioning = info.optBoolean("secureProvisioning", false),
+                    legacyBleWriteUnauthenticated = info.optBoolean("legacyBleWriteUnauthenticated", true),
+                    ownerBound = info.optBoolean("ownerBound", false)
+                )
+                message = if (deviceIdentity?.validId == true) {
+                    "Identidad V4 recibida desde el ESP32; comprueba seguridad antes de vincular."
+                } else "El firmware no devolvió una identidad V4 válida."
+            } }) { Text("Consultar identidad V4") }
+        deviceIdentity?.let { identity ->
+            Text("ID de este equipo: " +
+                (if (identity.validId) identity.deviceId else "Desconocido"))
+            Text(identity.report, color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall)
+            if (identity.legacyBleWriteUnauthenticated) {
+                Text("BLE V1 sigue aceptando escrituras sin propietario: usar solo en laboratorio.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error)
+            }
+        }
+        Spacer(Modifier.height(20.dp))
+        Text("Autodiagnóstico de conexión API", style = MaterialTheme.typography.titleMedium)
+        Text("Verifica la coherencia del protocolo, firmware y recursos. " +
+            "No confirma electricidad, seguridad BLE ni calidad del LED físico.",
+            style = MaterialTheme.typography.bodySmall)
+        Button(enabled = debug && !busy && LocalLabClient.validKey(secret),
+            onClick = { action {
+                qaReport = null
+                val s = client.status(secret)
+                val d = client.diagnostics(secret)
+                val f = client.firmwareInfo(secret)
+                status = s
+                diagnostics = d
+                firmware = f
+                qaReport = LabSelfCheck.report(LabSnapshot(
+                    apiVersion = s.optInt("version", -1),
+                    rgbFrame = s.optString("rgb"),
+                    chip = d.optString("chip"),
+                    flashBytes = d.optLong("flashBytes", -1),
+                    freeHeapBytes = d.optLong("freeHeap", -1),
+                    nextOtaSlotBytes = f.optLong("nextSize", -1),
+                    otaSlotPresent = f.optBoolean("otaSlotPresent", false),
+                    otaUploadEnabled = f.optBoolean("otaUploadEnabled", true)
+                ))
+                message = "Autodiagnóstico recibido; revisa PASS/FALLO antes de probar GPIO."
+            } }) { Text("Ejecutar autodiagnóstico (solo lectura)") }
+        qaReport?.let { report ->
+            Text(report, style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = {
+                val share = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, report)
+                }
+                context.startActivity(Intent.createChooser(share, "Compartir reporte del laboratorio"))
+            }) { Text("Compartir reporte sin claves") }
+        }
+        Spacer(Modifier.height(18.dp))
+        Text("Diagnóstico de hardware y recursos", style = MaterialTheme.typography.titleMedium)
+        Text("Datos del dispositivo; sin direcciones MAC ni contraseñas.",
+            style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
+            onClick = { action {
+                diagnostics = client.diagnostics(secret)
+                message = "Diagnóstico actualizado desde el ESP32."
+            } }) { Text("Consultar diagnóstico") }
+        diagnostics?.let { info ->
+            Text("Chip: " + info.optString("chip") + " · rev " + info.optInt("chipRevision"))
+            Text("Flash: " + info.optLong("flashBytes") + " bytes")
+            Text("RAM libre: " + info.optLong("freeHeap") + " bytes")
+            Text("RAM mínima observada: " + info.optLong("minFreeHeap") + " bytes")
+            Text("Reinicio (código): " + info.optInt("resetReason"))
+            Text("Wi-Fi RSSI: " + info.optInt("wifiRssi") + " dBm (0 = sin conexión)")
+            Text("GPIO reservados: " + info.optInt("leasedPins"))
+        }
+        Spacer(Modifier.height(20.dp))
+        Text("Diagnóstico de firmware", style = MaterialTheme.typography.titleMedium)
+        Text("Inspección de particiones OTA. La actualización no está activada.",
+            style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
+            onClick = { action {
+                firmware = client.firmwareInfo(secret)
+                message = "Particiones leídas directamente desde el ESP32."
+            } }) { Text("Comprobar espacio para OTA") }
+        firmware?.let { data ->
+            Text("Firmware: " + data.optString("firmwareVersion"))
+            Text("Actual: " + data.optString("activePartition") +
+                " · " + data.optLong("activeSize") + " bytes")
+            Text("Siguiente: " + data.optString("nextPartition") +
+                " · " + data.optLong("nextSize") + " bytes")
+            Text("Partición candidata: " + if (data.optBoolean("otaSlotPresent")) "Sí" else "No")
+            Text("Subir firmware OTA: DESHABILITADO", color = MaterialTheme.colorScheme.error)
+        }
+        }
+        if (section == LabSection.CONNECTION) {
+        Spacer(Modifier.height(20.dp))
+        Text("Wi-Fi del ESP32", style = MaterialTheme.typography.titleMedium)
+        Text("La búsqueda la realiza el ESP32, no el teléfono.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
+            onClick = { action {
+                networks = client.scan(secret).optJSONArray("networks")
+                message = "Redes disponibles actualizadas."
+            } }) { Text("Buscar redes") }
+        networks?.let { result ->
+            for (i in 0 until minOf(result.length(), 24)) {
+                val network = result.optJSONObject(i) ?: continue
+                val name = network.optString("ssid")
+                if (name.isNotEmpty()) {
+                    TextButton(onClick = { ssid = name }) {
+                        Text(name + " · " + network.optInt("rssi") + " dBm")
+                    }
+                }
+            }
+        }
+        OutlinedTextField(value = ssid, onValueChange = { ssid = it.take(32) },
+            label = { Text("SSID") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Spacer(Modifier.height(6.dp))
+        OutlinedTextField(value = wifiPassword, onValueChange = { wifiPassword = it.take(63) },
+            label = { Text("Contraseña de la red") },
+            visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(),
+            singleLine = true)
+        Spacer(Modifier.height(8.dp))
+        Button(enabled = debug && !busy && LocalLabClient.validKey(secret) &&
+            LocalLabClient.validSsid(ssid) && LocalLabClient.validPassword(wifiPassword),
+            onClick = { action {
+                client.connectWifi(secret, ssid, wifiPassword)
+                wifiPassword = ""
+                message = "ESP32 conectando al router. Consulta Estado para confirmar."
+            } }) { Text("Conectar ESP32 al router") }
+
+        }
+        if (section == LabSection.GPIO) {
+        Spacer(Modifier.height(20.dp))
+        Text("Entradas y salidas GPIO", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(8.dp))
+        Text("Solo GPIO 18, 19, 21, 22, 23 permiten salidas temporales de laboratorio. " +
+            "RGB 27/25/26 está reservado.", style = MaterialTheme.typography.bodySmall)
+        listOf(listOf(18, 19, 21), listOf(22, 23)).forEach { rowPins ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                rowPins.forEach { pin ->
+                    FilterChip(selected = selectedPin == pin, onClick = { selectedPin = pin },
+                        label = { Text("GPIO " + pin) })
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text("Ocupación REAL de GPIO", style = MaterialTheme.typography.titleMedium)
+        if (bleConnection == BleConnectionState.Ready) {
+            Text("Bluetooth · telemetría de solo lectura", style = MaterialTheme.typography.titleSmall)
+            if (blePins == null) {
+                CompiInlineMessage("Sin inventario BLE disponible. Necesita firmware Compi V9 " +
+                    "para la característica opcional; el control RGB BLE sigue funcionando.")
+            } else {
+                blePins.forEach { pin ->
+                    Text("GPIO ${pin.number} · ${pin.description}",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                Text("No autoriza cambiar GPIO por BLE; solo reporta reservas del firmware.",
+                    style = MaterialTheme.typography.bodySmall)
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+        Text("Wi-Fi · lectura detallada de 14 pines", style = MaterialTheme.typography.titleSmall)
+        Text("Leído del firmware por Wi-Fi de laboratorio cada 3 s. " +
+            "No demuestra cableado ni mide voltaje.",
+            style = MaterialTheme.typography.bodySmall)
+        if (gpioPolling) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        gpioError?.let { CompiInlineMessage(it, isError = true) }
+        gpioSnapshot?.optJSONArray("pins")?.let { pins ->
+            val occupied = (0 until pins.length()).mapNotNull { pins.optJSONObject(it) }
+                .filter { it.optString("owner") != "FREE" }
+            Text("Pines ocupados ahora: ${occupied.size}", style = MaterialTheme.typography.labelLarge)
+            for (i in 0 until pins.length()) {
+                val data = pins.optJSONObject(i) ?: continue
+                val owner = data.optString("owner")
+                val label = when (owner) {
+                    "RGB" -> "Reservado por LED RGB"
+                    "MANUAL" -> "Salida manual"
+                    "EXPERIMENT" -> "En experimento"
+                    "READ" -> "Lectura temporal"
+                    "FREE" -> "Libre en firmware"
+                    else -> "Reservado por otro módulo"
+                }
+                val manualLevel = if (owner == "MANUAL" && !data.isNull("level"))
+                    if (data.optInt("level") == 1) " · HIGH" else " · LOW" else ""
+                Text(
+                    "GPIO ${data.optInt("pin")} · $label" +
+                        (if (owner == "FREE") "" else " · ${data.optString("mode")}") +
+                        manualLevel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (owner == "FREE") MaterialTheme.colorScheme.onSurfaceVariant
+                        else MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+        if (gpioSnapshot == null && gpioError == null) {
+            CompiInlineMessage("Conecta el móvil a ESP32-Control-Lab e introduce la clave " +
+                "en Conexión para obtener los GPIO que el ESP32 ocupa realmente.")
+        }
+        TextButton(onClick = { showPinReference = !showPinReference }) {
+            Text(if (showPinReference) "Ocultar mapa informativo" else "Ver mapa estático de pines")
+        }
+        if (showPinReference) {
+            Text("Inventario estático: no demuestra el estado real.", style = MaterialTheme.typography.bodySmall)
+            Esp32BoardPinout.pins.forEach { pin ->
+                val label = when (pin.kind) {
+                    PinKind.LAB_OUTPUT -> "Lab"
+                    PinKind.RGB_RESERVED -> "RGB reservado"
+                    PinKind.ADC1_INPUT -> "ADC1"
+                    PinKind.SYSTEM_RESERVED -> "Protegido"
+                }
+                Text("GPIO ${pin.number} · $label · ${pin.note}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        if (busy) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            Text("Enviando operación GPIO al ESP32…", style = MaterialTheme.typography.labelSmall)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(enabled = debug && !busy && LocalLabClient.validKey(secret),
+                onClick = { action {
+                    client.writePin(secret, selectedPin, true)
+                    message = "GPIO " + selectedPin + " en HIGH por máximo 30 s."
+                } }) { Text("HIGH") }
+            OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
+                onClick = { action {
+                    client.writePin(secret, selectedPin, false)
+                    message = "GPIO " + selectedPin + " en LOW."
+                } }) { Text("LOW") }
+            OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
+                onClick = { action {
+                    val value = client.readPin(secret, selectedPin).optInt("value")
+                    message = "GPIO " + selectedPin + ": " + value
+                } }) { Text("Leer") }
+        }
+        OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
+            onClick = { action {
+                client.resetPins(secret)
+                message = "Salidas manuales restauradas a LOW."
+            } }) { Text("Liberar salidas") }
+        }
+        if (section == LabSection.AUTOMATIONS) {
+            Spacer(Modifier.height(16.dp))
+            Text("Automatización RGB por intervalos", style = MaterialTheme.typography.titleMedium)
+            Text("Alterna ON/OFF sin modificar el firmware. Máximo 10 ciclos y 20 minutos. " +
+                "Es temporal, no se guarda tras reiniciar y al completarse apaga el LED. " +
+                "Solo funciona por Wi-Fi de laboratorio con clave.",
+                style = MaterialTheme.typography.bodySmall)
+            if (!automationAvailable) {
+                CompiInlineMessage("No se confirmó el módulo de automatización. " +
+                    "Conecta a ESP32-Control-Lab y carga el firmware compatible para habilitar controles.")
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = automationInterval,
+                    onValueChange = { if (it.length <= 2 && it.all(Char::isDigit)) automationInterval = it },
+                    label = { Text("Segundos (1–60)") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = automationCycles,
+                    onValueChange = { if (it.length <= 2 && it.all(Char::isDigit)) automationCycles = it },
+                    label = { Text("Ciclos (1–10)") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = automationStartOn,
+                    onClick = { automationStartOn = true }, label = { Text("ON primero") })
+                FilterChip(selected = !automationStartOn,
+                    onClick = { automationStartOn = false }, label = { Text("OFF primero") })
+            }
+            val seconds = automationInterval.toIntOrNull() ?: 0
+            val cycles = automationCycles.toIntOrNull() ?: 0
+            val valid = RgbAutomationPolicy.valid(seconds, cycles)
+            if (valid) Text("Duración máxima: ${RgbAutomationPolicy.durationSeconds(seconds, cycles)} s",
+                style = MaterialTheme.typography.bodySmall)
+            else CompiInlineMessage("Intervalo o ciclos fuera del límite permitido.", isError = true)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    enabled = debug && automationAvailable && valid && !busy &&
+                        LocalLabClient.validKey(secret),
+                    onClick = { action {
+                        client.startAutomation(secret, seconds, cycles, automationStartOn)
+                        automationStatus = client.automationStatus(secret)
+                        message = "Automatización aceptada por el ESP32. Verifica el LED físico."
+                    } }
+                ) { Text("Iniciar") }
+                OutlinedButton(
+                    enabled = debug && automationAvailable && !busy && LocalLabClient.validKey(secret),
+                    onClick = { action {
+                        client.stopAutomation(secret)
+                        automationStatus = client.automationStatus(secret)
+                        message = "Orden de detener recibida. Revisa el estado físico."
+                    } }
+                ) { Text("Detener") }
+                TextButton(
+                    enabled = debug && !busy && LocalLabClient.validKey(secret),
+                    onClick = { action {
+                        automationStatus = client.automationStatus(secret)
+                        automationAvailable = automationStatus?.optInt("version") == 1
+                        message = "Estado de automatización actualizado."
+                    } }
+                ) { Text("Consultar") }
+            }
+            automationStatus?.let { state ->
+                Text(
+                    if (state.optBoolean("active")) "Ejecutando · quedan ${state.optInt("remainingTransitions")} cambios"
+                    else "Automatización inactiva",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+        if (section == LabSection.SENSORS) {
+        Spacer(Modifier.height(18.dp))
+        Text("Sensores / ADC1", style = MaterialTheme.typography.titleMedium)
+        Text("GPIO34 (entrada analógica, máximo 3.3 V). Valor sin calibrar.",
+            style = MaterialTheme.typography.bodySmall)
+        Button(enabled = debug && !busy && LocalLabClient.validKey(secret),
+            onClick = { action {
+                adcValue = client.readAnalog(secret, 34).optInt("raw")
+                message = "ADC1 leído desde el ESP32."
+            } }) { Text("Leer ADC GPIO34") }
+        adcValue?.let { Text("ADC: " + it) }
+        Spacer(Modifier.height(10.dp))
+        Text("Telemetría ADC1 (máximo 40 muestras / 20 segundos)",
+            style = MaterialTheme.typography.titleSmall)
+        Text("Lecturas RAW 12 bits; no son voltios calibrados ni un osciloscopio.",
+            style = MaterialTheme.typography.bodySmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = {
+                adcHistory = emptyList()
+                samplingAdc = true
+            }, enabled = debug && !busy && !samplingAdc && LocalLabClient.validKey(secret)) {
+                Text("Iniciar")
+            }
+            OutlinedButton(onClick = { samplingAdc = false },
+                enabled = samplingAdc) { Text("Detener") }
+        }
+        if (samplingAdc) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        if (adcHistory.isNotEmpty()) {
+            val minValue = adcHistory.minOf { it.raw }
+            val maxValue = adcHistory.maxOf { it.raw }
+            Text("Muestras: " + adcHistory.size + " · min: " + minValue + " · max: " + maxValue,
+                style = MaterialTheme.typography.bodySmall)
+            val graphColor = MaterialTheme.colorScheme.primary
+            Canvas(modifier = Modifier.fillMaxWidth().height(150.dp)) {
+                val samples = adcHistory
+                if (samples.size >= 2) {
+                    for (i in 1 until samples.size) {
+                        val x1 = size.width * (i - 1).toFloat() / (samples.size - 1)
+                        val x2 = size.width * i.toFloat() / (samples.size - 1)
+                        val y1 = size.height * (1f - samples[i - 1].raw / 4095f)
+                        val y2 = size.height * (1f - samples[i].raw / 4095f)
+                        drawLine(graphColor, Offset(x1, y1), Offset(x2, y2),
+                            strokeWidth = 2.dp.toPx())
+                    }
+                }
+            }
+            OutlinedButton(onClick = {
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/csv"
+                    putExtra(Intent.EXTRA_TEXT, AdcTelemetry.csv(adcHistory))
+                }
+                context.startActivity(Intent.createChooser(send, "Compartir datos ADC1"))
+            }, enabled = !samplingAdc) { Text("Exportar CSV") }
+        }
+        }
+        if (section == LabSection.EXPERIMENTS) {
+        Spacer(Modifier.height(20.dp))
+        Text("Laboratorio protegido", style = MaterialTheme.typography.titleMedium)
+        Text("Prueba declarativa: GPIO19 se alterna 5 veces, cada 500 ms.",
+            style = MaterialTheme.typography.bodySmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(enabled = debug && !busy && LocalLabClient.validKey(secret),
+                onClick = { action {
+                    client.blink(secret, 19, 500, 5)
+                    message = "Prueba de parpadeo iniciada."
+                } }) { Text("Iniciar") }
+            OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
+                onClick = { action {
+                    client.stopExperiment(secret)
+                    message = "Experimento detenido y pin liberado."
+                } }) { Text("Detener") }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text("Secuencia editable: 1=HIGH, 0=LOW; tiempo en ms por paso.",
+            style = MaterialTheme.typography.bodySmall)
+        Text("Plantillas de laboratorio", style = MaterialTheme.typography.titleSmall)
+        LabExperimentLibrary.templates.forEach { template ->
+            OutlinedButton(onClick = { steps = template.sequence }, enabled = debug && !busy) {
+                Text(template.name)
+            }
+        }
+        val parsedSteps = LabExperimentLibrary.parse(steps)
+        parsedSteps?.forEachIndexed { index, step ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Paso " + (index + 1) + ": " +
+                    (if (step.high) "HIGH" else "LOW") + " · " + step.durationMs + " ms",
+                    modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = {
+                    steps = LabExperimentLibrary.removeAt(steps, index) ?: steps
+                }, enabled = debug && !busy) { Text("Quitar") }
+            }
+        }
+        Text("Añadir paso (máximo 16; duración total 20 s)",
+            style = MaterialTheme.typography.bodySmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = nextHigh, onClick = { nextHigh = true },
+                label = { Text("HIGH") }, enabled = debug && !busy)
+            FilterChip(selected = !nextHigh, onClick = { nextHigh = false },
+                label = { Text("LOW") }, enabled = debug && !busy)
+        }
+        OutlinedTextField(value = nextDuration,
+            onValueChange = { nextDuration = it.filter(Char::isDigit).take(4) },
+            label = { Text("Duración en ms (100–2000)") },
+            singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = debug && !busy)
+        val nextStep = LabStep(nextHigh, nextDuration.toIntOrNull() ?: -1)
+        val appended = LabExperimentLibrary.append(steps, nextStep)
+        Button(onClick = { if (appended != null) steps = appended },
+            enabled = debug && !busy && appended != null) { Text("Agregar paso") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { action {
+                preferences.saveExperimentDraft(steps)
+                message = "Borrador guardado en este teléfono (sin credenciales)."
+            } }, enabled = debug && !busy && parsedSteps != null) {
+                Text("Guardar")
+            }
+            OutlinedButton(onClick = { action {
+                val saved = preferences.experimentDraft.first()
+                if (saved == null) message = "No hay borrador guardado."
+                else {
+                    steps = saved
+                    message = "Borrador local cargado."
+                }
+            } }, enabled = debug && !busy) { Text("Cargar") }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text("Proyectos locales · máximo 8", style = MaterialTheme.typography.titleSmall)
+        OutlinedTextField(value = projectName,
+            onValueChange = { projectName = it.take(24).filterNot(Char::isISOControl) },
+            label = { Text("Nombre del proyecto") },
+            singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = debug && !busy)
+        Button(onClick = { action {
+            preferences.saveExperimentProject(projectName, steps)
+            message = "Proyecto guardado localmente; sin credenciales de dispositivo."
+        } }, enabled = debug && !busy && projectName.isNotBlank() && parsedSteps != null) {
+            Text("Guardar proyecto")
+        }
+        savedProjects.forEach { project ->
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(project.name, style = MaterialTheme.typography.titleSmall)
+                    Text(project.sequence, style = MaterialTheme.typography.bodySmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = {
+                            steps = project.sequence
+                            projectName = project.name
+                            message = "Proyecto cargado para editar o ejecutar."
+                        }, enabled = debug && !busy) { Text("Abrir") }
+                        TextButton(onClick = { action {
+                            preferences.deleteExperimentProject(project.name)
+                            message = "Proyecto eliminado del teléfono."
+                        } }, enabled = debug && !busy) { Text("Eliminar") }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(value = steps, onValueChange = { steps = it.take(120) },
+            label = { Text("Instrucciones (máximo 16 pasos)") },
+            modifier = Modifier.fillMaxWidth(), singleLine = false)
+        Spacer(Modifier.height(8.dp))
+        Button(enabled = debug && !busy && LocalLabClient.validKey(secret) &&
+            LocalLabClient.validSequence(steps),
+            onClick = { action {
+                client.sequence(secret, 19, steps)
+                message = "Secuencia declarativa iniciada en GPIO19."
+            } }) { Text("Ejecutar secuencia") }
+        }
+        // RGB Wi-Fi controls live in the LED module. Laboratory stays focused on GPIO, network and sensors.
+        Spacer(Modifier.height(30.dp))
+    }
+    SnackbarHost(hostState = snackbar, modifier = Modifier.align(Alignment.BottomCenter))
+    }
+}
