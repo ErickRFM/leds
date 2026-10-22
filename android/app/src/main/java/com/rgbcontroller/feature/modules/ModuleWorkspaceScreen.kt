@@ -442,101 +442,51 @@ fun ModuleWorkspaceScreen(
                     }
                 }
             }
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth().testTag("modules_connection"),
-                    shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Column(Modifier.fillMaxWidth().padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(if (wifiAuthorized || bleReady) Icons.Default.CheckCircle
-                                else Icons.Default.Bluetooth, contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.width(8.dp))
-                            Text(when {
-                                wifiAuthorized -> "ESP32 · Wi-Fi autorizado"
-                                bleAuthorized -> "ESP32 · Bluetooth propietario autorizado"
-                                bleReady -> "ESP32 · Bluetooth conectado (sin autorización)"
-                                else -> "ESP32 desconectado"
-                            }, style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.weight(1f))
-                        }
-                        Text(
-                            if (wifiAuthorized) "GPIO y sensores: firmware."
-                            else if (bleAuthorized)
-                                "Sensores y módulos: lectura BLE autenticada. Calibración LDR: BLE o Wi-Fi autorizado; cambios GPIO según soporte del firmware."
-                            else if (bleReady) "Bluetooth conectado; autoriza propietario para leer sensores."
-                            else "Sin conexión · puedes preparar módulos.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = onConnect,
-                                modifier = Modifier.weight(1f).testTag("modules_connect")) {
-                                Text(ModuleEvidence.connectionAction(wifiAuthorized, bleReady))
-                            }
-                            OutlinedButton(onClick = onHardware, modifier = Modifier.weight(1f)) {
-                                Text("Hardware")
-                            }
-                        }
-                    }
-                }
-            }
             item(key = "compi_station_hardware_shortcut") {
-                Card(onClick = onHardware,
+                Card(
+                    onClick = onHardware,
                     modifier = Modifier.fillMaxWidth().testTag("compi_station_hardware_shortcut"),
-                    shape = RoundedCornerShape(22.dp)) {
-                    Row(Modifier.fillMaxWidth().padding(18.dp),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Surface(color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(16.dp)) {
-                            Icon(Icons.Default.DeviceHub, contentDescription = null,
-                                modifier = Modifier.padding(14.dp),
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                        }
-                        Column(Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Default.DeviceHub, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary)
+                        Column(Modifier.weight(1f)) {
                             Text("Estación Compi", style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold)
-                            Text("Sensores · OLED · luces · automatización",
+                            Text("Ambiente · OLED · RGB",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("Abrir panel de hardware",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary)
                         }
-                        Icon(Icons.Default.ChevronRight, contentDescription = null)
+                        Icon(Icons.Default.ChevronRight, contentDescription = "Abrir Estación Compi")
                     }
                 }
             }
             item(key = "compi_dfplayer_module") {
-                Card(onClick = { openedId = "compi_dfplayer" },
+                Card(
+                    onClick = { openedId = "compi_dfplayer" },
                     modifier = Modifier.fillMaxWidth().testTag("module_card_compi_dfplayer"),
-                    shape = RoundedCornerShape(22.dp)) {
-                    Row(Modifier.fillMaxWidth().padding(18.dp),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Surface(color = MaterialTheme.colorScheme.secondaryContainer,
-                            shape = RoundedCornerShape(16.dp)) {
-                            Icon(Icons.Default.Widgets, contentDescription = null,
-                                modifier = Modifier.padding(14.dp),
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer)
-                        }
-                        Column(Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("Música y DFPlayer", style = MaterialTheme.typography.titleMedium,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Default.Widgets, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary)
+                        Column(Modifier.weight(1f)) {
+                            Text("Reproductor MP3", style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold)
-                            Text("Biblioteca local · módulo MP3 físico",
+                            Text("DFPlayer Mini · audio y avisos",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("Abrir reproductor",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary)
                         }
-                        Icon(Icons.Default.ChevronRight, contentDescription = null)
+                        Icon(Icons.Default.ChevronRight, contentDescription = "Abrir reproductor")
                     }
                 }
             }
@@ -1027,62 +977,79 @@ private fun ModuleReadings(
             val raw = if (live) reading("ambient_light_raw")?.value else null
             Card(Modifier.fillMaxWidth().testTag("oled_environment_dashboard")) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Compi · Pantalla y ambiente", style = MaterialTheme.typography.titleLarge)
+                    Text("Compi · OLED", style = MaterialTheme.typography.titleLarge)
                     Text(
-                        if (live && active) "OLED conectada · telemetría en vivo"
-                        else "Sin confirmación actual de la pantalla y sus datos",
+                        if (live && active) "Pantalla activa · sensores en vivo"
+                        else "Sin datos actuales · verifica la conexión",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF07111A))) {
                         Column(
-                            Modifier.fillMaxWidth().padding(20.dp),
+                            Modifier.fillMaxWidth().padding(12.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text("◕ ᴗ ◕", style = MaterialTheme.typography.displayMedium,
                                 color = Color(0xFF9EE6FF))
-                            Text("COMPI · vista ilustrativa", color = Color(0xFF9EE6FF),
-                                style = MaterialTheme.typography.labelSmall)
+                            Text("Vista ilustrativa · no es un espejo de píxeles",
+                                color = Color(0xFF9EE6FF), style = MaterialTheme.typography.labelSmall)
                         }
                     }
-                    Text("Temperatura: " + (temp?.let { "%.1f °C".format(java.util.Locale.ROOT, it) } ?: "—"))
-                    Text("Humedad: " + (humidity?.let { "%.0f %%".format(java.util.Locale.ROOT, it) } ?: "—"))
-                    Text(
-                        "Luz: " + when {
-                            light != null -> "%.0f %% (calibrada)".format(java.util.Locale.ROOT, light)
-                            raw != null -> "%.0f ADC (sin calibrar)".format(java.util.Locale.ROOT, raw)
-                            else -> "—"
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Temperatura", style = MaterialTheme.typography.labelSmall)
+                            Text(temp?.let { "%.1f °C".format(java.util.Locale.ROOT, it) } ?: "—",
+                                style = MaterialTheme.typography.titleLarge)
                         }
-                    )
-                    Text(
-                        "Esta carita es una representación de Compi, no una captura de los píxeles físicos. " +
-                            "La OLED muestra localmente las lecturas disponibles. " +
-                            "El indicador de sonido requiere un sensor o fuente de audio confirmada.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Text("Expresiones físicas", style = MaterialTheme.typography.titleMedium)
+                        Column(Modifier.weight(1f)) {
+                            Text("Humedad", style = MaterialTheme.typography.labelSmall)
+                            Text(humidity?.let { "%.0f %%".format(java.util.Locale.ROOT, it) } ?: "—",
+                                style = MaterialTheme.typography.titleLarge)
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text("Luz", style = MaterialTheme.typography.labelSmall)
+                            Text(when {
+                                light != null -> "%.0f %%".format(java.util.Locale.ROOT, light)
+                                raw != null -> "%.0f ADC".format(java.util.Locale.ROOT, raw)
+                                else -> "—"
+                            }, style = MaterialTheme.typography.titleMedium)
+                        }
+                    }
+                    if (raw != null && light == null) {
+                        Text("Calibra el LDR para mostrar luz relativa (%)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Text("Expresiones y escenas", style = MaterialTheme.typography.titleMedium)
+                    if (!canControlOled) {
+                        Text("Controles desactivados: conecta y autoriza Compi por Wi-Fi. La OLED puede mostrar sensores localmente sin conexión de control.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     if (oledActionMessage != null) {
                         Text(oledActionMessage, style = MaterialTheme.typography.bodySmall,
                             color = if (oledActionMessage.startsWith("OLED:")) MaterialTheme.colorScheme.error
                                     else MaterialTheme.colorScheme.primary)
                     }
-                    Text("Se envían a la OLED mediante Wi-Fi autorizado. Las caritas manuales se muestran temporalmente antes de recuperar la vista ambiental.",
+                    val scenes = listOf(
+                        "happy" to "Feliz", "sleepy" to "Sueño",
+                        "surprised" to "Sorpresa", "angry" to "Alerta",
+                        "pumpkin" to "Calabaza", "cat" to "Gatito"
+                    )
+                    scenes.chunked(2).forEach { pair ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            pair.forEach { (face, label) ->
+                                OutlinedButton(onClick = { onOledFace(face) }, enabled = canControlOled,
+                                    modifier = Modifier.weight(1f).testTag("oled_face_$face")) {
+                                    Text(label)
+                                }
+                            }
+                        }
+                    }
+                    Text("Las escenas son temporales; la pantalla vuelve al ambiente automáticamente.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for ((face, label) in listOf("happy" to "Feliz", "sleepy" to "Sueño")) {
-                            OutlinedButton(onClick = { onOledFace(face) }, enabled = canControlOled,
-                                modifier = Modifier.weight(1f).testTag("oled_face_$face")) { Text(label) }
-                        }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for ((face, label) in listOf("surprised" to "Sorpresa", "angry" to "Alerta")) {
-                            OutlinedButton(onClick = { onOledFace(face) }, enabled = canControlOled,
-                                modifier = Modifier.weight(1f).testTag("oled_face_$face")) { Text(label) }
-                        }
-                    }
+                        style = MaterialTheme.typography.labelSmall)
                     OutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) {
                         Text("Actualizar sensores")
                     }
