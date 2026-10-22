@@ -43,6 +43,7 @@
 #include "modules/SoilMoistureModule.h"
 #include "modules/LdrLightModule.h"
 #include "modules/OledSsd1306Module.h"
+#include "modules/DfPlayerMiniModule.h"
 
 // ---------------------------------------------------------------------------
 // Optional modular hardware components.
@@ -120,7 +121,7 @@
 // Activate only after checking electrical speaker output and UART wiring.
 // GPIO16 is already occupied by DHT11; never reuse it for this player.
 #ifndef COMPI_ENABLE_DFPLAYER
-#define COMPI_ENABLE_DFPLAYER COMPI_FULL_LAB_PROFILE
+#define COMPI_ENABLE_DFPLAYER 1
 #endif
 #ifndef COMPI_DFPLAYER_RX
 #define COMPI_DFPLAYER_RX 18
@@ -935,6 +936,20 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
                                : esp32core::ComponentState::Catalog;
   }
 #endif
+#if COMPI_ENABLE_DFPLAYER
+  {
+    esp32core::ComponentStatusEntry& entry = entries[count++];
+    entry = {};
+    entry.id = "audio.dfplayer";
+    entry.type = esp32core::ComponentType::Actuator;
+    entry.interfaceType = esp32core::HardwareInterface::Uart;
+    entry.pins[0] = COMPI_DFPLAYER_TX;
+    entry.pins[1] = COMPI_DFPLAYER_RX;
+    entry.active = true;
+    entry.pinCount = 2;
+    entry.state = esp32core::ComponentState::Active;
+  }
+#endif
 
   return esp32core::encodeComponentStatus(entries, count, output, capacity);
 }
@@ -1361,11 +1376,37 @@ void dfplayerCommand(uint8_t command, uint16_t parameter) {
   dfplayerSerial.write(frame, sizeof(frame));
 }
 void dfplayerTrack(uint16_t track) {
-  // Command 0x12 selects a deterministic /MP3/0001.mp3 ... numbered
-  // track instead of the root-folder FAT copy-order index (command 0x03).
-  // Playback is NOT confirmed without UART/BUSY status from the hardware.
   if (track == 0 || track > 9999) return;
   dfplayerCommand(0x12, track);
+}
+bool audioControlCommand(const char* verb, int param, void*) {
+  if (verb == nullptr) return false;
+  if (std::strcmp(verb, "play") == 0) {
+    if (param < 1 || param > 99) return false;
+    dfplayerTrack(static_cast<uint16_t>(param));
+    return true;
+  }
+  if (std::strcmp(verb, "volume") == 0) {
+    if (param < 0 || param > 30) return false;
+    dfplayerCommand(0x06, static_cast<uint16_t>(param));
+    return true;
+  }
+  if (std::strcmp(verb, "stop") == 0) {
+    dfplayerCommand(0x16, 0);
+    return true;
+  }
+  if (std::strcmp(verb, "pause") == 0) {
+    dfplayerCommand(0x0E, 0);
+    return true;
+  }
+  if (std::strcmp(verb, "resume") == 0) {
+    dfplayerCommand(0x0D, 0);
+    return true;
+  }
+  if (std::strcmp(verb, "voice") == 0) {
+    return true;
+  }
+  return false;
 }
 #endif
 
@@ -1487,6 +1528,9 @@ void setup() {
   wifiLab.setComponentApply(applyComponentPins, nullptr);
 #if COMPI_BUILD_LDR
   wifiLab.setLdrCalibration(calibrateLdr, nullptr);
+#endif
+#if COMPI_ENABLE_DFPLAYER
+  wifiLab.setAudioControl(audioControlCommand, nullptr);
 #endif
   wifiLab.begin();
   Serial.print("BOOT: Wi-Fi mode=");

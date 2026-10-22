@@ -45,6 +45,8 @@ class LocalWifiControl final {
 
   using OledDisplay = bool (*)(const char* mode, const char* value, void* context);
 
+  using AudioCommand = bool (*)(const char* verb, int param, void* context);
+
   LocalWifiControl(PinManager& pins, RgbState state, RgbCommand manualCommand,
                    RgbCommand runtimeCommand, DeviceId deviceId)
       : pins_(pins), rgbState_(state), rgbCommand_(manualCommand),
@@ -73,6 +75,11 @@ class LocalWifiControl final {
   void setOledDisplay(OledDisplay display, void* context) {
     oledDisplay_ = display;
     oledContext_ = context;
+  }
+
+  void setAudioControl(AudioCommand audio, void* context) {
+    audio_ = audio;
+    audioContext_ = context;
   }
 
   // One authority for both authorized transports. No duplicate GPIO rules.
@@ -709,6 +716,54 @@ class LocalWifiControl final {
       server_.send(200, "application/json", "{\"status\":\"APPLIED\"}");
     });
 
+    server_.on("/v2/audio/play", HTTP_POST, [this]() {
+      if (!authorized()) return;
+      int track = -1;
+      if (!parseInt("track", 1, 99, track) || audio_ == nullptr ||
+          !audio_("play", track, audioContext_)) {
+        jsonError(400, "audio_play_failed"); return;
+      }
+      server_.send(200, "application/json", "{\"status\":\"PLAYING\",\"track\":" + String(track) + "}");
+    });
+
+    server_.on("/v2/audio/volume", HTTP_POST, [this]() {
+      if (!authorized()) return;
+      int vol = -1;
+      if (!parseInt("volume", 0, 30, vol) || audio_ == nullptr ||
+          !audio_("volume", vol, audioContext_)) {
+        jsonError(400, "audio_volume_failed"); return;
+      }
+      server_.send(200, "application/json", "{\"status\":\"APPLIED\",\"volume\":" + String(vol) + "}");
+    });
+
+    server_.on("/v2/audio/stop", HTTP_POST, [this]() {
+      if (!authorized()) return;
+      if (audio_ != nullptr) audio_("stop", 0, audioContext_);
+      server_.send(200, "application/json", "{\"status\":\"STOPPED\"}");
+    });
+
+    server_.on("/v2/audio/pause", HTTP_POST, [this]() {
+      if (!authorized()) return;
+      if (audio_ != nullptr) audio_("pause", 0, audioContext_);
+      server_.send(200, "application/json", "{\"status\":\"PAUSED\"}");
+    });
+
+    server_.on("/v2/audio/resume", HTTP_POST, [this]() {
+      if (!authorized()) return;
+      if (audio_ != nullptr) audio_("resume", 0, audioContext_);
+      server_.send(200, "application/json", "{\"status\":\"PLAYING\"}");
+    });
+
+    server_.on("/v2/audio/voice", HTTP_POST, [this]() {
+      if (!authorized()) return;
+      int enabled = -1;
+      if (!parseInt("enabled", 0, 1, enabled) || audio_ == nullptr ||
+          !audio_("voice", enabled, audioContext_)) {
+        jsonError(400, "audio_voice_failed"); return;
+      }
+      server_.send(200, "application/json", "{\"status\":\"APPLIED\",\"enabled\":" + String(enabled) + "}");
+    });
+
     server_.onNotFound([this]() {
       if (!authorized()) return;
       jsonError(404, "not_found");
@@ -800,6 +855,8 @@ class LocalWifiControl final {
   void* applyContext_ = nullptr;
   OledDisplay oledDisplay_ = nullptr;
   void* oledContext_ = nullptr;
+  AudioCommand audio_ = nullptr;
+  void* audioContext_ = nullptr;
   LdrCalibration ldrCalibration_ = nullptr;
   void* ldrCalibrationContext_ = nullptr;
   bool environmentalRgbEnabled_ = false;

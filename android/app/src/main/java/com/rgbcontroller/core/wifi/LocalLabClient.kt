@@ -280,6 +280,23 @@ class LocalLabClient(private val context: Context) {
     suspend fun startRgbEffect(key: String, name: String, speed: Int): JSONObject =
         rgb(key, RgbDeviceCommand.effect(name, speed))
 
+    suspend fun playAudio(key: String, track: Int): JSONObject {
+        require(track in 1..99) { "Pista inválida (1 a 99)." }
+        return request("POST", "/v2/audio/play", key, mapOf("track" to track.toString()))
+    }
+    suspend fun setAudioVolume(key: String, volume: Int): JSONObject {
+        require(volume in 0..30) { "Volumen fuera de rango (0 a 30)." }
+        return request("POST", "/v2/audio/volume", key, mapOf("volume" to volume.toString()))
+    }
+    suspend fun stopAudio(key: String): JSONObject =
+        request("POST", "/v2/audio/stop", key)
+    suspend fun pauseAudio(key: String): JSONObject =
+        request("POST", "/v2/audio/pause", key)
+    suspend fun resumeAudio(key: String): JSONObject =
+        request("POST", "/v2/audio/resume", key)
+    suspend fun setAudioVoice(key: String, enabled: Boolean): JSONObject =
+        request("POST", "/v2/audio/voice", key, mapOf("enabled" to if (enabled) "1" else "0"))
+
     suspend fun rgb(key: String, command: String): JSONObject {
         require(RgbDeviceCommand.allowed(command)) { "Invalid RGB command" }
         return request("POST", "/v2/led/command", key, mapOf("command" to command))
