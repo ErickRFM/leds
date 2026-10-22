@@ -734,6 +734,19 @@ bool oledDisplayCommand(const char* mode, const char* value, void*) {
     }
     return shown;
   }
+  if (std::strcmp(mode, "contrast") == 0) {
+    if (value[0] == 0) return false;
+    unsigned int level = 0;
+    for (const char* digit = value; *digit != 0; ++digit) {
+      if (*digit < '0' || *digit > '9') return false;
+      level = level * 10u + static_cast<unsigned int>(*digit - '0');
+      if (level > 255u) return false;
+    }
+    if (level < 8u) return false;
+    oledDriver.ssd1306_command(SSD1306_SETCONTRAST);
+    oledDriver.ssd1306_command(static_cast<uint8_t>(level));
+    return true;
+  }
   if (std::strcmp(mode, "face") != 0) return false;
   if (std::strcmp(value, "dance") == 0) {
     oledCatDance = true;

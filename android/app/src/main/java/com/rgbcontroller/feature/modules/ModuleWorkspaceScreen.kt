@@ -284,6 +284,47 @@ fun ModuleWorkspaceScreen(
                                     }
                                 }
                             }
+                            var contrastLevel by rememberSaveable { mutableFloatStateOf(128f) }
+                            Text("Intensidad OLED", style = MaterialTheme.typography.titleSmall)
+                            Slider(
+                                value = contrastLevel,
+                                onValueChange = { contrastLevel = it },
+                                valueRange = 8f..255f,
+                                enabled = wifiAuthorized,
+                                modifier = Modifier.testTag("station_oled_contrast_slider")
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("${contrastLevel.toInt()} / 255",
+                                    modifier = Modifier.weight(1f),
+                                    style = MaterialTheme.typography.labelSmall)
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            val epoch = session.revision
+                                            try {
+                                                check(wifiAuthorized) { "Autoriza Wi-Fi para controlar OLED." }
+                                                val key = session.key
+                                                session.serialized {
+                                                    check(wifiAuthorized && epoch == session.revision) {
+                                                        "La conexión cambió antes de aplicar el brillo."
+                                                    }
+                                                    labClient.showOled(key, "contrast", contrastLevel.toInt().toString())
+                                                }
+                                                check(epoch == session.revision) {
+                                                    "La conexión cambió; no se confirmó el brillo."
+                                                }
+                                                oledActionMessage = "Intensidad OLED aplicada."
+                                            } catch (cancelled: CancellationException) {
+                                                throw cancelled
+                                            } catch (error: Exception) {
+                                                oledActionMessage = "OLED: ${error.message}"
+                                            }
+                                        }
+                                    },
+                                    enabled = wifiAuthorized,
+                                    modifier = Modifier.testTag("station_oled_contrast_apply")
+                                ) { Text("Aplicar") }
+                            }
                             if (!wifiAuthorized) {
                                 Text("Las expresiones requieren Wi-Fi autorizado.",
                                     style = MaterialTheme.typography.labelSmall,
