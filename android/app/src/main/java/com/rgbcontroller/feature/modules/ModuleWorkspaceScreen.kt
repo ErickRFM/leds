@@ -359,6 +359,41 @@ fun ModuleWorkspaceScreen(
                     }
                 }
             }
+            item(key = "compi_station_hardware_shortcut") {
+                Card(
+                    onClick = onHardware,
+                    modifier = Modifier.fillMaxWidth().testTag("compi_station_hardware_shortcut"),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.DeviceHub, contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(10.dp))
+                            Text("Estación Compi · hardware integrado",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f))
+                            Icon(Icons.Default.ChevronRight, contentDescription = null)
+                        }
+                        Text("DHT11 · GPIO16  |  Luz LDR · GPIO32  |  OLED · GPIO21/22  |  RGB · 27/25/26",
+                            style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            "Abre Laboratorio de hardware para verificar lecturas, calibrar la luz " +
+                                "y controlar la OLED. El DFPlayer necesita microSD para reproducir; " +
+                                "sin tarjeta no bloquea los sensores ni la pantalla.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text("Abrir Laboratorio de hardware →",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
