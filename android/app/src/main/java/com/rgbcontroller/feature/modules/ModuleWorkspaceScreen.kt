@@ -248,7 +248,8 @@ fun ModuleWorkspaceScreen(
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 for (faces in listOf("happy" to "Feliz",
                                         "sleepy" to "Sueño", "surprised" to "Sorpresa",
-                                        "pumpkin" to "Calabaza", "cat" to "Gato").chunked(3)) {
+                                        "pumpkin" to "Calabaza", "cat" to "Gato",
+                                        "dance" to "Baile").chunked(3)) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         for ((face, label) in faces) {
                                     OutlinedButton(
@@ -1299,10 +1300,18 @@ private fun ModuleReadings(
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for ((face, label) in listOf("surprised" to "Sorpresa", "angry" to "Alerta",
-                                "pumpkin" to "Calabaza", "cat" to "Gato")) {
+                        for ((face, label) in listOf("surprised" to "Sorpresa", "angry" to "Alerta")) {
                             OutlinedButton(onClick = { onOledFace(face) }, enabled = canControlOled,
                                 modifier = Modifier.weight(1f).testTag("oled_face_$face")) { Text(label) }
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for ((face, label) in listOf("pumpkin" to "Calabaza",
+                                "cat" to "Gato", "dance" to "Baile")) {
+                            OutlinedButton(onClick = { onOledFace(face) }, enabled = canControlOled,
+                                modifier = Modifier.weight(1f).testTag("oled_face_$face")) {
+                                Text(label, maxLines = 1)
+                            }
                         }
                     }
                     OutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) {
