@@ -313,7 +313,27 @@ fun ModuleWorkspaceScreen(
                             }
                         }
                         item(key = "environmental_audio_library") {
-                            CompiAudioPlayerCard()
+                            OutlinedCard(
+                                onClick = { openedId = "compi_dfplayer" },
+                                modifier = Modifier.fillMaxWidth().testTag("environment_open_audio"),
+                                shape = RoundedCornerShape(18.dp)
+                            ) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(Icons.Default.Widgets, contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary)
+                                    Column(Modifier.weight(1f)) {
+                                        Text("Música y avisos", style = MaterialTheme.typography.titleSmall)
+                                        Text("Abrir biblioteca y controles de audio",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Icon(Icons.Default.ChevronRight, contentDescription = null)
+                                }
+                            }
                         }
                     } else {
                     item {
