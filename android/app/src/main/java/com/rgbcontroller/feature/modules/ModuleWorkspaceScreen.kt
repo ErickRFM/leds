@@ -165,18 +165,160 @@ fun ModuleWorkspaceScreen(
                     Icon(Icons.Default.ArrowBack, contentDescription = "Volver a módulos")
                 }
                 Text(if (id == ModuleWorkspaceGrouping.ENVIRONMENT) "Sensor ambiental"
+                     else if (id == "compi_station") "Estación Compi"
                      else if (id == "compi_dfplayer") "Música"
                      else ComponentCatalog.get(id)?.name ?: id,
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.weight(1f))
-                if (id != "compi_dfplayer") {
+                if (id != "compi_dfplayer" && id != "compi_station") {
                     TextButton(
                         onClick = { editingId = if (id == ModuleWorkspaceGrouping.ENVIRONMENT) environmentSensor else id },
                         modifier = Modifier.testTag("module_edit_pins")
                     ) { Icon(Icons.Default.Tune, null); Text("GPIO") }
                 }
             }
-            if (id == "compi_dfplayer") {
+            if (id == "compi_station") {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().testTag("compi_station_dashboard"),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Tu estación ambiental", style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold)
+                                Text("Sensores, luz, expresiones y sonido",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
+                            Surface(
+                                color = if (currentlyVerified) MaterialTheme.colorScheme.primaryContainer
+                                    else MaterialTheme.colorScheme.surfaceVariant,
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(if (currentlyVerified) "En vivo" else "Sin datos en vivo",
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+                    item {
+                        val readings = if (currentlyVerified &&
+                            state.telemetryFreshness == ComponentStatusFreshness.LIVE)
+                            state.authoritativeTelemetry.orEmpty() else emptyList()
+                        val temp = ComponentTelemetryCodec.find(readings, "temperature")
+                            ?.takeIf { it.valid }?.value
+                        val humid = ComponentTelemetryCodec.find(readings, "humidity")
+                            ?.takeIf { it.valid }?.value
+                        val light = ComponentTelemetryCodec.find(readings, "ambient_light")
+                            ?.takeIf { it.valid }?.value
+                        val raw = ComponentTelemetryCodec.find(readings, "ambient_light_raw")
+                            ?.takeIf { it.valid }?.value
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            StationMetric("Temperatura",
+                                temp?.let { "%.1f°".format(java.util.Locale.ROOT, it) } ?: "—",
+                                Icons.Default.Thermostat, Modifier.weight(1f))
+                            StationMetric("Humedad",
+                                humid?.let { "%.0f%%".format(java.util.Locale.ROOT, it) } ?: "—",
+                                Icons.Default.WaterDrop, Modifier.weight(1f))
+                            StationMetric("Luz", light?.let {
+                                "%.0f%%".format(java.util.Locale.ROOT, it)
+                            } ?: raw?.let { "%.0f ADC".format(java.util.Locale.ROOT, it) } ?: "—",
+                                Icons.Default.Lightbulb, Modifier.weight(1f))
+                        }
+                    }
+                    item {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { scope.launch { vm.refresh() } },
+                                modifier = Modifier.weight(1f)) { Text("Actualizar") }
+                            OutlinedButton(onClick = {
+                                previousOpenedId = openedId
+                                openedId = "ldr_light"
+                            }, modifier = Modifier.weight(1f)) { Text("LDR y OLED") }
+                        }
+                    }
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Caritas OLED", style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold)
+                            Text("Expresiones temporales en la pantalla física",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                for ((face, label) in listOf("happy" to "Feliz",
+                                        "sleepy" to "Sueño", "surprised" to "Sorpresa")) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            scope.launch {
+                                                val epoch = session.revision
+                                                val authorizedKey = session.key
+                                                try {
+                                                    check(wifiAuthorized) { "Autoriza Wi-Fi para controlar OLED." }
+                                                    session.serialized {
+                                                        check(wifiAuthorized && epoch == session.revision) {
+                                                            "Cambió la conexión antes de enviar la carita."
+                                                        }
+                                                        labClient.showOled(authorizedKey, "face", face)
+                                                    }
+                                                    check(epoch == session.revision) {
+                                                        "La conexión cambió; no se confirmó la expresión."
+                                                    }
+                                                    oledActionMessage = "Carita $label enviada."
+                                                } catch (cancelled: CancellationException) {
+                                                    throw cancelled
+                                                } catch (error: Exception) {
+                                                    oledActionMessage = "OLED: ${error.message}"
+                                                }
+                                            }
+                                        },
+                                        enabled = wifiAuthorized,
+                                        modifier = Modifier.weight(1f).testTag("station_oled_$face"),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 10.dp)
+                                    ) { Text(label, maxLines = 1) }
+                                }
+                            }
+                            if (!wifiAuthorized) {
+                                Text("Las expresiones requieren Wi-Fi autorizado.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            oledActionMessage?.let {
+                                Text(it, style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
+                    item {
+                        Text("Automatización RGB", style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold)
+                        EnvironmentalRgbControlCard(session, labClient, bleManager)
+                    }
+                    item {
+                        OutlinedCard(
+                            onClick = {
+                                previousOpenedId = openedId
+                                openedId = "compi_dfplayer"
+                            },
+                            modifier = Modifier.fillMaxWidth().testTag("station_audio_shortcut")
+                        ) {
+                            Row(Modifier.fillMaxWidth().padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Icon(Icons.Default.Widgets, null,
+                                    tint = MaterialTheme.colorScheme.primary)
+                                Column(Modifier.weight(1f)) {
+                                    Text("Música y avisos", style = MaterialTheme.typography.titleMedium)
+                                    Text("Reproductor y módulo MP3",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Icon(Icons.Default.ChevronRight, null)
+                            }
+                        }
+                    }
+                }
+            } else if (id == "compi_dfplayer") {
                 var showWiring by rememberSaveable { mutableStateOf(false) }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize().testTag("dfplayer_module_detail"),
@@ -474,49 +616,29 @@ fun ModuleWorkspaceScreen(
                 }
             }
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth().testTag("modules_connection"),
-                    shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Column(Modifier.fillMaxWidth().padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(if (wifiAuthorized || bleReady) Icons.Default.CheckCircle
-                                else Icons.Default.Bluetooth, contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.width(8.dp))
-                            Text(when {
-                                wifiAuthorized -> "ESP32 · Wi-Fi autorizado"
-                                bleAuthorized -> "ESP32 · Bluetooth propietario autorizado"
-                                bleReady -> "ESP32 · Bluetooth conectado (sin autorización)"
-                                else -> "ESP32 desconectado"
-                            }, style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.weight(1f))
+                OutlinedCard(onClick = onConnect,
+                    modifier = Modifier.fillMaxWidth().testTag("modules_connection")) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Icon(if (wifiAuthorized || bleAuthorized) Icons.Default.CheckCircle
+                            else Icons.Default.Bluetooth, null,
+                            tint = MaterialTheme.colorScheme.primary)
+                        Column(Modifier.weight(1f)) {
+                            Text(if (wifiAuthorized || bleAuthorized) "ESP32 conectado"
+                                else if (bleReady) "ESP32 · falta autorizar"
+                                else "Conectar ESP32",
+                                style = MaterialTheme.typography.titleSmall)
+                            Text("Conexiones y permisos",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Text(
-                            if (wifiAuthorized) "GPIO y sensores: firmware."
-                            else if (bleAuthorized)
-                                "Sensores y módulos: lectura BLE autenticada. Calibración LDR: BLE o Wi-Fi autorizado; cambios GPIO según soporte del firmware."
-                            else if (bleReady) "Bluetooth conectado; autoriza propietario para leer sensores."
-                            else "Sin conexión · puedes preparar módulos.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = onConnect,
-                                modifier = Modifier.weight(1f).testTag("modules_connect")) {
-                                Text(ModuleEvidence.connectionAction(wifiAuthorized, bleReady))
-                            }
-                            OutlinedButton(onClick = onHardware, modifier = Modifier.weight(1f)) {
-                                Text("Hardware")
-                            }
-                        }
+                        Icon(Icons.Default.ChevronRight, null)
                     }
                 }
             }
             item(key = "compi_station_hardware_shortcut") {
-                Card(onClick = onHardware,
+                Card(onClick = { openedId = "compi_station" },
                     modifier = Modifier.fillMaxWidth().testTag("compi_station_hardware_shortcut"),
                     shape = RoundedCornerShape(22.dp)) {
                     Row(Modifier.fillMaxWidth().padding(18.dp),
@@ -565,16 +687,13 @@ fun ModuleWorkspaceScreen(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            Text("Abrir panel de hardware",
+                            Text("Abrir estación",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary)
                         }
                         Icon(Icons.Default.ChevronRight, contentDescription = null)
                     }
                 }
-            }
-            item(key = "compi_station_rgb_control") {
-                EnvironmentalRgbControlCard(session, labClient, bleManager)
             }
             item(key = "compi_dfplayer_module") {
                 Card(onClick = { openedId = "compi_dfplayer" },
@@ -932,6 +1051,25 @@ private fun ModuleRuntimeCard(
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@Composable
+private fun StationMetric(
+    label: String,
+    value: String,
+    image: ImageVector,
+    modifier: Modifier = Modifier
+) {
+    Surface(modifier = modifier, shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(image, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Text(value, style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(label, style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         }
     }
 }
