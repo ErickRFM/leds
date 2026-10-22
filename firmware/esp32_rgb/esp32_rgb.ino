@@ -1081,12 +1081,17 @@ bool calibrateLdr(uint16_t darkRaw, uint16_t brightRaw, void*) {
   // GPIO ownership and actual ADC sampling are required for calibration.
   if (!ldrModule.ready() ||
       !pinManager.belongsTo(ldrModule.pin(), ldrModule.id()) ||
-      !ldrModule.rawReading().valid ||
-      !ldrModule.setCalibration(darkRaw, brightRaw)) return false;
+      !ldrModule.rawReading().valid) return false;
+  // Keep the last confirmed calibration if the NVS write fails.
+  const bool previousValid = ldrModule.calibrated();
+  const uint16_t previousDark = ldrModule.darkRaw();
+  const uint16_t previousBright = ldrModule.brightRaw();
+  if (!ldrModule.setCalibration(darkRaw, brightRaw)) return false;
   // Persist only explicit calibration, never periodic ADC samples.
   if (!saveLdrCalibration(darkRaw, brightRaw)) {
-    ldrModule.clearCalibration();
-    Serial.println("ERROR: LDR NVS write failed");
+    if (previousValid) ldrModule.setCalibration(previousDark, previousBright);
+    else ldrModule.clearCalibration();
+    Serial.println("ERROR: LDR NVS write failed; previous calibration restored");
     return false;
   }
   return true;
@@ -1513,13 +1518,13 @@ void loop() {
 
 #if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY && COMPI_BUILD_DHT11
   // Small independent OLED dashboard: never writes PWM and never blocks
-  // the network. Start after the greeting, then redraw only when due.
+  // the network. Limit I2C transfers to 1 Hz to leave time for BLE framing,\n  // Wi-Fi command processing and sensor sampling. Start after the greeting.
   static uint32_t lastOledTelemetryAt = 0;
   if (oledModule.ready() && now >= 8000U &&
       (lastOledUserCommandAt == 0 ||
        static_cast<uint32_t>(now - lastOledUserCommandAt) >= 30000u) &&
       (lastOledTelemetryAt == 0 ||
-       static_cast<uint32_t>(now - lastOledTelemetryAt) >= 250U)) {
+       static_cast<uint32_t>(now - lastOledTelemetryAt) >= 1000U)) {
     lastOledTelemetryAt = now;
     // Mixed view: a friendly face AND live measurements on the physical
     // 128x64 OLED. Raw ADC is labelled RAW until the LDR is calibrated;
