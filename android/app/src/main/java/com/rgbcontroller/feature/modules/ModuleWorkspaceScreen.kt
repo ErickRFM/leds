@@ -341,7 +341,7 @@ fun ModuleWorkspaceScreen(
                         Text(
                             if (wifiAuthorized) "GPIO y sensores: firmware."
                             else if (bleAuthorized)
-                                "Sensores y módulos: lectura BLE autenticada. Calibración/GPIO: Wi-Fi."
+                                "Sensores y módulos: lectura BLE autenticada. Calibración LDR: BLE o Wi-Fi autorizado; cambios GPIO según soporte del firmware."
                             else if (bleReady) "Bluetooth conectado; autoriza propietario para leer sensores."
                             else "Sin conexión · puedes preparar módulos.",
                             style = MaterialTheme.typography.bodySmall,
