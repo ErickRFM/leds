@@ -137,6 +137,24 @@ class CompiLabSessionTest {
         assertEquals(LabConnectionState.AUTH_FAILED, session.connectionState)
     }
 
+    @Test fun rejectedInitialHandshakeExitsVerifyingWithoutAuthorization() {
+        for (bad in listOf(
+            LabHttpException.Conflict(409, "Ocupado"),
+            LabHttpException.BadRequest(400, "Solicitud inválida")
+        )) {
+            val session = CompiLabSession()
+            session.selectTransport(LabTransport.WIFI_LAB)
+            session.updateNetworkRouteAvailable(true)
+            session.updateKey("1234567890abcdef")
+            val (epoch, key) = session.beginVerification()
+            assertEquals(LabConnectionState.VERIFYING, session.connectionState)
+            session.failed(epoch, bad)
+            assertEquals(LabConnectionState.NETWORK_ERROR, session.connectionState)
+            assertFalse(session.wifiReady)
+            assertFalse(session.verified(epoch, key, red))
+        }
+    }
+
     @Test fun http409ConflictDoesNotInvalidateAuthorizedSession() {
         val session = CompiLabSession()
         session.selectTransport(LabTransport.WIFI_LAB)
