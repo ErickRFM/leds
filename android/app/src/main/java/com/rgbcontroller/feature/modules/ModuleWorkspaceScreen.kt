@@ -349,6 +349,26 @@ fun ModuleWorkspaceScreen(
                                     }
                                 }
                             },
+                            onOledContrast = { level ->
+                                scope.launch {
+                                    try {
+                                        val revision = session.revision
+                                        check(wifiAuthorized) { "Conecta al Wi-Fi autorizado." }
+                                        val key = session.key
+                                        session.serialized {
+                                            check(wifiAuthorized && session.revision == revision) {
+                                                "La conexión cambió; no se aplicó el brillo."
+                                            }
+                                            labClient.showOled(key, "contrast", level.toString())
+                                        }
+                                        oledActionMessage = "Brillo OLED enviado: $level/255."
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
+                                    } catch (failure: Exception) {
+                                        oledActionMessage = "OLED: ${failure.message}"
+                                    }
+                                }
+                            },
                             onCalibrateLdr = { dark, bright ->
                                 scope.launch {
                                     ldrCalibrationMessage = "Aplicando calibración en el ESP32…"
@@ -832,6 +852,7 @@ private fun ModuleReadings(
     canControlOled: Boolean = false,
     oledActionMessage: String? = null,
     onOledFace: (String) -> Unit = {},
+    onOledContrast: (Int) -> Unit = {},
     onCalibrateLdr: (Int, Int) -> Unit = { _, _ -> }
 ) {
     val live = state.telemetryFreshness == ComponentStatusFreshness.LIVE &&
@@ -1045,6 +1066,24 @@ private fun ModuleReadings(
                                     Text(label)
                                 }
                             }
+                        }
+                    }
+                    var contrast by rememberSaveable { mutableFloatStateOf(128f) }
+                    Text("Brillo OLED", style = MaterialTheme.typography.titleSmall)
+                    Slider(
+                        value = contrast,
+                        onValueChange = { contrast = it },
+                        valueRange = 8f..255f,
+                        enabled = canControlOled,
+                        modifier = Modifier.testTag("oled_contrast_slider")
+                    )
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("${contrast.toInt()} / 255", modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelMedium)
+                        Button(onClick = { onOledContrast(contrast.toInt()) },
+                            enabled = canControlOled,
+                            modifier = Modifier.testTag("oled_contrast_apply")) {
+                            Text("Aplicar brillo")
                         }
                     }
                     Text("Las escenas son temporales; la pantalla vuelve al ambiente automáticamente.",
