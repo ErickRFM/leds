@@ -1137,6 +1137,7 @@ private fun ModuleReadings(
         "ldr_light" -> {
             var darkReference by remember { mutableStateOf<Int?>(null) }
             var brightReference by remember { mutableStateOf<Int?>(null) }
+            var showCalibrationHelp by rememberSaveable { mutableStateOf(false) }
             val light = if (active && live) reading("ambient_light")?.value else null
             val raw = if (active && live) reading("ambient_light_raw")?.value?.toInt() else null
             val status = ComponentTelemetryCodec.find(measurements.orEmpty(), "ambient_light")?.status
@@ -1145,11 +1146,27 @@ private fun ModuleReadings(
                     Column(Modifier.padding(16.dp).animateContentSize(animationSpec = tween(250)),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Luz ambiental · LDR", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            if (light != null) "Iluminación relativa: %.1f %%".format(java.util.Locale.ROOT, light)
-                            else "Iluminación relativa: —",
-                            style = MaterialTheme.typography.titleLarge,
-                            modifier = Modifier.testTag("ldr_light_percent")
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    if (light != null) "%.0f %%".format(java.util.Locale.ROOT, light)
+                                    else "— %",
+                                    style = MaterialTheme.typography.headlineLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.testTag("ldr_light_percent")
+                                )
+                                Text(if (light != null) "Luz relativa calibrada" else if (!live) "Sin conexión en vivo" else "Sin lectura calibrada",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Icon(Icons.Default.Lightbulb, contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(36.dp))
+                        }
+                        LinearProgressIndicator(
+                            progress = { (light ?: 0f).coerceIn(0f, 100f) / 100f },
+                            modifier = Modifier.fillMaxWidth().height(9.dp)
+                                .testTag("ldr_calibrated_level")
                         )
                         Text(
                             when {
@@ -1171,10 +1188,16 @@ private fun ModuleReadings(
                         HorizontalDivider()
                         Text("Calibración de luz", style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold)
-                        Text("1 · Cubre el LDR y actualiza la lectura antes de capturar oscuridad. " +
-                            "2 · Ilumínalo, actualiza otra vez y captura claridad. " +
-                            "Envía la calibración por BLE propietario o Wi-Fi autorizado.",
-                            style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = { showCalibrationHelp = !showCalibrationHelp },
+                            modifier = Modifier.testTag("ldr_calibration_help")) {
+                            Text(if (showCalibrationHelp) "Ocultar guía" else "¿Cómo calibrar?")
+                        }
+                        if (showCalibrationHelp) {
+                            Text("Cubre el LDR, actualiza y captura oscuridad. Luego ilumínalo, " +
+                                "actualiza y captura claridad. Aplica con BLE propietario o Wi-Fi autorizado.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         if (raw != null) {
                             LinearProgressIndicator(
                                 progress = { raw.coerceIn(0, 4095) / 4095f },
