@@ -536,6 +536,26 @@ fun ModuleWorkspaceScreen(
                                     }
                                 }
                             },
+                            onOledContrast = { level ->
+                                scope.launch {
+                                    try {
+                                        val revision = session.revision
+                                        check(wifiAuthorized) { "Conecta al Wi-Fi autorizado." }
+                                        val key = session.key
+                                        session.serialized {
+                                            check(wifiAuthorized && session.revision == revision) {
+                                                "La conexión cambió; no se aplicó el brillo."
+                                            }
+                                            labClient.showOled(key, "contrast", level.toString())
+                                        }
+                                        oledActionMessage = "Brillo OLED enviado: $level/255."
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
+                                    } catch (failure: Exception) {
+                                        oledActionMessage = "OLED: ${failure.message}"
+                                    }
+                                }
+                            },
                             onCalibrateLdr = { dark, bright ->
                                 scope.launch {
                                     ldrCalibrationMessage = "Aplicando calibración en el ESP32…"
@@ -1098,6 +1118,7 @@ private fun ModuleReadings(
     canControlOled: Boolean = false,
     oledActionMessage: String? = null,
     onOledFace: (String) -> Unit = {},
+    onOledContrast: (Int) -> Unit = {},
     onCalibrateLdr: (Int, Int) -> Unit = { _, _ -> }
 ) {
     val live = state.telemetryFreshness == ComponentStatusFreshness.LIVE &&
@@ -1243,62 +1264,97 @@ private fun ModuleReadings(
             val raw = if (live) reading("ambient_light_raw")?.value else null
             Card(Modifier.fillMaxWidth().testTag("oled_environment_dashboard")) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Compi · Pantalla y ambiente", style = MaterialTheme.typography.titleLarge)
+                    Text("Compi · OLED", style = MaterialTheme.typography.titleLarge)
                     Text(
-                        if (live && active) "OLED conectada · telemetría en vivo"
-                        else "Sin confirmación actual de la pantalla y sus datos",
+                        if (live && active) "Pantalla activa · sensores en vivo"
+                        else "Sin datos actuales · verifica la conexión",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF07111A))) {
                         Column(
-                            Modifier.fillMaxWidth().padding(20.dp),
+                            Modifier.fillMaxWidth().padding(12.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text("◕ ᴗ ◕", style = MaterialTheme.typography.displayMedium,
                                 color = Color(0xFF9EE6FF))
-                            Text("COMPI · vista ilustrativa", color = Color(0xFF9EE6FF),
-                                style = MaterialTheme.typography.labelSmall)
+                            Text("Vista ilustrativa · no es un espejo de píxeles",
+                                color = Color(0xFF9EE6FF), style = MaterialTheme.typography.labelSmall)
                         }
                     }
-                    Text("Temperatura: " + (temp?.let { "%.1f °C".format(java.util.Locale.ROOT, it) } ?: "—"))
-                    Text("Humedad: " + (humidity?.let { "%.0f %%".format(java.util.Locale.ROOT, it) } ?: "—"))
-                    Text(
-                        "Luz: " + when {
-                            light != null -> "%.0f %% (calibrada)".format(java.util.Locale.ROOT, light)
-                            raw != null -> "%.0f ADC (sin calibrar)".format(java.util.Locale.ROOT, raw)
-                            else -> "—"
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Temperatura", style = MaterialTheme.typography.labelSmall)
+                            Text(temp?.let { "%.1f °C".format(java.util.Locale.ROOT, it) } ?: "—",
+                                style = MaterialTheme.typography.titleLarge)
                         }
-                    )
-                    Text(
-                        "Esta carita es una representación de Compi, no una captura de los píxeles físicos. " +
-                            "La OLED muestra localmente las lecturas disponibles. " +
-                            "El indicador de sonido requiere un sensor o fuente de audio confirmada.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Text("Expresiones físicas", style = MaterialTheme.typography.titleMedium)
+                        Column(Modifier.weight(1f)) {
+                            Text("Humedad", style = MaterialTheme.typography.labelSmall)
+                            Text(humidity?.let { "%.0f %%".format(java.util.Locale.ROOT, it) } ?: "—",
+                                style = MaterialTheme.typography.titleLarge)
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text("Luz", style = MaterialTheme.typography.labelSmall)
+                            Text(when {
+                                light != null -> "%.0f %%".format(java.util.Locale.ROOT, light)
+                                raw != null -> "%.0f ADC".format(java.util.Locale.ROOT, raw)
+                                else -> "—"
+                            }, style = MaterialTheme.typography.titleMedium)
+                        }
+                    }
+                    if (raw != null && light == null) {
+                        Text("Calibra el LDR para mostrar luz relativa (%)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Text("Expresiones y escenas", style = MaterialTheme.typography.titleMedium)
+                    if (!canControlOled) {
+                        Text("Controles desactivados: conecta y autoriza Compi por Wi-Fi. La OLED puede mostrar sensores localmente sin conexión de control.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     if (oledActionMessage != null) {
                         Text(oledActionMessage, style = MaterialTheme.typography.bodySmall,
                             color = if (oledActionMessage.startsWith("OLED:")) MaterialTheme.colorScheme.error
                                     else MaterialTheme.colorScheme.primary)
                     }
-                    Text("Se envían a la OLED mediante Wi-Fi autorizado. Las caritas manuales se muestran temporalmente antes de recuperar la vista ambiental.",
+                    val scenes = listOf(
+                        "happy" to "Feliz", "sleepy" to "Sueño",
+                        "surprised" to "Sorpresa", "angry" to "Alerta",
+                        "pumpkin" to "Calabaza", "cat" to "Gatito"
+                    )
+                    scenes.chunked(2).forEach { pair ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            pair.forEach { (face, label) ->
+                                OutlinedButton(onClick = { onOledFace(face) }, enabled = canControlOled,
+                                    modifier = Modifier.weight(1f).testTag("oled_face_$face")) {
+                                    Text(label)
+                                }
+                            }
+                        }
+                    }
+                    var contrast by rememberSaveable { mutableFloatStateOf(128f) }
+                    Text("Brillo OLED", style = MaterialTheme.typography.titleSmall)
+                    Slider(
+                        value = contrast,
+                        onValueChange = { contrast = it },
+                        valueRange = 8f..255f,
+                        enabled = canControlOled,
+                        modifier = Modifier.testTag("oled_contrast_slider")
+                    )
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("${contrast.toInt()} / 255", modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelMedium)
+                        Button(onClick = { onOledContrast(contrast.toInt()) },
+                            enabled = canControlOled,
+                            modifier = Modifier.testTag("oled_contrast_apply")) {
+                            Text("Aplicar brillo")
+                        }
+                    }
+                    Text("Las escenas son temporales; la pantalla vuelve al ambiente automáticamente.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for ((face, label) in listOf("happy" to "Feliz", "sleepy" to "Sueño")) {
-                            OutlinedButton(onClick = { onOledFace(face) }, enabled = canControlOled,
-                                modifier = Modifier.weight(1f).testTag("oled_face_$face")) { Text(label) }
-                        }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for ((face, label) in listOf("surprised" to "Sorpresa", "angry" to "Alerta")) {
-                            OutlinedButton(onClick = { onOledFace(face) }, enabled = canControlOled,
-                                modifier = Modifier.weight(1f).testTag("oled_face_$face")) { Text(label) }
-                        }
-                    }
+                        style = MaterialTheme.typography.labelSmall)
                     OutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) {
                         Text("Actualizar sensores")
                     }
