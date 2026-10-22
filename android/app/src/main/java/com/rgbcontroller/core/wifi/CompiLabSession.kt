@@ -204,8 +204,14 @@ class CompiLabSession {
             val targetState = when (error) {
                 is LabHttpException.Unauthorized, is LabHttpException.Forbidden -> LabConnectionState.AUTH_FAILED
                 is LabHttpException.Conflict, is LabHttpException.BadRequest -> {
-                    // Operational conflicts or bad payloads do NOT invalidate an authorized session.
-                    message = details
+                    // A rejected operation must not revoke an already authorized
+                    // session. But a rejected initial handshake cannot stay VERIFYING.
+                    if (wifiReady) {
+                        message = details
+                    } else {
+                        invalidate(details, preserveErrorState = true)
+                        connectionState = LabConnectionState.NETWORK_ERROR
+                    }
                     return
                 }
                 is LabHttpException.RateLimited, is LabHttpException.ServerError,
