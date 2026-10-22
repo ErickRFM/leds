@@ -235,7 +235,7 @@ fun ModuleWorkspaceScreen(
                             OutlinedButton(onClick = {
                                 previousOpenedId = openedId
                                 openedId = "ldr_light"
-                            }, modifier = Modifier.weight(1f)) { Text("LDR y OLED") }
+                            }, modifier = Modifier.weight(1f)) { Text("Calibrar LDR") }
                         }
                     }
                     item {
@@ -310,8 +310,6 @@ fun ModuleWorkspaceScreen(
                         }
                     }
                     item {
-                        Text("Automatización RGB", style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold)
                         EnvironmentalRgbControlCard(session, labClient, bleManager)
                     }
                     item {
