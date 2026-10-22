@@ -97,6 +97,7 @@ fun ModuleWorkspaceScreen(
         session.connectionState == LabConnectionState.AUTHORIZED && session.wifiReady
     var showLibrary by rememberSaveable { mutableStateOf(false) }
     var openedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var previousOpenedId by rememberSaveable { mutableStateOf<String?>(null) }
     var editingId by remember { mutableStateOf<String?>(null) }
     var applyMessage by remember { mutableStateOf<String?>(null) }
     var ldrCalibrationMessage by remember { mutableStateOf<String?>(null) }
@@ -104,7 +105,10 @@ fun ModuleWorkspaceScreen(
     var applying by remember { mutableStateOf(false) }
     // Physical Back should close a nested component editor/detail before leaving Modules.
     BackHandler(enabled = editingId != null || openedId != null) {
-        if (editingId != null) editingId = null else openedId = null
+        if (editingId != null) editingId = null else {
+            openedId = previousOpenedId
+            previousOpenedId = null
+        }
     }
     val labClient = remember(context) { LocalLabClient(context.applicationContext) }
 
@@ -153,7 +157,10 @@ fun ModuleWorkspaceScreen(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { openedId = null }, modifier = Modifier.testTag("module_back")) {
+                IconButton(onClick = {
+                    openedId = previousOpenedId
+                    previousOpenedId = null
+                }, modifier = Modifier.testTag("module_back")) {
                     Icon(Icons.Default.ArrowBack, contentDescription = "Volver a módulos")
                 }
                 Text(if (id == ModuleWorkspaceGrouping.ENVIRONMENT) "Sensor ambiental"
@@ -313,7 +320,30 @@ fun ModuleWorkspaceScreen(
                             }
                         }
                         item(key = "environmental_audio_library") {
-                            CompiAudioPlayerCard()
+                            OutlinedCard(
+                                onClick = {
+                                    previousOpenedId = openedId
+                                    openedId = "compi_dfplayer"
+                                },
+                                modifier = Modifier.fillMaxWidth().testTag("environment_open_audio"),
+                                shape = RoundedCornerShape(18.dp)
+                            ) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(Icons.Default.Widgets, contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary)
+                                    Column(Modifier.weight(1f)) {
+                                        Text("Música y avisos", style = MaterialTheme.typography.titleSmall)
+                                        Text("Abrir biblioteca y controles de audio",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Icon(Icons.Default.ChevronRight, contentDescription = null)
+                                }
+                            }
                         }
                     } else {
                     item {
