@@ -1490,7 +1490,7 @@ void loop() {
   wifiLab.tick(now);
   moduleRegistry.tickAll(millis());
 #if COMPI_ENABLE_DFPLAYER
-  if (static_cast<uint32_t>(now - lastVoiceSampleAt) >= 2000u) {
+  if (static_cast<uint32_t>(now - lastVoiceSampleAt) >= 250u) {
     lastVoiceSampleAt = now;
     esp32core::VoiceSample voiceSample{};
 #if COMPI_BUILD_DHT11
@@ -1552,22 +1552,28 @@ void loop() {
     oledDriver.drawLine(37, 43, 44, 39, SSD1306_WHITE);
     oledDriver.drawLine(69, 0, 69, 52, SSD1306_WHITE);
     oledDriver.setCursor(75, 2);
-    if (temperature.valid) {
+    if (temperature.valid && temperature.status == esp32core::MeasurementStatus::Fresh &&
+        static_cast<uint32_t>(now - temperature.timestampMs) <= 10000u) {
       oledDriver.printf("T %.1fC", static_cast<double>(temperature.value));
     } else {
       oledDriver.print("T --");
     }
     oledDriver.setCursor(75, 17);
-    if (humidity.valid) {
+    if (humidity.valid && humidity.status == esp32core::MeasurementStatus::Fresh &&
+        static_cast<uint32_t>(now - humidity.timestampMs) <= 10000u) {
       oledDriver.printf("H %.0f%%", static_cast<double>(humidity.value));
     } else {
       oledDriver.print("H --");
     }
     oledDriver.setCursor(75, 32);
 #if COMPI_BUILD_LDR
-    if (ldrModule.ready() && ldrModule.lightReading().valid) {
+    if (ldrModule.ready() && ldrModule.lightReading().valid &&
+        ldrModule.lightReading().status == esp32core::MeasurementStatus::Fresh &&
+        static_cast<uint32_t>(now - ldrModule.lightReading().timestampMs) <= 10000u) {
       oledDriver.printf("L %.0f%%", static_cast<double>(ldrModule.lightReading().value));
-    } else if (ldrModule.ready() && ldrModule.rawReading().valid) {
+    } else if (ldrModule.ready() && ldrModule.rawReading().valid &&
+               ldrModule.rawReading().status == esp32core::MeasurementStatus::Fresh &&
+               static_cast<uint32_t>(now - ldrModule.rawReading().timestampMs) <= 10000u) {
       oledDriver.printf("RAW %.0f", static_cast<double>(ldrModule.rawReading().value));
     } else {
       oledDriver.print("L --");
@@ -1577,7 +1583,7 @@ void loop() {
 #endif
     oledDriver.drawLine(0, 54, 127, 54, SSD1306_WHITE);
     oledDriver.setCursor(3, 56);
-    oledDriver.print("OLED + AMBIENTE");
+    oledDriver.print("SENSORES EN VIVO");
     oledDriver.display();
   }
 #endif
