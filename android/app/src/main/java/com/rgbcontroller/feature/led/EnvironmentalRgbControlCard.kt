@@ -94,8 +94,9 @@ fun EnvironmentalRgbControlCard(
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("RGB ambiental", style = MaterialTheme.typography.titleMedium)
             Text(
-                "La temperatura determina el color y la LDR calibrada ajusta el brillo. " +
-                    "Si el DHT11 falla, el ESP32 suspende cambios automáticos.",
+                "Temperatura: azul, verde, ámbar o rojo. La humedad suaviza el tono " +
+                    "y la LDR calibrada regula el brillo. Sin temperatura válida, " +
+                    "el ESP32 mantiene el último color.",
                 style = MaterialTheme.typography.bodySmall
             )
             Text(
