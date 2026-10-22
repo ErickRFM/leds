@@ -55,12 +55,24 @@ fun TelemetryChartCard(
                     else MaterialTheme.colorScheme.onSurfaceVariant
             )
             if (geometry.hasData) {
+                geometry.latestValid?.let { latest ->
+                    Text("Actual: ${formatChartValue(latest.value)} ${geometry.unit}",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold)
+                }
                 Text(
                     "↓ ${formatChartValue(geometry.minValue)} ${geometry.unit}    " +
                     "↑ ${formatChartValue(geometry.maxValue)} ${geometry.unit}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            if (geometry.hasData && geometry.requestedWindowMs > 0) {
+                val observed = (geometry.visibleDurationMs / 60_000f).coerceAtLeast(0f)
+                val selected = geometry.requestedWindowMs / 60_000
+                Text("Mostrando ${String.format(Locale.getDefault(), \"%.1f\", observed)} min disponibles · periodo $selected min",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             val note = when {
                 geometry.disconnected ->
@@ -118,6 +130,11 @@ fun TelemetryChartCard(
                     val color = if (cs.quality == SampleQuality.STALE) staleColor else invalidColor
                     drawCircle(color, radius = 3.5f, center = Offset(cs.fractionX * w, h - 4f))
                 }
+            }
+            if (geometry.hasData) {
+                Text("Inicio del registro visible                                     Ahora",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (geometry.invalidCount > 0 || geometry.staleCount > 0) {
                 Text(
