@@ -106,7 +106,6 @@ fun CompiAudioPlayerCard() {
 
     var revision by remember { mutableIntStateOf(0) }
     var volume by remember { mutableFloatStateOf(0.6f) }
-    var isEnvVoiceEnabled by remember { mutableStateOf(true) }
     var dfplayerMessage by remember { mutableStateOf("DFPlayer: estado físico sin confirmar. Requiere respuesta real del ESP32 y del módulo.") }
 
     // 24 Tracks Map from firmware specification
@@ -242,16 +241,17 @@ fun CompiAudioPlayerCard() {
                             color = Color.White
                         )
                         Text(
-                            text = "Anuncios automáticos de voz según temperatura y humedad",
+                            text = "Pendiente de enlazar al control real del ESP32",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFF94A3B8)
                         )
                     }
                 }
 
-                Switch(
-                    checked = isEnvVoiceEnabled,
-                    onCheckedChange = { isEnvVoiceEnabled = it }
+                Text(
+                    text = "No configurado",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF94A3B8)
                 )
             }
         }
@@ -344,7 +344,7 @@ fun CompiAudioPlayerCard() {
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "Animación decorativa de reproducción",
+                    text = "Sin telemetría de reproducción: conecta el ESP32 para comprobar el módulo",
                     style = MaterialTheme.typography.labelSmall,
                     color = Color(0xFF94A3B8)
                 )
