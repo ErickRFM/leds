@@ -23,6 +23,9 @@ struct EnvironmentalRgbInput {
   float temperatureC = 0.0f;
   bool temperatureFresh = false;
   uint32_t temperatureAgeMs = 0;
+  float humidityPercent = 0.0f;
+  bool humidityFresh = false;
+  uint32_t humidityAgeMs = 0;
   float lightPercent = 0.0f;  // calibrated 0..100; never treat raw ADC as %
   bool lightFresh = false;
   uint32_t lightAgeMs = 0;
