@@ -757,6 +757,8 @@ private fun OledStatusCard(state: ComponentDashboardState, session: CompiLabSess
     val scope = rememberCoroutineScope()
     var textInput by rememberSaveable { mutableStateOf("Hola, soy Compi!") }
     var sending by remember { mutableStateOf(false) }
+    var lastConfirmed by remember { mutableStateOf<String?>(null) }
+    var lastMode by remember { mutableStateOf("text") }
     var result by remember { mutableStateOf("Selecciona una expresión o escribe texto.") }
     val live = state.freshness == ComponentStatusFreshness.LIVE
     val status = (state.authoritative ?: state.persisted)
@@ -796,7 +798,9 @@ private fun OledStatusCard(state: ComponentDashboardState, session: CompiLabSess
                         LocalLabClient(context.applicationContext)
                             .showOled(activeSession.key, mode, value)
                     }
-                    result = "El firmware confirmó el dibujo. Comprueba la pantalla física."
+                    lastMode = mode
+                    lastConfirmed = value
+                    result = "ESP32 confirmó el comando; la vista es una representación, no video de la OLED."
                 } catch (failure: Exception) {
                     result = failure.message ?: "No se confirmó la pantalla OLED."
                 } finally {
@@ -813,6 +817,22 @@ private fun OledStatusCard(state: ComponentDashboardState, session: CompiLabSess
                 "angry" to "Enojo", "surprised" to "Sorpresa").forEach { (code, label) ->
                 OutlinedButton(enabled = canSend && !sending,
                     onClick = { transmit("face", code) }) { Text(label) }
+            }
+        }
+        Card(Modifier.fillMaxWidth().testTag("oled_last_command_preview")) {
+            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Vista previa · último comando confirmado", style = MaterialTheme.typography.labelMedium)
+                Text(if (lastMode == "face") when (lastConfirmed) {
+                    "happy" -> "◕   ◕  ﹀"
+                    "sleepy" -> "－   －"
+                    "angry" -> "⌁   ⌁"
+                    "surprised" -> "●   ●   ○"
+                    else -> "Sin transmisión confirmada"
+                } else lastConfirmed ?: "Sin transmisión confirmada",
+                    style = MaterialTheme.typography.titleMedium, modifier = Modifier.testTag("oled_confirmed_content"))
+                Text("Solo muestra el último ACK. No es captura de píxeles ni transmisión continua.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Text(result, style = MaterialTheme.typography.bodySmall,
