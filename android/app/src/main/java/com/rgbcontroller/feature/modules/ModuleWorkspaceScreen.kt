@@ -224,6 +224,28 @@ fun ModuleWorkspaceScreen(
                             id, state, onRefresh = { scope.launch { vm.refresh() } },
                             canCalibrateLdr = wifiAuthorized || bleAuthorized,
                             calibrationMessage = ldrCalibrationMessage,
+                            canControlOled = wifiAuthorized,
+                            onOledFace = { face ->
+                                scope.launch {
+                                    ldrCalibrationMessage = null
+                                    try {
+                                        val revision = session.revision
+                                        check(wifiAuthorized) { "Conecta al Wi-Fi autorizado." }
+                                        val key = session.key
+                                        session.serialized {
+                                            check(wifiAuthorized && session.revision == revision) {
+                                                "La conexión cambió; no se envió la expresión."
+                                            }
+                                            labClient.showOled(key, "face", face)
+                                        }
+                                        applyMessage = "Carita $face confirmada por el ESP32."
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
+                                    } catch (failure: Exception) {
+                                        applyMessage = "OLED: ${failure.message}"
+                                    }
+                                }
+                            },
                             onCalibrateLdr = { dark, bright ->
                                 scope.launch {
                                     ldrCalibrationMessage = "Aplicando calibración en el ESP32…"
@@ -698,6 +720,8 @@ private fun ModuleReadings(
     onRefresh: () -> Unit,
     canCalibrateLdr: Boolean = false,
     calibrationMessage: String? = null,
+    canControlOled: Boolean = false,
+    onOledFace: (String) -> Unit = {},
     onCalibrateLdr: (Int, Int) -> Unit = { _, _ -> }
 ) {
     val live = state.telemetryFreshness == ComponentStatusFreshness.LIVE &&
@@ -848,6 +872,22 @@ private fun ModuleReadings(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall
                     )
+                    Text("Expresiones físicas", style = MaterialTheme.typography.titleMedium)
+                    Text("Se envían a la OLED mediante Wi-Fi autorizado. Las caritas manuales se muestran temporalmente antes de recuperar la vista ambiental.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for ((face, label) in listOf("happy" to "Feliz", "sleepy" to "Sueño")) {
+                            OutlinedButton(onClick = { onOledFace(face) }, enabled = canControlOled,
+                                modifier = Modifier.weight(1f).testTag("oled_face_$face")) { Text(label) }
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for ((face, label) in listOf("surprised" to "Sorpresa", "angry" to "Alerta")) {
+                            OutlinedButton(onClick = { onOledFace(face) }, enabled = canControlOled,
+                                modifier = Modifier.weight(1f).testTag("oled_face_$face")) { Text(label) }
+                        }
+                    }
                     OutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) {
                         Text("Actualizar sensores")
                     }
