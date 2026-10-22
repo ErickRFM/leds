@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <cmath>
 
 namespace esp32core {
 
@@ -18,13 +19,19 @@ class EnvironmentalVoicePolicy {
   // Minimum pause between actual play requests. Avoids looping voice prompts
   // when sensors oscillate around thresholds or the player is busy.
   VoiceCue evaluate(const VoiceSample& sample, uint32_t nowMs) {
-    if (sample.temperatureFresh) {
+    const bool validTemperature = sample.temperatureFresh &&
+        std::isfinite(sample.temperatureC) && sample.temperatureC >= -40.0f &&
+        sample.temperatureC <= 80.0f;
+    const bool validLight = sample.lightFresh &&
+        std::isfinite(sample.lightPercent) && sample.lightPercent >= 0.0f &&
+        sample.lightPercent <= 100.0f;
+    if (validTemperature) {
       if (sample.temperatureC >= 31.0f) hot_ = true;
       else if (sample.temperatureC <= 29.0f) hot_ = false;
       if (sample.temperatureC <= 16.0f) cold_ = true;
       else if (sample.temperatureC >= 18.0f) cold_ = false;
     }
-    if (sample.lightFresh) {
+    if (validLight) {
       if (sample.lightPercent <= 20.0f) dark_ = true;
       else if (sample.lightPercent >= 30.0f) dark_ = false;
     }
@@ -40,13 +47,13 @@ class EnvironmentalVoicePolicy {
     if (!greeted_) return VoiceCue::None;
     const bool repeatDue = !hasTemperatureCue_ ||
         static_cast<uint32_t>(nowMs - lastTemperatureCueAt_) >= kTemperatureRepeatMs;
-    if (sample.temperatureFresh && hot_ && (!announcedHot_ || repeatDue)) requested = VoiceCue::Hot;
-    else if (sample.temperatureFresh && cold_ && (!announcedCold_ || repeatDue)) requested = VoiceCue::Cold;
-    else if (sample.lightFresh && dark_ && !announcedDark_) requested = VoiceCue::Dark;
-    else if (sample.lightFresh && !dark_ && announcedDark_) requested = VoiceCue::LightRestored;
+    if (validTemperature && hot_ && (!announcedHot_ || repeatDue)) requested = VoiceCue::Hot;
+    else if (validTemperature && cold_ && (!announcedCold_ || repeatDue)) requested = VoiceCue::Cold;
+    else if (validLight && dark_ && !announcedDark_) requested = VoiceCue::Dark;
+    else if (validLight && !dark_ && announcedDark_) requested = VoiceCue::LightRestored;
     if (requested == VoiceCue::None) {
-      if (sample.temperatureFresh && !hot_) announcedHot_ = false;
-      if (sample.temperatureFresh && !cold_) announcedCold_ = false;
+      if (validTemperature && !hot_) announcedHot_ = false;
+      if (validTemperature && !cold_) announcedCold_ = false;
       return requested;
     }
     if (hasPlayed_ && static_cast<uint32_t>(nowMs - lastPlayAt_) < 60000u)
