@@ -67,6 +67,10 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/rgb_automation_clock_test.cpp -o /tmp/rgb_automation_clock_test
           /tmp/rgb_automation_clock_test
+      - name: Environmental voice station host tests
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/environmental_voice_policy_test.cpp -o /tmp/environmental_voice_policy_test
+          /tmp/environmental_voice_policy_test
       - name: Environmental RGB policy host tests
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/environmental_rgb_policy_test.cpp -o /tmp/environmental_rgb_policy_test
