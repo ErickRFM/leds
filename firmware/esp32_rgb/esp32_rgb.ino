@@ -708,9 +708,9 @@ bool oledDisplayCommand(const char* mode, const char* value, void*) {
   // SSD1306 hardware contrast (not an ambient-light sensor or RGB dimmer).
   // Reject malformed input instead of silently applying an unintended level.
   if (std::strcmp(mode, "contrast") == 0) {
-    if (value[0] == '\\0') return false;
+    if (value[0] == 0) return false;
     unsigned int level = 0;
-    for (const char* digit = value; *digit != '\\0'; ++digit) {
+    for (const char* digit = value; *digit != 0; ++digit) {
       if (*digit < '0' || *digit > '9') return false;
       level = level * 10u + static_cast<unsigned int>(*digit - '0');
       if (level > 255u) return false;
