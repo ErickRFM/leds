@@ -333,6 +333,14 @@ class BleManager(private val context: Context) {
 
     private fun connectInternal(device: BluetoothDevice) {
         if (!hasPermissions() || adapter?.isEnabled != true) {
+            // Reconnect can be invoked after permissions or the radio disappear.
+            // Never retain authorization/state from the previous GATT session.
+            handler.removeCallbacks(connectionTimeout)
+            handler.removeCallbacks(reconnect)
+            closeConnection()
+            _rgbState.value = null
+            _publicDeviceId.value = null
+            _deviceState.value = "Sin estado del ESP32"
             _connectionState.value = BleConnectionState.Error("Bluetooth o permisos no disponibles")
             return
         }
