@@ -10,6 +10,7 @@ struct EnvironmentalRgbConfig {
   float coldMaxC = 20.0f;
   float comfortMaxC = 26.0f;
   float warmMaxC = 30.0f;
+  float hotMaxC = 35.0f;
   float hysteresisC = 0.5f;
   uint8_t minBrightness = 25;
   uint8_t maxBrightness = 180;
@@ -28,7 +29,7 @@ struct EnvironmentalRgbInput {
 };
 
 enum class EnvironmentalRgbBand : uint8_t {
-  Cold, Comfort, Warm, Hot
+  Cold, Comfort, Warm, Hot, Extreme
 };
 
 struct EnvironmentalRgbResult {
@@ -43,9 +44,10 @@ class EnvironmentalRgbPolicy final {
  public:
   bool configure(const EnvironmentalRgbConfig& cfg) {
     if (!finite(cfg.coldMaxC) || !finite(cfg.comfortMaxC) ||
-        !finite(cfg.warmMaxC) || !finite(cfg.hysteresisC) ||
+        !finite(cfg.warmMaxC) || !finite(cfg.hotMaxC) || !finite(cfg.hysteresisC) ||
         cfg.coldMaxC >= cfg.comfortMaxC ||
         cfg.comfortMaxC >= cfg.warmMaxC ||
+        cfg.warmMaxC >= cfg.hotMaxC ||
         cfg.hysteresisC < 0.0f || cfg.hysteresisC > 3.0f ||
         cfg.minBrightness > cfg.maxBrightness ||
         cfg.fallbackBrightness > cfg.maxBrightness ||
@@ -87,10 +89,11 @@ class EnvironmentalRgbPolicy final {
     out.suspended = false;
     out.apply = true;
     switch (band_) {
-      case EnvironmentalRgbBand::Cold: out.red=52; out.green=120; out.blue=237; break;
-      case EnvironmentalRgbBand::Comfort: out.red=54; out.green=186; out.blue=116; break;
-      case EnvironmentalRgbBand::Warm: out.red=246; out.green=184; out.blue=63; break;
-      case EnvironmentalRgbBand::Hot: out.red=230; out.green=75; out.blue=75; break;
+      case EnvironmentalRgbBand::Cold: out.red=0; out.green=0; out.blue=255; break;
+      case EnvironmentalRgbBand::Comfort: out.red=0; out.green=255; out.blue=0; break;
+      case EnvironmentalRgbBand::Warm: out.red=255; out.green=210; out.blue=0; break;
+      case EnvironmentalRgbBand::Hot: out.red=255; out.green=100; out.blue=0; break;
+      case EnvironmentalRgbBand::Extreme: out.red=255; out.green=0; out.blue=0; break;
     }
     out.brightness = config_.fallbackBrightness;
     if (sample.lightFresh && sample.lightAgeMs <= config_.maxSampleAgeMs &&
@@ -116,14 +119,17 @@ class EnvironmentalRgbPolicy final {
     if (c < config_.coldMaxC) return EnvironmentalRgbBand::Cold;
     if (c < config_.comfortMaxC) return EnvironmentalRgbBand::Comfort;
     if (c < config_.warmMaxC) return EnvironmentalRgbBand::Warm;
-    return EnvironmentalRgbBand::Hot;
+    if (c < config_.hotMaxC) return EnvironmentalRgbBand::Hot;
+    return EnvironmentalRgbBand::Extreme;
   }
   float boundaryAbove(uint8_t band) const {
     if (band == 0) return config_.coldMaxC;
     if (band == 1) return config_.comfortMaxC;
-    return config_.warmMaxC;
+    if (band == 2) return config_.warmMaxC;
+    return config_.hotMaxC;
   }
   float boundaryBelow(uint8_t band) const {
+    if (band == 4) return config_.hotMaxC;
     if (band == 3) return config_.warmMaxC;
     if (band == 2) return config_.comfortMaxC;
     return config_.coldMaxC;
