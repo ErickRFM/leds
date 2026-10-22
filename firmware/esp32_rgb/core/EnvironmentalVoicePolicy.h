@@ -29,8 +29,19 @@ class EnvironmentalVoicePolicy {
       else if (sample.lightPercent >= 30.0f) dark_ = false;
     }
     VoiceCue requested = VoiceCue::None;
-    if (sample.temperatureFresh && hot_ && !announcedHot_) requested = VoiceCue::Hot;
-    else if (sample.temperatureFresh && cold_ && !announcedCold_) requested = VoiceCue::Cold;
+    // Speak once after the three-second startup window. The DFPlayer may not
+    // have a card inserted, so this is a command request, not audio feedback.
+    if (!greeted_ && nowMs >= kGreetingDelayMs) {
+      greeted_ = true;
+      lastPlayAt_ = nowMs;
+      hasPlayed_ = true;
+      return VoiceCue::Hello;
+    }
+    if (!greeted_) return VoiceCue::None;
+    const bool repeatDue = !hasTemperatureCue_ ||
+        static_cast<uint32_t>(nowMs - lastTemperatureCueAt_) >= kTemperatureRepeatMs;
+    if (sample.temperatureFresh && hot_ && (!announcedHot_ || repeatDue)) requested = VoiceCue::Hot;
+    else if (sample.temperatureFresh && cold_ && (!announcedCold_ || repeatDue)) requested = VoiceCue::Cold;
     else if (sample.lightFresh && dark_ && !announcedDark_) requested = VoiceCue::Dark;
     else if (sample.lightFresh && !dark_ && announcedDark_) requested = VoiceCue::LightRestored;
     if (requested == VoiceCue::None) {
@@ -43,8 +54,16 @@ class EnvironmentalVoicePolicy {
     lastPlayAt_ = nowMs;
     hasPlayed_ = true;
     switch (requested) {
-      case VoiceCue::Hot: announcedHot_ = true; break;
-      case VoiceCue::Cold: announcedCold_ = true; break;
+      case VoiceCue::Hot:
+        announcedHot_ = true;
+        hasTemperatureCue_ = true;
+        lastTemperatureCueAt_ = nowMs;
+        break;
+      case VoiceCue::Cold:
+        announcedCold_ = true;
+        hasTemperatureCue_ = true;
+        lastTemperatureCueAt_ = nowMs;
+        break;
       case VoiceCue::Dark: announcedDark_ = true; break;
       case VoiceCue::LightRestored: announcedDark_ = false; break;
       default: break;
@@ -52,6 +71,11 @@ class EnvironmentalVoicePolicy {
     return requested;
   }
  private:
+  static constexpr uint32_t kGreetingDelayMs = 3000u;
+  static constexpr uint32_t kTemperatureRepeatMs = 300000u;
+  bool greeted_ = false;
+  bool hasTemperatureCue_ = false;
+  uint32_t lastTemperatureCueAt_ = 0;
   bool hot_ = false, cold_ = false, dark_ = false;
   bool announcedHot_ = false, announcedCold_ = false, announcedDark_ = false;
   bool hasPlayed_ = false;

@@ -11,7 +11,7 @@
 | OLED VCC/GND | 3V3 / GND |
 | OLED SDA/SCL | GPIO21 / GPIO22 |
 | DHT11 DATA | GPIO16 (EXCLUSIVO, no usar para DFPlayer) |
-| LDR ADC1 | GPIO36 (divisor 3.3 V, no entrada a 5 V) |
+| LDR ADC1 | GPIO32 (AO de módulo analógico a 3.3 V, no entrada a 5 V) |
 | RGB | GPIO27 / GPIO25 / GPIO26 |
 
 **Bocina pasiva 8 Ω / 0.5 W:** NO conectar a GPIO ESP32. DFPlayer SPK1/SPK2 tienen potencia que puede superar 0.5 W. **NO conectarla directamente a SPK1/SPK2 hasta medir y limitar la potencia mediante una etapa de salida de potencia adecuada**; el volumen de software no es protección suficiente. Nunca conectar SPK1/SPK2 a GND (salida puente).
@@ -32,11 +32,11 @@ El firmware prototipo envía comando DFPlayer 0x03 con el índice 1–5. El orde
 
 ## Activación y límites
 
-Activar **solo tras verificar el circuito** mediante `#define COMPI_ENABLE_DFPLAYER 1` al comienzo de `esp32_rgb.ino` (o bandera de compilación equivalente). Por defecto queda a **0** para evitar arranques accidentales. No se habilita automáticamente por estar conectado en la protoboard.
+Activar **solo tras verificar el circuito** mediante `#define COMPI_ENABLE_DFPLAYER 1` al comienzo de `esp32_rgb.ino` (o bandera de compilación equivalente). La habilitación por defecto depende del perfil de compilación (`COMPI_FULL_LAB_PROFILE`); comprueba su valor antes de conectar una etapa de audio.
 
 - Temperatura: frío ≤16 °C (rearme ≥18 °C), calor ≥31 °C (rearme ≤29 °C).
 - Luz calibrada: aviso bajo ≤20 %, rearme ≥30 %, siempre que el LDR publique lectura válida/fresca. Si la calibración no existe, no se inventan porcentajes.
-- Mínimo 60 segundos entre solicitudes de audio.
+- Saludo de arranque: solicitud de pista 0001.mp3 tras 3 segundos; no implica que el audio se escuchó.\n- Avisos de frío/calor: como máximo cada 5 minutos mientras haya temperatura fresca y la condición se mantenga.\n- Mínimo 60 segundos entre solicitudes de audio.
 - Sin lecturas válidas, no hay anuncio; los cambios de temperatura/humedad se obtienen del sensor real.
 - Serial UART2 a 9600 baudios; volumen de arranque 1/30 **no garantiza potencia eléctrica segura**.
 - La aplicación Android continúa reproduciendo música en el teléfono. Este firmware produce solicitudes locales a DFPlayer cuando se habilita; la app aún no tiene controles específicos ni telemetría de estado DFPlayer.
