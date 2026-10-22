@@ -132,10 +132,30 @@ class ComponentDashboardViewModelTest {
         h.telemetryFailure = IllegalStateException("telemetry timeout")
         h.viewModel.refresh()
         val after = h.viewModel.uiState.value
-        // Confirmed status and readings from the previous good fetch survive.
+        // Confirmed status and cached readings survive, but are no longer live.
         assertEquals(before.firmwareStatus, after.firmwareStatus)
-        assertEquals(before.firmwareTelemetry, after.firmwareTelemetry)
+        assertNull(after.firmwareTelemetry)
+        assertEquals(before.lastKnownTelemetry, after.lastKnownTelemetry)
+        assertEquals(ComponentStatusFreshness.LAST_KNOWN, after.telemetryFreshness)
         assertNotNull(after.authorityError)
+    }
+
+    @Test fun missingTelemetryResponseDoesNotLeaveLastReadingLive() = runBlocking {
+        val h = Harness().apply { response = validPayload; telemetryResponse = validTelemetry }
+        h.viewModel.refresh()
+        h.telemetryResponse = null
+        h.viewModel.refresh()
+        assertNull(h.viewModel.uiState.value.authoritativeTelemetry)
+        assertEquals(ComponentStatusFreshness.LAST_KNOWN, h.viewModel.uiState.value.telemetryFreshness)
+    }
+
+    @Test fun invalidTelemetryResponseDoesNotLeaveLastReadingLive() = runBlocking {
+        val h = Harness().apply { response = validPayload; telemetryResponse = validTelemetry }
+        h.viewModel.refresh()
+        h.telemetryResponse = "{invalid"
+        h.viewModel.refresh()
+        assertNull(h.viewModel.uiState.value.authoritativeTelemetry)
+        assertEquals(ComponentStatusFreshness.LAST_KNOWN, h.viewModel.uiState.value.telemetryFreshness)
     }
 
     @Test fun authorizedFetchIngestsCalibratedSoilTelemetry() = runBlocking {
