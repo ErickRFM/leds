@@ -70,7 +70,7 @@ fun TelemetryChartCard(
             if (geometry.hasData && geometry.requestedWindowMs > 0) {
                 val observed = (geometry.visibleDurationMs / 60_000f).coerceAtLeast(0f)
                 val selected = geometry.requestedWindowMs / 60_000
-                Text("Mostrando ${String.format(Locale.getDefault(), \"%.1f\", observed)} min disponibles · periodo $selected min",
+                Text("Mostrando ${String.format(Locale.getDefault(), "%.1f", observed)} min disponibles · periodo $selected min",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
