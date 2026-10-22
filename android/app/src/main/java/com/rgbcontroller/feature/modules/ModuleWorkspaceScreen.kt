@@ -441,18 +441,9 @@ fun ModuleWorkspaceScreen(
                             color = if (currentlyVerified) MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Text("DHT11 · GPIO16  ·  LDR · GPIO32  ·  OLED · I²C  ·  RGB",
-                            style = MaterialTheme.typography.bodySmall)
-                        Text(
-                            "Abre Laboratorio de hardware para verificar lecturas, calibrar la luz " +
-                                "y controlar la OLED. El DFPlayer necesita microSD para reproducir; " +
-                                "sin tarjeta no bloquea los sensores ni la pantalla.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text("Abrir Laboratorio de hardware →",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary)
+                        Text("Sensores · RGB · OLED · audio",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
