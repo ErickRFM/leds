@@ -220,16 +220,15 @@ class LocalWifiControl final {
       const String mode = server_.arg("mode");
       const String value = server_.arg("value");
       const bool face = mode == "face";
-      if ((!face && mode != "text") || value.isEmpty() || value.length() > 39) {
+      const bool contrast = mode == "contrast";
+      if ((!face && mode != "text" && !contrast) ||
+          value.isEmpty() || value.length() > 39) {
         jsonError(400, "invalid_oled_command");
         return;
       }
-      if (face && value != "happy" && value != "sleepy" &&
-          value != "angry" && value != "surprised") {
-        jsonError(400, "invalid_oled_face");
-        return;
-      }
-      for (size_t i = 0; i < value.length(); ++i) {
+      if (contrast) {
+        unsigned int level = 0;
+        for (size_t i = 0; i < value.length(); ++i) {
         const char ch = value[i];
         if (ch < 32 || ch > 126) {
           jsonError(400, "oled_ascii_only");
