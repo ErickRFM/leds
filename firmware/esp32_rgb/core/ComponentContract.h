@@ -18,6 +18,7 @@ enum class HardwareInterface : uint8_t {
   Pwm,
   OneWire,
   Digital,
+  Uart,
 };
 
 // Lifecycle states. Catalog -> Configured -> Active is the only forward path;
@@ -65,6 +66,7 @@ constexpr const char* interfaceName(HardwareInterface iface) {
     case HardwareInterface::Pwm: return "pwm";
     case HardwareInterface::OneWire: return "one_wire";
     case HardwareInterface::Digital: return "digital";
+    case HardwareInterface::Uart: return "uart";
   }
   return "unknown";
 }
