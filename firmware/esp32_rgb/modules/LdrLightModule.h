@@ -6,11 +6,13 @@
 
 namespace esp32core {
 
-// Two-terminal LDR photoresistor on an ADC1 pin (default GPIO36 / VP).
-//
-// Recommended circuit:
-// 3.3V -> LDR -> ADC1 Node (GPIO36) -> 10k Ohm -> GND
-// Higher illumination -> Lower LDR resistance -> Higher voltage -> Higher ADC reading.
+// LDR sensor on an ADC1 pin (Compi lab default GPIO32).
+// Four-pin comparator modules must connect AO (analog output) to GPIO32,
+// VCC to 3V3, GND to GND; leave DO unconnected.
+// A discrete two-terminal photoresistor also needs a voltage divider.
+// For a divider 3V3 -> LDR -> ADC node -> 10k -> GND, greater light
+// normally raises the ADC value. Other module topologies can invert it.
+// Calibration currently requires darkRaw < brightRaw (min span 32).
 //
 // Reports the raw sample as AdcRaw, and relative ambient_light percentage (0-100%)
 // when calibrated with darkRaw and brightRaw reference points.
