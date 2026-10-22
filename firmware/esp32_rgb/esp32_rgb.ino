@@ -12,6 +12,7 @@
 #include "core/ModuleRegistry.h"
 #include "modules/LedRgbModule.h"
 #include "core/LocalWifiControl.h"
+#include "core/EnvironmentalVoicePolicy.h"
 #include "core/RgbCommandCodec.h"
 #include "core/RgbCommandInbox.h"
 #include "core/DeviceIdentity.h"
@@ -110,6 +111,17 @@
 #define COMPI_OLED_ADDRESS 0x3C
 #endif
 
+// Activate only after checking electrical speaker output and UART wiring.
+// GPIO16 is already occupied by DHT11; never reuse it for this player.
+#ifndef COMPI_ENABLE_DFPLAYER
+#define COMPI_ENABLE_DFPLAYER 0
+#endif
+#ifndef COMPI_DFPLAYER_RX
+#define COMPI_DFPLAYER_RX 18
+#endif
+#ifndef COMPI_DFPLAYER_TX
+#define COMPI_DFPLAYER_TX 17
+#endif
 constexpr uint8_t LED_R = 27, LED_G = 25, LED_B = 26;
 // Runtime-only RGB mapping. Kept in sync with the module after an authorized
 // transaction; fresh boot always returns to the audited pins above.
@@ -1176,7 +1188,39 @@ void servePhysicalWindow(uint32_t now) {
   }
 }
 
+#if COMPI_ENABLE_DFPLAYER
+esp32core::EnvironmentalVoicePolicy voicePolicy;
+HardwareSerial dfplayerSerial(2);
+uint32_t lastVoiceSampleAt = 0;
+void dfplayerCommand(uint8_t command, uint16_t parameter) {
+  const uint8_t packet[10] = {
+    0x7E, 0xFF, 0x06, command, 0x00,
+    static_cast<uint8_t>(parameter >> 8),
+    static_cast<uint8_t>(parameter & 0xFF), 0, 0, 0xEF
+  };
+  uint8_t frame[10];
+  for (uint8_t i = 0; i < 10; ++i) frame[i] = packet[i];
+  const uint16_t checksum = static_cast<uint16_t>(0u -
+      (0xFFu + 0x06u + command + frame[4] + frame[5] + frame[6]));
+  frame[7] = checksum >> 8;
+  frame[8] = checksum & 0xFFu;
+  dfplayerSerial.write(frame, sizeof(frame));
+}
+void dfplayerTrack(uint16_t track) {
+  // DFPlayer 'play specified track' command 0x03. Playback is NOT confirmed
+  // without BUSY/status feedback from the hardware.
+  dfplayerCommand(0x03, track);
+}
+#endif
+
 void setup() {
+#if COMPI_ENABLE_DFPLAYER
+  // USB-independent UART2; 16 belongs to DHT11. DFPlayer is externally powered.
+  dfplayerSerial.begin(9600, SERIAL_8N1, COMPI_DFPLAYER_RX, COMPI_DFPLAYER_TX);
+  delay(250);
+  dfplayerCommand(0x06, 1); // volume 1/30 until amplifier power is verified
+#endif
+
   Serial.begin(115200);
   Serial.println("\n--- COMPI ESP32 LAB V16 ---");
 
@@ -1350,6 +1394,35 @@ void loop() {
   servePhysicalWindow(now);
   wifiLab.tick(now);
   moduleRegistry.tickAll(millis());
+#if COMPI_ENABLE_DFPLAYER
+  if (static_cast<uint32_t>(now - lastVoiceSampleAt) >= 2000u) {
+    lastVoiceSampleAt = now;
+    esp32core::VoiceSample voiceSample{};
+#if COMPI_BUILD_DHT11
+    if (dht11Module.ready()) {
+      const auto& temp = dht11Module.temperatureReading();
+      voiceSample.temperatureFresh = temp.valid &&
+          temp.status == esp32core::MeasurementStatus::Fresh &&
+          static_cast<uint32_t>(now - temp.timestampMs) <= 10000u;
+      voiceSample.temperatureC = temp.value;
+    }
+#endif
+#if COMPI_BUILD_LDR
+    if (ldrModule.ready()) {
+      const auto& light = ldrModule.lightReading();
+      voiceSample.lightFresh = light.valid &&
+          light.status == esp32core::MeasurementStatus::Fresh &&
+          static_cast<uint32_t>(now - light.timestampMs) <= 10000u;
+      voiceSample.lightPercent = light.value;
+    }
+#endif
+    const auto cue = voicePolicy.evaluate(voiceSample, now);
+    if (cue != esp32core::VoiceCue::None) {
+      dfplayerTrack(static_cast<uint16_t>(cue));
+    }
+  }
+#endif
+
 #if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY && COMPI_BUILD_DHT11
   // Small independent OLED dashboard: never writes PWM and never blocks
   // the network. Start after the greeting, then refresh every 3 seconds.
