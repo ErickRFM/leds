@@ -1188,6 +1188,31 @@ void servePhysicalWindow(uint32_t now) {
   }
 }
 
+#if COMPI_ENABLE_DFPLAYER
+esp32core::EnvironmentalVoicePolicy voicePolicy;
+HardwareSerial dfplayerSerial(2);
+uint32_t lastVoiceSampleAt = 0;
+void dfplayerCommand(uint8_t command, uint16_t parameter) {
+  const uint8_t packet[10] = {
+    0x7E, 0xFF, 0x06, command, 0x00,
+    static_cast<uint8_t>(parameter >> 8),
+    static_cast<uint8_t>(parameter & 0xFF), 0, 0, 0xEF
+  };
+  uint8_t frame[10];
+  for (uint8_t i = 0; i < 10; ++i) frame[i] = packet[i];
+  const uint16_t checksum = static_cast<uint16_t>(0u -
+      (0xFFu + 0x06u + command + frame[4] + frame[5] + frame[6]));
+  frame[7] = checksum >> 8;
+  frame[8] = checksum & 0xFFu;
+  dfplayerSerial.write(frame, sizeof(frame));
+}
+void dfplayerTrack(uint16_t track) {
+  // DFPlayer 'play specified track' command 0x03. Playback is NOT confirmed
+  // without BUSY/status feedback from the hardware.
+  dfplayerCommand(0x03, track);
+}
+#endif
+
 void setup() {
 #if COMPI_ENABLE_DFPLAYER
   // USB-independent UART2; 16 belongs to DHT11. DFPlayer is externally powered.
@@ -1355,31 +1380,6 @@ void setup() {
   Serial.print("BOOT: after BLE init, AP-IP=");
   Serial.println(WiFi.softAPIP());
 }
-
-#if COMPI_ENABLE_DFPLAYER
-esp32core::EnvironmentalVoicePolicy voicePolicy;
-HardwareSerial dfplayerSerial(2);
-uint32_t lastVoiceSampleAt = 0;
-void dfplayerCommand(uint8_t command, uint16_t parameter) {
-  const uint8_t packet[10] = {
-    0x7E, 0xFF, 0x06, command, 0x00,
-    static_cast<uint8_t>(parameter >> 8),
-    static_cast<uint8_t>(parameter & 0xFF), 0, 0, 0xEF
-  };
-  uint8_t frame[10];
-  for (uint8_t i = 0; i < 10; ++i) frame[i] = packet[i];
-  const uint16_t checksum = static_cast<uint16_t>(0u -
-      (0xFFu + 0x06u + command + frame[4] + frame[5] + frame[6]));
-  frame[7] = checksum >> 8;
-  frame[8] = checksum & 0xFFu;
-  dfplayerSerial.write(frame, sizeof(frame));
-}
-void dfplayerTrack(uint16_t track) {
-  // DFPlayer 'play specified track' command 0x03. Playback is NOT confirmed
-  // without BUSY/status feedback from the hardware.
-  dfplayerCommand(0x03, track);
-}
-#endif
 
 void loop() {
   uint32_t now = millis();
