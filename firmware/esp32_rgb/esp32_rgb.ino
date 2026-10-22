@@ -1288,9 +1288,11 @@ void dfplayerCommand(uint8_t command, uint16_t parameter) {
   dfplayerSerial.write(frame, sizeof(frame));
 }
 void dfplayerTrack(uint16_t track) {
-  // DFPlayer 'play specified track' command 0x03. Playback is NOT confirmed
-  // without BUSY/status feedback from the hardware.
-  dfplayerCommand(0x03, track);
+  // Command 0x12 selects a deterministic /MP3/0001.mp3 ... numbered
+  // track instead of the root-folder FAT copy-order index (command 0x03).
+  // Playback is NOT confirmed without UART/BUSY status from the hardware.
+  if (track == 0 || track > 9999) return;
+  dfplayerCommand(0x12, track);
 }
 #endif
 
