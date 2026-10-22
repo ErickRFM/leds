@@ -33,6 +33,13 @@ class AudioPlaylistQueue(private val limit: Int = 50) {
         return current()
     }
 
+    /** Advance only if another item exists; never wrap on automatic completion. */
+    fun advanceOrNull(): String? {
+        if (currentIndex !in 0 until items.lastIndex) return null
+        currentIndex++
+        return current()
+    }
+
     fun previous(): String? {
         if (items.isEmpty()) return null
         currentIndex = (currentIndex - 1 + items.size) % items.size
