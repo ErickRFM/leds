@@ -164,7 +164,11 @@ class HomeNavigationTest {
     fun moduleCatalogBuildsLocalDraftWithoutFirmware() {
         composeRule.onNodeWithTag("nav_modules").performClick()
         composeRule.onNodeWithTag("modules_tab_catalog").performClick()
+        composeRule.onNodeWithTag("module_workspace_list")
+            .performScrollToNode(androidx.compose.ui.test.hasTestTag("module_catalog_dht22"))
         composeRule.onNodeWithTag("module_symbol_dht22", useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithTag("module_workspace_list")
+            .performScrollToNode(androidx.compose.ui.test.hasTestTag("module_catalog_dht22"))
         composeRule.onNodeWithTag("module_catalog_dht22").performClick()
         composeRule.onNodeWithTag("module_pin_editor").assertExists()
         composeRule.onNodeWithTag("module_pin_save").performClick()
@@ -202,6 +206,8 @@ class HomeNavigationTest {
     fun editingModuleThenReturningHomeDoesNotTrapNavigation() {
         composeRule.onNodeWithTag("nav_modules").performClick()
         composeRule.onNodeWithTag("modules_tab_catalog").performClick()
+        composeRule.onNodeWithTag("module_workspace_list")
+            .performScrollToNode(androidx.compose.ui.test.hasTestTag("module_catalog_dht22"))
         composeRule.onNodeWithTag("module_catalog_dht22").performClick()
         composeRule.onNodeWithTag("module_pin_editor").assertExists()
         composeRule.onNodeWithTag("module_pin_save").performClick()
