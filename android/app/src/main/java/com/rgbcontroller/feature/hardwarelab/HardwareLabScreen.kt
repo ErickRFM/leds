@@ -1,5 +1,7 @@
 package com.rgbcontroller.feature.hardwarelab
 
+import com.rgbcontroller.core.wifi.LocalLabClient
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -255,7 +257,7 @@ fun HardwareLabScreen(
                         Text("Pantalla OLED",
                             style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
-                    item(key = "hardware_oled_card") { OledStatusCard(state = state) }
+                    item(key = "hardware_oled_card") { OledStatusCard(state = state, session = session) }
                     item(key = "hardware_sensor_more") {
                         TextButton(
                             onClick = { showSensorDetails = !showSensorDetails },
@@ -750,7 +752,12 @@ private fun SoilCalibrationCard(
 }
 
 @Composable
-private fun OledStatusCard(state: ComponentDashboardState) {
+private fun OledStatusCard(state: ComponentDashboardState, session: CompiLabSession?) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var textInput by rememberSaveable { mutableStateOf("Hola, soy Compi!") }
+    var sending by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf("Selecciona una expresión o escribe texto.") }
     val live = state.freshness == ComponentStatusFreshness.LIVE
     val status = (state.authoritative ?: state.persisted)
         ?.let { ComponentStatusCodec.find(it, OledRuntime.FIRMWARE_ID) }
@@ -768,6 +775,55 @@ private fun OledStatusCard(state: ComponentDashboardState) {
         live = live,
         modifier = Modifier.testTag("component_oled_status")
     )
+    val canSend = oled.operative && live && session?.wifiReady == true &&
+        session.connectionState == LabConnectionState.AUTHORIZED
+    Column(Modifier.fillMaxWidth().padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Control OLED · Wi-Fi local autorizado", style = MaterialTheme.typography.titleSmall)
+        Text("SDA GPIO21 · SCL GPIO22 · 0x3C. Requiere SSD1306 de 128×64.",
+            style = MaterialTheme.typography.bodySmall)
+        OutlinedTextField(value = textInput, onValueChange = { textInput = it.take(39) },
+            label = { Text("Texto ASCII (máximo 39 caracteres)") },
+            singleLine = true, modifier = Modifier.fillMaxWidth().testTag("oled_text_input"))
+        fun transmit(mode: String, value: String) {
+            val activeSession = session ?: return
+            if (!canSend || sending) return
+            sending = true
+            result = "Enviando comando…"
+            scope.launch {
+                try {
+                    activeSession.userOperation("Pantalla OLED") {
+                        LocalLabClient(context.applicationContext)
+                            .showOled(activeSession.key, mode, value)
+                    }
+                    result = "El firmware confirmó el dibujo. Comprueba la pantalla física."
+                } catch (failure: Exception) {
+                    result = failure.message ?: "No se confirmó la pantalla OLED."
+                } finally {
+                    sending = false
+                }
+            }
+        }
+        Button(enabled = canSend && !sending &&
+            textInput.isNotBlank() && textInput.all { it.code in 32..126 },
+            onClick = { transmit("text", textInput) },
+            modifier = Modifier.testTag("oled_send_text")) { Text("Mostrar mensaje") }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("happy" to "Feliz", "sleepy" to "Sueño",
+                "angry" to "Enojo", "surprised" to "Sorpresa").forEach { (code, label) ->
+                OutlinedButton(enabled = canSend && !sending,
+                    onClick = { transmit("face", code) }) { Text(label) }
+            }
+        }
+        Text(result, style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!canSend) {
+            Text("Para enviar: habilita el módulo OLED y conecta el SoftAP autorizado. " +
+                "Bluetooth todavía no transmite pantallas.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
 }
 
 @Composable
