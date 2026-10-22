@@ -42,7 +42,6 @@ import com.rgbcontroller.feature.devices.ConnectionCenterScreen
 import com.rgbcontroller.feature.home.DashboardScreen
 import com.rgbcontroller.feature.hub.LabHubScreen
 import com.rgbcontroller.feature.hardwarelab.HardwareLabScreen
-import com.rgbcontroller.feature.led.LedModuleScreen
 import com.rgbcontroller.feature.modules.ModuleWorkspaceScreen
 import com.rgbcontroller.feature.settings.SettingsScreen
 import androidx.compose.ui.unit.dp
@@ -218,11 +217,16 @@ fun MainAppNavHost(
                         onHardware = { navController.navigateTopLevel(Screen.Hub) }
                     )
                 }
-                // Existing V8-V16 route remains valid for restored navigation and deep links.
-                // It still uses the audited LED transport, now as one reusable module.
+                // Keep the legacy route address for restored V8-V16 stacks,
+                // but never render the retired LED page. Its current controls
+                // live in Modules and share the audited BLE/Wi-Fi transport.
                 composable("led") {
-                    LedModuleScreen(bleManager, preferencesRepository, session,
-                        onOpenDevices = { navController.navigateNested(Screen.Devices.route) })
+                    LaunchedEffect(Unit) {
+                        navController.navigate(Screen.Modules.route) {
+                            popUpTo("led") { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
                 }
                 composable(Screen.Code.route) { ProgramEditorScreen(session, bleManager) }
                 composable(Screen.Settings.route) {
