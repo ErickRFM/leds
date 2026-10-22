@@ -107,7 +107,7 @@ fun CompiAudioPlayerCard() {
     var revision by remember { mutableIntStateOf(0) }
     var volume by remember { mutableFloatStateOf(0.6f) }
     var isEnvVoiceEnabled by remember { mutableStateOf(true) }
-    var dfplayerMessage by remember { mutableStateOf("DFPlayer Mini listo en UART GPIO17/18 (24 pistas)") }
+    var dfplayerMessage by remember { mutableStateOf("DFPlayer: estado físico sin confirmar. Requiere respuesta real del ESP32 y del módulo.") }
 
     // 24 Tracks Map from firmware specification
     val quickTrackGroups = listOf(
@@ -187,7 +187,7 @@ fun CompiAudioPlayerCard() {
                         }
                     }
 
-                    CompiBadge(label = "24 Pistas", type = CompiBadgeType.CONFIRMED)
+                    CompiBadge(label = "24 pistas previstas", type = CompiBadgeType.INFO)
                 }
 
                 Row(
@@ -195,15 +195,15 @@ fun CompiAudioPlayerCard() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = CompiTokens.Colors.ActiveGreen, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Info, contentDescription = null, tint = CompiTokens.Colors.PrimaryViolet, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("Módulo detectado", style = MaterialTheme.typography.labelSmall, color = Color.White)
+                        Text("Módulo sin verificar", style = MaterialTheme.typography.labelSmall, color = Color.White)
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.SdCard, contentDescription = null, tint = CompiTokens.Colors.ActiveGreen, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.SdCard, contentDescription = null, tint = CompiTokens.Colors.PrimaryViolet, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("MicroSD lista", style = MaterialTheme.typography.labelSmall, color = Color.White)
+                        Text("MicroSD sin verificar", style = MaterialTheme.typography.labelSmall, color = Color.White)
                     }
                 }
             }
@@ -301,7 +301,7 @@ fun CompiAudioPlayerCard() {
                                     modifier = Modifier
                                         .weight(1f)
                                         .clickable {
-                                            dfplayerMessage = "Comando UART enviado: Pista $trackNum ($label)"
+                                            dfplayerMessage = "Pista $trackNum seleccionada ($label). Control físico UART no conectado a este botón; reproducción sin confirmar."
                                         }
                                 ) {
                                     Text(
