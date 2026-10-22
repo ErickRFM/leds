@@ -698,14 +698,50 @@ esp32core::OledSsd1306Module oledModule(COMPI_OLED_ADDRESS, COMPI_OLED_SDA,
 
 #if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
 uint32_t lastOledUserCommandAt = 0;
+bool oledCatDance = false;
+uint32_t lastCatDanceFrameAt = 0;
+void drawCatDanceFrame(bool alternate) {
+  oledDriver.clearDisplay();
+  oledDriver.setTextColor(SSD1306_WHITE);
+  for (uint8_t n = 0; n < 2; ++n) {
+    const int cx = (n == 0) ? 34 : 94;
+    const int lift = ((n == 0) == alternate) ? 0 : 5;
+    const int headY = 24 + lift;
+    oledDriver.drawTriangle(cx - 14, headY - 3, cx - 10, headY - 17,
+                             cx - 2, headY - 10, SSD1306_WHITE);
+    oledDriver.drawTriangle(cx + 2, headY - 10, cx + 10, headY - 17,
+                             cx + 14, headY - 3, SSD1306_WHITE);
+    oledDriver.drawRoundRect(cx - 15, headY - 9, 30, 27, 10, SSD1306_WHITE);
+    oledDriver.fillCircle(cx - 6, headY + 1, 2, SSD1306_WHITE);
+    oledDriver.fillCircle(cx + 6, headY + 1, 2, SSD1306_WHITE);
+    oledDriver.fillTriangle(cx - 3, headY + 8, cx + 3, headY + 8,
+                             cx, headY + 11, SSD1306_WHITE);
+    oledDriver.drawRoundRect(cx - 10, headY + 17, 20, 14, 5, SSD1306_WHITE);
+    oledDriver.drawLine(cx - 10, headY + 24, cx - 20,
+                        headY + (alternate ? 17 : 29), SSD1306_WHITE);
+    oledDriver.drawLine(cx + 10, headY + 24, cx + 20,
+                        headY + (alternate ? 29 : 17), SSD1306_WHITE);
+  }
+  oledDriver.display();
+}
 bool oledDisplayCommand(const char* mode, const char* value, void*) {
   if (!oledModule.ready() || mode == nullptr || value == nullptr) return false;
   if (std::strcmp(mode, "text") == 0) {
     const bool shown = oledModule.setText(value) && oledModule.refreshNow(millis());
-    if (shown) lastOledUserCommandAt = millis();
+    if (shown) {
+      oledCatDance = false;
+      lastOledUserCommandAt = millis();
+    }
     return shown;
   }
   if (std::strcmp(mode, "face") != 0) return false;
+  if (std::strcmp(value, "dance") == 0) {
+    oledCatDance = true;
+    lastOledUserCommandAt = millis();
+    lastCatDanceFrameAt = lastOledUserCommandAt;
+    drawCatDanceFrame(false);
+    return true;
+  }
   oledDriver.clearDisplay();
   oledDriver.setTextColor(SSD1306_WHITE);
   if (std::strcmp(value, "sleepy") == 0) {
@@ -750,6 +786,7 @@ bool oledDisplayCommand(const char* mode, const char* value, void*) {
     return false;
   }
   oledDriver.display();
+  oledCatDance = false;
   lastOledUserCommandAt = millis();
   return true;
 }
@@ -1538,6 +1575,19 @@ void loop() {
     const auto cue = voicePolicy.evaluate(voiceSample, now);
     if (cue != esp32core::VoiceCue::None) {
       dfplayerTrack(static_cast<uint16_t>(cue));
+    }
+  }
+#endif
+
+#if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
+  // Two cats alternate poses without delay(): command handling, sensors,
+  // BLE and Wi-Fi keep running. Revert to the ambient dashboard after 30 s.
+  if (oledCatDance) {
+    if (static_cast<uint32_t>(now - lastOledUserCommandAt) >= 30000u) {
+      oledCatDance = false;
+    } else if (static_cast<uint32_t>(now - lastCatDanceFrameAt) >= 400u) {
+      lastCatDanceFrameAt = now;
+      drawCatDanceFrame(((now / 400u) & 1u) != 0);
     }
   }
 #endif
