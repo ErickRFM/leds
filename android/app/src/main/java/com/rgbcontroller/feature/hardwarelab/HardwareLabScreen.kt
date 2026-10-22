@@ -1017,18 +1017,20 @@ private fun TelemetryChartsSection(state: ComponentDashboardState) {
     val now = System.currentTimeMillis()
     val live = state.telemetryFreshness == ComponentStatusFreshness.LIVE
     val disconnected = !state.connected
+    val dhtSensorId = if ("dht11" in state.confirmedCatalogIds) "dht11" else "dht22"
+    val dhtLabel = dhtSensorId.uppercase()
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TelemetryChartCard(
-            title = "Temperatura ambiental (DHT22)",
+            title = "Temperatura ambiental ($dhtLabel)",
             geometry = TelemetryChart.build(
-                "dht22", "temperature", state.series("dht22", "temperature"),
+                dhtSensorId, "temperature", state.series(dhtSensorId, "temperature"),
                 nowMs = now, disconnected = disconnected),
             live = live
         )
         TelemetryChartCard(
-            title = "Humedad ambiental (DHT22)",
+            title = "Humedad ambiental ($dhtLabel)",
             geometry = TelemetryChart.build(
-                "dht22", "humidity", state.series("dht22", "humidity"),
+                dhtSensorId, "humidity", state.series(dhtSensorId, "humidity"),
                 nowMs = now, disconnected = disconnected),
             live = live
         )

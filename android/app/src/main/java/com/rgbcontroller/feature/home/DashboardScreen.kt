@@ -483,7 +483,8 @@ private fun TelemetryChartSection(
     live: Boolean
 ) {
     var selectedInterval by remember { mutableStateOf("24h") }
-    val samples = moduleState.series("dht22", "temperature")
+    val samples = moduleState.series("dht11", "temperature")
+        .ifEmpty { moduleState.series("dht22", "temperature") }
     var touchedSample by remember { mutableStateOf<TelemetrySample?>(null) }
 
     Card(
