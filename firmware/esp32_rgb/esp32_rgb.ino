@@ -696,10 +696,13 @@ esp32core::OledSsd1306Module oledModule(COMPI_OLED_ADDRESS, COMPI_OLED_SDA,
 #endif
 
 #if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
+uint32_t lastOledUserCommandAt = 0;
 bool oledDisplayCommand(const char* mode, const char* value, void*) {
   if (!oledModule.ready() || mode == nullptr || value == nullptr) return false;
   if (std::strcmp(mode, "text") == 0) {
-    return oledModule.setText(value) && oledModule.refreshNow(millis());
+    const bool shown = oledModule.setText(value) && oledModule.refreshNow(millis());
+    if (shown) lastOledUserCommandAt = millis();
+    return shown;
   }
   if (std::strcmp(mode, "face") != 0) return false;
   oledDriver.clearDisplay();
@@ -723,6 +726,7 @@ bool oledDisplayCommand(const char* mode, const char* value, void*) {
     return false;
   }
   oledDriver.display();
+  lastOledUserCommandAt = millis();
   return true;
 }
 #endif
@@ -1468,6 +1472,8 @@ void loop() {
   // the network. Start after the greeting, then refresh every 3 seconds.
   static uint32_t lastOledTelemetryAt = 0;
   if (oledModule.ready() && now >= 8000U &&
+      (lastOledUserCommandAt == 0 ||
+       static_cast<uint32_t>(now - lastOledUserCommandAt) >= 30000u) &&
       (lastOledTelemetryAt == 0 ||
        static_cast<uint32_t>(now - lastOledTelemetryAt) >= 3000U)) {
     lastOledTelemetryAt = now;
