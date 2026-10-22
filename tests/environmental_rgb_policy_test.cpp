@@ -35,12 +35,19 @@ int main() {
   reading.temperatureC = 19.4f;
   assert(policy.evaluate(reading).band == EnvironmentalRgbBand::Cold);
 
-  reading.temperatureC = 28.0f;
+  reading.temperatureC = 26.0f;
   assert(policy.evaluate(reading).band == EnvironmentalRgbBand::Warm);
-  reading.temperatureC = 31.0f;
+  reading.temperatureC = 30.0f;
   assert(policy.evaluate(reading).band == EnvironmentalRgbBand::Warm);
-  reading.temperatureC = 31.6f;
+  reading.temperatureC = 30.6f;
   assert(policy.evaluate(reading).band == EnvironmentalRgbBand::Hot);
+  reading.temperatureC = 35.0f;
+  assert(policy.evaluate(reading).band == EnvironmentalRgbBand::Hot);
+  reading.temperatureC = 35.6f;
+  assert(policy.evaluate(reading).band == EnvironmentalRgbBand::Extreme);
+  reading.temperatureC = 34.8f;
+  assert(policy.evaluate(reading).band == EnvironmentalRgbBand::Extreme);
+  reading.temperatureC = 35.6f;
 
   // Humidity adjusts color only when the same DHT reports usable humidity.
   reading.humidityFresh = true;
@@ -48,8 +55,8 @@ int main() {
   reading.humidityPercent = 75.0f;
   result = policy.evaluate(reading);
   assert(result.humidityWasUsed);
-  assert(result.band == EnvironmentalRgbBand::Hot);
-  assert(result.blue == 120);  // (75 * 3 + 255) / 4
+  assert(result.band == EnvironmentalRgbBand::Extreme);
+  assert(result.blue == 90);  // (35 * 3 + 255) / 4
   reading.humidityPercent = 25.0f;
   result = policy.evaluate(reading);
   assert(result.humidityWasUsed && result.red == 236);
