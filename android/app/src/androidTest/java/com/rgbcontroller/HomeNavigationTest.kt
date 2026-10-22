@@ -215,6 +215,32 @@ class HomeNavigationTest {
     }
 
     @Test
+    fun repeatedModuleConnectionEntryAlwaysReturnsToModules() {
+        repeat(3) {
+            composeRule.onNodeWithTag("nav_modules").performClick()
+            composeRule.onNodeWithTag("module_workspace_list").assertExists()
+            composeRule.onNodeWithTag("modules_connect").performClick()
+            composeRule.onNodeWithTag("connect_bluetooth").assertExists()
+            composeRule.onNodeWithTag("nav_back").performClick()
+            composeRule.onNodeWithTag("module_workspace_list").assertExists()
+        }
+        composeRule.onNodeWithTag("nav_home").performClick()
+        composeRule.onNodeWithText("Compi").assertExists()
+    }
+
+    @Test
+    fun moduleListCanScrollToCatalogWithoutNavigatingAway() {
+        composeRule.onNodeWithTag("nav_modules").performClick()
+        composeRule.onNodeWithTag("module_workspace_list").assertExists()
+        composeRule.onNodeWithTag("modules_tab_catalog").performClick()
+        composeRule.onNodeWithTag("module_workspace_list")
+            .performScrollToNode(androidx.compose.ui.test.hasTestTag("module_catalog_dht22"))
+        composeRule.onNodeWithTag("module_catalog_dht22").assertExists()
+        composeRule.onNodeWithTag("nav_home").performClick()
+        composeRule.onNodeWithText("Compi").assertExists()
+    }
+
+    @Test
     fun homeReturnsFromOtherPrimaryModules() {
         composeRule.onNodeWithTag("open_code").performScrollTo().performClick()
         composeRule.onNodeWithTag("nav_home").performClick()
