@@ -289,6 +289,20 @@ fun ModuleWorkspaceScreen(
                             }
                         }
                     }
+                    item(key = "station_sensor_charts") {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Historial de sensores",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold)
+                            SensorDashboard(
+                                id = environmentSensor,
+                                state = state,
+                                active = runtime(environmentSensor)?.active == true,
+                                live = currentlyVerified,
+                                onRefresh = { scope.launch { vm.refresh() } }
+                            )
+                        }
+                    }
                     item {
                         Text("Automatización RGB", style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold)
