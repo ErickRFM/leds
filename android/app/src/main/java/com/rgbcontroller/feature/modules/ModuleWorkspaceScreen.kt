@@ -243,6 +243,20 @@ fun ModuleWorkspaceScreen(
                             }, modifier = Modifier.weight(1f)) { Text("Calibrar LDR") }
                         }
                     }
+                    item(key = "station_sensor_charts") {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Historial de sensores",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold)
+                            SensorDashboard(
+                                id = environmentSensor,
+                                state = state,
+                                active = runtime(environmentSensor)?.active == true,
+                                live = currentlyVerified,
+                                onRefresh = { scope.launch { vm.refresh() } }
+                            )
+                        }
+                    }
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("Caritas OLED", style = MaterialTheme.typography.titleMedium,
@@ -339,20 +353,6 @@ fun ModuleWorkspaceScreen(
                                 Text(it, style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.primary)
                             }
-                        }
-                    }
-                    item(key = "station_sensor_charts") {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Historial de sensores",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold)
-                            SensorDashboard(
-                                id = environmentSensor,
-                                state = state,
-                                active = runtime(environmentSensor)?.active == true,
-                                live = currentlyVerified,
-                                onRefresh = { scope.launch { vm.refresh() } }
-                            )
                         }
                     }
                     item {
