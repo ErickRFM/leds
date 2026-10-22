@@ -239,11 +239,15 @@ class CompiLabSessionTest {
         val session = CompiLabSession()
         session.selectTransport(LabTransport.WIFI_LAB)
         session.updateNetworkRouteAvailable(true)
-        val value = session.userOperation("RGB") {
-            session.updateNetworkRouteAvailable(false)
-            42
+        try {
+            session.userOperation("RGB") {
+                session.updateNetworkRouteAvailable(false)
+                42
+            }
+            fail("A stale command must not return a successful result")
+        } catch (_: kotlinx.coroutines.CancellationException) {
+            // The physical outcome is unknown after disconnection.
         }
-        assertEquals(42, value)
         assertEquals(com.rgbcontroller.core.wifi.LabOperationPhase.CANCELLED,
             session.operationStatus.phase)
     }
@@ -294,9 +298,14 @@ class CompiLabSessionTest {
         val started = kotlinx.coroutines.CompletableDeferred<Unit>()
         coroutineScope {
             val operation = launch {
-                session.userOperation("RGB") {
-                    started.complete(Unit)
-                    release.await()
+                try {
+                    session.userOperation("RGB") {
+                        started.complete(Unit)
+                        release.await()
+                    }
+                    fail("In-flight command must not succeed after route loss")
+                } catch (_: kotlinx.coroutines.CancellationException) {
+                    // Expected when the session changes during the HTTP call.
                 }
             }
             started.await()

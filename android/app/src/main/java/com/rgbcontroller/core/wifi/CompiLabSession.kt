@@ -95,12 +95,14 @@ class CompiLabSession {
                 }
                 block()
             }
-            if (id == latestOperationId && startingRevision == revision) {
+            if (startingRevision != revision) {
+                // Do not return a successful result to the caller after a route
+                // or transport change. The hardware outcome is now unknown.
+                throw CancellationException("La sesión cambió durante el comando; verifica el ESP32.")
+            }
+            if (id == latestOperationId) {
                 operationStatus = LabOperationStatus(name, LabOperationPhase.CONFIRMED,
                     "El firmware respondió; verifica el hardware físico.")
-            } else if (id == latestOperationId) {
-                operationStatus = LabOperationStatus(name, LabOperationPhase.CANCELLED,
-                    "La sesión cambió; vuelve a verificar el dispositivo.")
             }
             value
         } catch (cancelled: CancellationException) {
