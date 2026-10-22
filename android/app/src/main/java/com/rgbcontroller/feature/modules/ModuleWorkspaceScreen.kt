@@ -167,30 +167,85 @@ fun ModuleWorkspaceScreen(
                 }
             }
             if (id == "compi_dfplayer") {
+                var showWiring by rememberSaveable { mutableStateOf(false) }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize().testTag("dfplayer_module_detail"),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 40.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     item {
-                        Text("DFPlayer Mini MP3-TF-16P · reproducción física",
-                            style = MaterialTheme.typography.titleMedium)
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Tu música, en un solo lugar",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold)
+                            Text("Reproduce audios del teléfono y consulta tu módulo físico por separado.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Surface(
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("Salida actual · Teléfono",
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer)
+                            }
+                        }
                     }
-                    item {
-                        Text("Conexión: 5 V regulados y GND compartida; " +
-                            "GPIO17 (ESP32 TX) a RX del DFPlayer mediante 1 kΩ; " +
-                            "TX del DFPlayer a GPIO18 (ESP32 RX) solo con señal de hasta 3.3 V. " +
-                            "Bocina Samsung 4 Ω / 3 W entre SPK1 y SPK2.",
-                            style = MaterialTheme.typography.bodyMedium)
+                    item(key = "dfplayer_audio_controls") { CompiAudioPlayerCard() }
+                    item(key = "dfplayer_hardware_status") {
+                        Card(shape = RoundedCornerShape(22.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                            Column(Modifier.fillMaxWidth().padding(18.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text("DFPlayer Mini", style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold)
+                                Text("Reproducción por bocina externa",
+                                    style = MaterialTheme.typography.bodyMedium)
+                                Text("Requiere una microSD con pistas compatibles. El estado de reproducción física aún no se confirma mediante BUSY.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("El audio del teléfono no se transmite al DFPlayer por Bluetooth.",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
                     }
-                    item {
-                        Text("Necesita microSD con pistas compatibles para reproducir. " +
-                            "El firmware puede enviar comandos y avisos ambientales, " +
-                            "pero todavía no confirma reproducción real mediante BUSY/status. " +
-                            "No incluye recepción de audio Bluetooth A2DP.",
-                            style = MaterialTheme.typography.bodySmall)
+                    item(key = "dfplayer_wiring") {
+                        OutlinedCard(
+                            onClick = { showWiring = !showWiring },
+                            modifier = Modifier.fillMaxWidth().testTag("dfplayer_wiring_toggle"),
+                            shape = RoundedCornerShape(20.dp)
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text("Conexión y especificaciones",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold)
+                                        Text("ESP32 · UART · bocina 4 Ω / 3 W",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Icon(Icons.Default.ChevronRight,
+                                        contentDescription = if (showWiring) "Ocultar conexión" else "Mostrar conexión")
+                                }
+                                if (showWiring) {
+                                    HorizontalDivider()
+                                    Text("Alimentación: 5 V regulados y GND compartida.",
+                                        style = MaterialTheme.typography.bodyMedium)
+                                    Text("GPIO17 (TX ESP32) → RX DFPlayer, con resistencia de 1 kΩ.",
+                                        style = MaterialTheme.typography.bodyMedium)
+                                    Text("TX DFPlayer → GPIO18 (RX ESP32), solo si la señal es de hasta 3.3 V.",
+                                        style = MaterialTheme.typography.bodyMedium)
+                                    Text("Bocina Samsung 4 Ω / 3 W → SPK1 y SPK2.",
+                                        style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+                        }
                     }
-                    item { CompiAudioPlayerCard() }
                 }
             } else if (id == "led_rgb") {
                 // Reuse the *real* V16 BLE/Wi-Fi control path; no fake RGB widget.
