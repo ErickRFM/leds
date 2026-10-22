@@ -159,6 +159,15 @@ class CompiLabSession {
     /** Increments revision so delayed responses cannot revive an invalid session. */
     fun invalidate(reason: String = "Sesión Wi-Fi sin confirmar.", preserveErrorState: Boolean = false) {
         revision += 1
+        // A pending write cannot remain QUEUED/RUNNING after transport, key,
+        // authorization or route changes, even if its HTTP call is still pending.
+        if (operationStatus.phase == LabOperationPhase.QUEUED ||
+            operationStatus.phase == LabOperationPhase.RUNNING) {
+            operationStatus = operationStatus.copy(
+                phase = LabOperationPhase.CANCELLED,
+                details = reason
+            )
+        }
         wifiReady = false
         rgbState = null
         message = reason
