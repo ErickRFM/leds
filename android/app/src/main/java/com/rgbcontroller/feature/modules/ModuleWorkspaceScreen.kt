@@ -277,12 +277,18 @@ fun ModuleWorkspaceScreen(
                                                 val epoch = session.revision
                                                 val authorizedKey = session.key
                                                 try {
-                                                    check(wifiAuthorized) { "Autoriza Wi-Fi para controlar OLED." }
-                                                    session.serialized {
-                                                        check(wifiAuthorized && epoch == session.revision) {
-                                                            "Cambió la conexión antes de enviar la carita."
+                                                    if (bleAuthorized) {
+                                                        check(bleManager.controlOledBle("face", face)) {
+                                                            "El ESP32 no confirmó la expresión por BLE."
                                                         }
-                                                        labClient.showOled(authorizedKey, "face", face)
+                                                    } else {
+                                                        check(wifiAuthorized) { "Autoriza Wi-Fi o BLE propietario." }
+                                                        session.serialized {
+                                                            check(wifiAuthorized && epoch == session.revision) {
+                                                                "Cambió la conexión antes de enviar la carita."
+                                                            }
+                                                            labClient.showOled(authorizedKey, "face", face)
+                                                        }
                                                     }
                                                     check(epoch == session.revision) {
                                                         "La conexión cambió; no se confirmó la expresión."
@@ -295,7 +301,7 @@ fun ModuleWorkspaceScreen(
                                                 }
                                             }
                                         },
-                                        enabled = wifiAuthorized,
+                                        enabled = wifiAuthorized || bleAuthorized,
                                         modifier = Modifier.weight(1f).testTag("station_oled_$face"),
                                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 10.dp)
                                     ) { Text(label, maxLines = 1) }
@@ -309,7 +315,7 @@ fun ModuleWorkspaceScreen(
                                 value = contrastLevel,
                                 onValueChange = { contrastLevel = it },
                                 valueRange = 8f..255f,
-                                enabled = wifiAuthorized,
+                                enabled = wifiAuthorized || bleAuthorized,
                                 modifier = Modifier.testTag("station_oled_contrast_slider")
                             )
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -321,13 +327,19 @@ fun ModuleWorkspaceScreen(
                                         scope.launch {
                                             val epoch = session.revision
                                             try {
-                                                check(wifiAuthorized) { "Autoriza Wi-Fi para controlar OLED." }
-                                                val key = session.key
-                                                session.serialized {
-                                                    check(wifiAuthorized && epoch == session.revision) {
-                                                        "La conexión cambió antes de aplicar el brillo."
+                                                if (bleAuthorized) {
+                                                    check(bleManager.controlOledBle("contrast", contrastLevel.toInt().toString())) {
+                                                        "El ESP32 no confirmó la intensidad por BLE."
                                                     }
-                                                    labClient.showOled(key, "contrast", contrastLevel.toInt().toString())
+                                                } else {
+                                                    check(wifiAuthorized) { "Autoriza Wi-Fi o BLE propietario." }
+                                                    val key = session.key
+                                                    session.serialized {
+                                                        check(wifiAuthorized && epoch == session.revision) {
+                                                            "La conexión cambió antes de aplicar el brillo."
+                                                        }
+                                                        labClient.showOled(key, "contrast", contrastLevel.toInt().toString())
+                                                    }
                                                 }
                                                 check(epoch == session.revision) {
                                                     "La conexión cambió; no se confirmó el brillo."
@@ -340,12 +352,12 @@ fun ModuleWorkspaceScreen(
                                             }
                                         }
                                     },
-                                    enabled = wifiAuthorized,
+                                    enabled = wifiAuthorized || bleAuthorized,
                                     modifier = Modifier.testTag("station_oled_contrast_apply")
                                 ) { Text("Aplicar") }
                             }
-                            if (!wifiAuthorized) {
-                                Text("Las expresiones requieren Wi-Fi autorizado.",
+                            if (!wifiAuthorized && !bleAuthorized) {
+                                Text("Autoriza Wi-Fi o Bluetooth propietario para controlar la OLED.",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
@@ -563,20 +575,26 @@ fun ModuleWorkspaceScreen(
                             id, state, onRefresh = { scope.launch { vm.refresh() } },
                             canCalibrateLdr = wifiAuthorized || bleAuthorized,
                             calibrationMessage = ldrCalibrationMessage,
-                            canControlOled = wifiAuthorized,
+                            canControlOled = wifiAuthorized || bleAuthorized,
                             oledActionMessage = oledActionMessage,
                             onOledFace = { face ->
                                 scope.launch {
                                     ldrCalibrationMessage = null
                                     try {
                                         val revision = session.revision
-                                        check(wifiAuthorized) { "Conecta al Wi-Fi autorizado." }
-                                        val key = session.key
-                                        session.serialized {
-                                            check(wifiAuthorized && session.revision == revision) {
-                                                "La conexión cambió; no se envió la expresión."
+                                        if (bleAuthorized) {
+                                            check(bleManager.controlOledBle("face", face)) {
+                                                "El ESP32 no confirmó la expresión por BLE."
                                             }
-                                            labClient.showOled(key, "face", face)
+                                        } else {
+                                            check(wifiAuthorized) { "Autoriza Wi-Fi o BLE propietario." }
+                                            val key = session.key
+                                            session.serialized {
+                                                check(wifiAuthorized && session.revision == revision) {
+                                                    "La conexión cambió; no se envió la expresión."
+                                                }
+                                                labClient.showOled(key, "face", face)
+                                            }
                                         }
                                         oledActionMessage = "Carita $face confirmada por el ESP32."
                                     } catch (cancelled: CancellationException) {

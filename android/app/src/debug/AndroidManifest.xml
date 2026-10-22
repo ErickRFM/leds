@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
-    <!-- Local WPA2 SoftAP HTTP in DEBUG ONLY; release keeps cleartext blocked. -->
-    <application android:usesCleartextTraffic="true"
-        tools:replace="android:usesCleartextTraffic" />
-</manifest>

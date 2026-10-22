@@ -627,7 +627,8 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
                        esp32core::isBleEnvironmentalCommand(command.c_str()) ||
                        esp32core::parseBleSnapshotRequest(command.c_str(),
                                                          kind, requestId) ||
-                       esp32core::parseBleLdrCalibration(command.c_str(), calibration);
+                       esp32core::parseBleLdrCalibration(command.c_str(), calibration) ||
+                       (command.startsWith("OLED,") && command.length() < 48);
     portENTER_CRITICAL(&bleInboxMux);
     const bool accepted = valid && bleInbox.push(command.c_str());
     if (!accepted && bleRejected < 65535) ++bleRejected;
@@ -1227,8 +1228,9 @@ void processBleCommands() {
     esp32core::BleLdrCalibration calibration{};
     const bool calibrationRequest = esp32core::parseBleLdrCalibration(
         buffer, calibration);
+    const bool oledRequest = std::strncmp(buffer, "OLED,", 5) == 0;
     esp32core::RgbCommand parsed{};
-    if (!snapshotRequest && !calibrationRequest &&
+    if (!snapshotRequest && !calibrationRequest && !oledRequest &&
         environmental == esp32core::BleEnvironmentalAction::Invalid &&
         !esp32core::parseRgbCommand(buffer, parsed)) {
       reject();
@@ -1243,6 +1245,24 @@ void processBleCommands() {
     auto evaluation = commandArbiter.evaluate(channelSource, isStop);
     if (!evaluation.allowed) {
       reject();
+      continue;
+    }
+    if (oledRequest) {
+      unsigned int requestId = 0;
+      char mode[12] = {}, value[20] = {}, extra = 0;
+      const bool valid = std::sscanf(buffer, "OLED,%u,%11[^,],%19[^,]%c",
+                                     &requestId, mode, value, &extra) == 3 &&
+                         requestId > 0 && requestId <= 65535;
+      bool applied = false;
+#if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
+      if (valid && (std::strcmp(mode, "face") == 0 ||
+                    std::strcmp(mode, "contrast") == 0)) {
+        applied = oledDisplayCommand(mode, value, nullptr);
+      }
+#endif
+      const String reply = String(applied ? "OLED,OK," : "OLED,ERR,") +
+                           String(valid ? requestId : 0);
+      publishControlReply(reply.c_str());
       continue;
     }
     if (calibrationRequest) {
