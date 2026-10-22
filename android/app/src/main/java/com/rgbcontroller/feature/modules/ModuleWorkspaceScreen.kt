@@ -64,6 +64,7 @@ import com.rgbcontroller.core.wifi.LabConnectionState
 import com.rgbcontroller.core.wifi.LabTransport
 import com.rgbcontroller.feature.hardwarelab.ComponentDashboardViewModel
 import com.rgbcontroller.feature.led.LedModuleScreen
+import com.rgbcontroller.feature.led.EnvironmentalRgbControlCard
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
@@ -541,6 +542,9 @@ fun ModuleWorkspaceScreen(
                         Icon(Icons.Default.ChevronRight, contentDescription = null)
                     }
                 }
+            }
+            item(key = "compi_station_rgb_control") {
+                EnvironmentalRgbControlCard(session, labClient, bleManager)
             }
             item(key = "compi_dfplayer_module") {
                 Card(onClick = { openedId = "compi_dfplayer" },
