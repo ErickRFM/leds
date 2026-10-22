@@ -5,10 +5,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.Alignment
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,27 +43,30 @@ fun TelemetryChartCard(
 
     Card(modifier = modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Text(title, fontWeight = FontWeight.SemiBold)
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text(
-                "${rangeLabel(geometry)} · ${geometry.validCount} válidas · " +
-                    "${geometry.invalidCount} inválidas · ${geometry.staleCount} antiguas · " +
-                    (if (live) "en vivo" else "histórico"),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                when {
+                    !geometry.hasData -> "Sin muestras en este periodo"
+                    live -> "● En vivo  ·  ${geometry.validCount} muestras"
+                    else -> "Historial  ·  ${geometry.validCount} muestras"
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = if (live && geometry.hasData) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
             )
             if (geometry.hasData) {
                 Text(
-                    "Mín ${formatChartValue(geometry.minValue)} ${geometry.unit}   ·   " +
-                    "Máx ${formatChartValue(geometry.maxValue)} ${geometry.unit}",
+                    "↓ ${formatChartValue(geometry.minValue)} ${geometry.unit}    " +
+                    "↑ ${formatChartValue(geometry.maxValue)} ${geometry.unit}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             val note = when {
                 geometry.disconnected ->
-                    "Desconectado · sin telemetría en vivo (datos históricos listados abajo)."
+                    "Sin conexión en vivo"
                 !geometry.hasData -> "Sin datos válidos en la ventana temporal."
-                geometry.hasGap -> "Hay huecos: una lectura inválida u obsoleta interrumpe la línea."
+                geometry.hasGap -> "Lecturas interrumpidas"
                 else -> null
             }
             note?.let {
@@ -81,7 +85,7 @@ fun TelemetryChartCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else Canvas(
-                Modifier.fillMaxWidth().height(120.dp)
+                Modifier.fillMaxWidth().height(156.dp)
                     .testTag("chart_${geometry.componentId}_${geometry.measurementType}")
             ) {
                 val w = size.width
@@ -114,6 +118,13 @@ fun TelemetryChartCard(
                     val color = if (cs.quality == SampleQuality.STALE) staleColor else invalidColor
                     drawCircle(color, radius = 3.5f, center = Offset(cs.fractionX * w, h - 4f))
                 }
+            }
+            if (geometry.invalidCount > 0 || geometry.staleCount > 0) {
+                Text(
+                    "${geometry.invalidCount} inválidas · ${geometry.staleCount} antiguas",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
