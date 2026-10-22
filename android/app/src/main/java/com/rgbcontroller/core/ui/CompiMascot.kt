@@ -244,7 +244,7 @@ fun CompiMascot(
                 val mouthY = eyeY + screenHeight * 0.25f
                 val mouthPath = Path().apply {
                     moveTo(cx - 8f, mouthY)
-                    quadraticTo(cx, mouthY + 8f, cx + 8f, mouthY)
+                    quadraticBezierTo(cx, mouthY + 8f, cx + 8f, mouthY)
                 }
                 drawPath(mouthPath, color = eyeColor, style = Stroke(width = 4f))
 

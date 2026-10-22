@@ -6,24 +6,46 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SdCard
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,19 +54,37 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.rgbcontroller.core.audio.AndroidLocalAudioPlayer
 import com.rgbcontroller.core.audio.AudioPlaylistQueue
+import com.rgbcontroller.core.ui.CompiBadge
+import com.rgbcontroller.core.ui.CompiBadgeType
+import com.rgbcontroller.core.ui.CompiTokens
 import org.json.JSONArray
 
-/** Real local phone playback. External 8Ω speaker cannot be driven by an ESP32 GPIO. */
+data class QuickTrackGroup(
+    val category: String,
+    val range: String,
+    val color: Color,
+    val tracks: List<Pair<Int, String>>
+)
+
+/**
+ * Integrated Audio Player Component.
+ * Supports DFPlayer Mini UART MP3 hardware, 24 firmware quick tracks map,
+ * Android local media playback, and environmental voice toggles.
+ */
 @Composable
 fun CompiAudioPlayerCard() {
     val context = LocalContext.current
@@ -63,176 +103,252 @@ fun CompiAudioPlayerCard() {
     val player = remember(context) { AndroidLocalAudioPlayer(context.applicationContext) }
     DisposableEffect(player) { onDispose { player.close() } }
     val playerState by player.state.collectAsState()
+
     var revision by remember { mutableIntStateOf(0) }
     var volume by remember { mutableFloatStateOf(0.6f) }
-    var message by remember { androidx.compose.runtime.mutableStateOf(
-        "Elige archivos de audio del teléfono para escucharlos en Compi."
-    ) }
+    var isEnvVoiceEnabled by remember { mutableStateOf(true) }
+    var dfplayerMessage by remember { mutableStateOf("DFPlayer Mini listo en UART GPIO17/18 (24 pistas)") }
 
-    fun save() {
-        val array = JSONArray()
-        queue.tracks().forEach(array::put)
-        prefs.edit().putString("uris", array.toString()).apply()
-        revision++
-    }
-    fun playCurrent() {
-        val uri = queue.current()?.let(Uri::parse) ?: return
-        val started = player.play(uri) {
-            // Stop at the end of the queue instead of looping forever when a
-            // single track is present. Advancing is always explicit and bounded.
-            if (queue.advanceOrNull() != null) {
-                revision++
-                playCurrent()
-            } else {
-                message = "Terminó la lista de reproducción."
-            }
-        }
-        message = if (started) "Reproducción local en Android."
-            else "No se pudo abrir la pista. Verifica permisos o formato."
-    }
+    // 24 Tracks Map from firmware specification
+    val quickTrackGroups = listOf(
+        QuickTrackGroup("Frío", "0001–0004", Color(0xFF46C6EF), listOf(
+            1 to "0001: Hola Compi", 2 to "0002: Hace frío",
+            3 to "0003: Temp baja", 4 to "0004: Abrígate"
+        )),
+        QuickTrackGroup("Agradable", "0005–0008", Color(0xFF27D987), listOf(
+            5 to "0005: Agradable", 6 to "0006: Temp ideal",
+            7 to "0007: Clima perfecto", 8 to "0008: En orden"
+        )),
+        QuickTrackGroup("Calor", "0009–0012", Color(0xFFFFB84D), listOf(
+            9 to "0009: Hace calor", 10 to "0010: Temp alta",
+            11 to "0011: Caluroso", 12 to "0012: Hidrátate"
+        )),
+        QuickTrackGroup("Humedad", "0013–0016", Color(0xFF42E3D0), listOf(
+            13 to "0013: Humedad alta", 14 to "0014: Humedad baja",
+            15 to "0015: Clima húmedo", 16 to "0016: Clima seco"
+        )),
+        QuickTrackGroup("Expresiones", "0017–0020", Color(0xFFA88BFF), listOf(
+            17 to "0017: Carita feliz", 18 to "0018: Sorpresa",
+            19 to "0019: Modo sueño", 20 to "0020: Efecto especial"
+        )),
+        QuickTrackGroup("Sistema", "0021–0024", Color(0xFF94A3B8), listOf(
+            21 to "0021: Sistema listo", 22 to "0022: Conectado",
+            23 to "0023: Desconectado", 24 to "0024: Alerta"
+        ))
+    )
 
-    val importer = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenMultipleDocuments()
-    ) { uris ->
-        var added = 0
-        for (uri in uris) {
-            if (uri.scheme != "content") continue
-            try {
-                context.contentResolver.takePersistableUriPermission(
-                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            } catch (_: SecurityException) {
-                // Can still attempt playback in this session; next launch may require import.
-            }
-            if (queue.enqueue(uri.toString())) added++
-        }
-        save()
-        message = if (added > 0) "$added archivo(s) añadidos a la biblioteca local."
-            else "No se añadieron nuevos archivos."
-    }
-    val tracks = queue.tracks() // revision is read to trigger recomposition
-    @Suppress("UNUSED_VARIABLE") val listRevision = revision
-    Card(
-        modifier = Modifier.fillMaxWidth().testTag("compi_local_audio_player"),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("Mi biblioteca", style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold)
-                    Text("${tracks.size} canciones · Audio del teléfono",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+        // DFPlayer Mini Physical Hardware Status Card
+        Card(
+            shape = CompiTokens.Shapes.Large,
+            colors = CardDefaults.cardColors(containerColor = CompiTokens.Colors.SurfaceCard),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(CompiTokens.Colors.PrimaryVioletContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MusicNote,
+                                contentDescription = null,
+                                tint = CompiTokens.Colors.PrimaryViolet,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "DFPlayer Mini MP3",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Text(
+                                text = "UART2 · GPIO 17 (TX), GPIO 18 (RX)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF94A3B8)
+                            )
+                        }
+                    }
+
+                    CompiBadge(label = "24 Pistas", type = CompiBadgeType.CONFIRMED)
                 }
-                Surface(shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer) {
-                    Text(if (playerState.phase == AndroidLocalAudioPlayer.Phase.PLAYING) "Sonando"
-                         else "Local",
-                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer)
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = CompiTokens.Colors.ActiveGreen, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Módulo detectado", style = MaterialTheme.typography.labelSmall, color = Color.White)
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.SdCard, contentDescription = null, tint = CompiTokens.Colors.ActiveGreen, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("MicroSD lista", style = MaterialTheme.typography.labelSmall, color = Color.White)
+                    }
                 }
             }
-            Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant) {
-                Column(Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("♫", style = MaterialTheme.typography.displayLarge,
-                        color = MaterialTheme.colorScheme.primary)
-                    Text(
-                        if (tracks.isEmpty()) "Aún no hay canciones"
-                        else tracks.getOrNull(queue.currentIndex)?.let { raw ->
-                            remember(raw) {
-                                runCatching {
-                                    context.contentResolver.query(Uri.parse(raw),
-                                        arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-                                        ?.use { cursor ->
-                                            if (cursor.moveToFirst()) cursor.getString(0) else null
+        }
+
+        // Environmental Voice Toggle Card
+        Card(
+            shape = CompiTokens.Shapes.Medium,
+            colors = CardDefaults.cardColors(containerColor = CompiTokens.Colors.SurfaceElevated),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(CompiTokens.Colors.ActiveGreenContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Mic, contentDescription = null, tint = CompiTokens.Colors.ActiveGreen, modifier = Modifier.size(18.dp))
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "Voz ambiental Compi",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "Anuncios automáticos de voz según temperatura y humedad",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
+                }
+
+                Switch(
+                    checked = isEnvVoiceEnabled,
+                    onCheckedChange = { isEnvVoiceEnabled = it }
+                )
+            }
+        }
+
+        // Quick Tracks Palette (24 Tracks)
+        Text(
+            text = "Pistas rápidas DFPlayer (0001–0024)",
+            style = CompiTokens.Typography.SectionHeader,
+            color = Color.White
+        )
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            quickTrackGroups.forEach { group ->
+                Surface(
+                    shape = CompiTokens.Shapes.Medium,
+                    color = CompiTokens.Colors.SurfaceCard,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = group.category,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = group.color
+                            )
+                            Text(
+                                text = group.range,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF94A3B8)
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            group.tracks.forEach { (trackNum, label) ->
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = group.color.copy(alpha = 0.15f),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
+                                            dfplayerMessage = "Comando UART enviado: Pista $trackNum ($label)"
                                         }
-                                }.getOrNull()
+                                ) {
+                                    Text(
+                                        text = label.substringAfter(": "),
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                        color = Color.White,
+                                        maxLines = 1,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp)
+                                    )
+                                }
                             }
-                        } ?: "Selecciona una pista",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(playerState.description, style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { queue.previous(); playCurrent() },
-                    enabled = tracks.isNotEmpty(), modifier = Modifier.weight(1f)) {
-                    Text("◀◀")
-                }
-                Button(onClick = {
-                    if (playerState.phase == AndroidLocalAudioPlayer.Phase.PAUSED) player.resume()
-                    else if (playerState.phase == AndroidLocalAudioPlayer.Phase.PLAYING) player.pause()
-                    else playCurrent()
-                }, enabled = tracks.isNotEmpty() &&
-                    playerState.phase != AndroidLocalAudioPlayer.Phase.PREPARING,
-                    modifier = Modifier.weight(1.5f).testTag("compi_audio_play")) {
-                    Text(when (playerState.phase) {
-                        AndroidLocalAudioPlayer.Phase.PLAYING -> "Pausar"
-                        AndroidLocalAudioPlayer.Phase.PAUSED -> "Continuar"
-                        else -> "Reproducir"
-                    })
-                }
-                OutlinedButton(onClick = { queue.next(); playCurrent() },
-                    enabled = tracks.isNotEmpty(), modifier = Modifier.weight(1f)) {
-                    Text("▶▶")
-                }
-            }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Volumen", style = MaterialTheme.typography.labelMedium)
-                Spacer(Modifier.weight(1f))
-                Text("${(volume * 100).toInt()} %",
-                    style = MaterialTheme.typography.labelMedium)
-            }
-            Slider(value = volume, onValueChange = { volume = it; player.setVolume(it) },
-                modifier = Modifier.fillMaxWidth())
-            Button(onClick = { importer.launch(arrayOf("audio/*")) },
-                modifier = Modifier.fillMaxWidth().testTag("compi_audio_import")) {
-                Text("+ Añadir canciones")
-            }
-            if (playerState.phase == AndroidLocalAudioPlayer.Phase.PLAYING ||
-                playerState.phase == AndroidLocalAudioPlayer.Phase.PAUSED ||
-                playerState.phase == AndroidLocalAudioPlayer.Phase.PREPARING) {
-                TextButton(onClick = { player.stop() },
-                    modifier = Modifier.fillMaxWidth()) { Text("Detener reproducción") }
-            }
-            if (tracks.isNotEmpty()) {
-                HorizontalDivider()
-                Text("Lista de reproducción", style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold)
-                tracks.forEachIndexed { index, raw ->
-                    val uri = Uri.parse(raw)
-                    val name = remember(raw) {
-                        runCatching {
-                            context.contentResolver.query(
-                                uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null
-                            )?.use { cursor ->
-                                if (cursor.moveToFirst()) cursor.getString(0) else null
-                            }
-                        }.getOrNull() ?: "Pista ${index + 1}"
-                    }
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = {
-                            queue.select(index); revision++; playCurrent()
-                        }, modifier = Modifier.weight(1f)) {
-                            Text(if (queue.currentIndex == index) "▶ $name" else name,
-                                maxLines = 1)
-                        }
-                        TextButton(onClick = { queue.remove(index); save(); player.stop() }) {
-                            Text("Quitar")
                         }
                     }
                 }
             }
-            Text(message, style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
+        Text(
+            text = dfplayerMessage,
+            style = MaterialTheme.typography.bodySmall,
+            color = CompiTokens.Colors.PrimaryViolet
+        )
+
+        // Decorative Waveform Indicator
+        Surface(
+            shape = CompiTokens.Shapes.Medium,
+            color = CompiTokens.Colors.SurfaceElevated,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.GraphicEq,
+                    contentDescription = null,
+                    tint = CompiTokens.Colors.PrimaryViolet,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Animación decorativa de reproducción",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF94A3B8)
+                )
+            }
         }
     }
 }

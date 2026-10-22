@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.ble.BleConnectionState
@@ -603,13 +604,24 @@ private fun AuthorityCard(connected: Boolean, authorized: Boolean, error: String
 @Composable
 private fun FirmwareComponentCard(component: ComponentRuntimeStatus, live: Boolean) {
     val state = ComponentStatusCodec.stateFor(component)
+    val catalogId = ComponentCatalog.catalogIdForFirmwareId(component.id)
+    val humanName = ComponentCatalog.get(catalogId)?.name ?: component.id
+    var showTechDetails by remember { mutableStateOf(false) }
+
     Card(Modifier.fillMaxWidth().testTag("component_${component.id}")) {
         Column(Modifier.fillMaxWidth().padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()) {
-                Text(component.id, fontWeight = FontWeight.SemiBold)
+                Column {
+                    Text(humanName, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    if (showTechDetails) {
+                        Text("ID Técnico: ${component.id}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary)
+                    }
+                }
                 Text(
                     when (state) {
                         ComponentState.ACTIVE -> if (live) "ACTIVO" else "ÚLTIMO"
@@ -619,16 +631,24 @@ private fun FirmwareComponentCard(component: ComponentRuntimeStatus, live: Boole
                         else -> "DESCONOCIDO"
                     },
                     style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
                     color = if (live && component.active && component.state == "active")
                         MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Text("Tipo: ${component.type} · Interfaz: ${component.interfaceType}",
+            Text("Tipo: ${component.type.replaceFirstChar { it.uppercase() }} · Interfaz: ${component.interfaceType.uppercase()}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("GPIO: ${if (component.pins.isEmpty()) "—" else component.pins.joinToString(", ")}",
+            Text("Conexión GPIO: ${if (component.pins.isEmpty()) "—" else component.pins.joinToString(", ")}",
                 style = MaterialTheme.typography.bodySmall)
+
+            TextButton(
+                onClick = { showTechDetails = !showTechDetails },
+                modifier = Modifier.align(Alignment.End)
+            ) {
+                Text(if (showTechDetails) "Ocultar ID técnico" else "Detalles técnicos", fontSize = 11.sp)
+            }
         }
     }
 }

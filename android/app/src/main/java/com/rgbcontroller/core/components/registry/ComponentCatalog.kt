@@ -93,6 +93,16 @@ object ComponentCatalog {
             requiredPins = emptySet(),
             description = "Actuador digital · requiere perfil de firmware",
             category = "actuators"
+        ),
+        HardwareComponentDescriptor(
+            id = "dfplayer_mp3",
+            name = "Reproductor MP3 DFPlayer Mini",
+            type = ComponentType.ACTUATOR,
+            interfaces = setOf(HardwareInterface.GPIO, HardwareInterface.DIGITAL),
+            capabilities = setOf("audio", "mp3", "voice", "uart"),
+            requiredPins = setOf(17, 18),
+            description = "Módulo reproductor MP3 DFPlayer Mini por UART (TX GPIO17, RX GPIO18)",
+            category = "audio"
         )
     )
 
@@ -112,6 +122,7 @@ object ComponentCatalog {
         "sensor.ldr_light" -> "ldr_light"
         "led.rgb" -> "led_rgb"
         "display.ssd1306" -> "ssd1306_oled"
+        "audio.dfplayer" -> "dfplayer_mp3"
         else -> firmwareId
     }
 }

@@ -214,7 +214,7 @@ fun OledInteractiveModule(
                             drawPath(
                                 Path().apply {
                                     moveTo(cx - 20f, cy + 10f)
-                                    quadraticTo(cx, cy + 28f, cx + 20f, cy + 10f)
+                                    quadraticBezierTo(cx, cy + 28f, cx + 20f, cy + 10f)
                                 },
                                 fgPixelColor,
                                 style = Stroke(width = 5f)

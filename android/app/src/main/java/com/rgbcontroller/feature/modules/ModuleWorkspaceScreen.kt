@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rgbcontroller.core.ble.BleConnectionState
 import com.rgbcontroller.core.ble.BleSecurityState
@@ -178,146 +179,147 @@ fun ModuleWorkspaceScreen(
                 }
             }
             if (id == "compi_station") {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().testTag("compi_station_dashboard"),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    item {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text("Tu estación ambiental", style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Bold)
-                                Text("Sensores, luz, expresiones y sonido",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    style = MaterialTheme.typography.bodySmall)
-                            }
-                            Surface(
-                                color = if (currentlyVerified && state.telemetryFreshness == ComponentStatusFreshness.LIVE) MaterialTheme.colorScheme.primaryContainer
-                                    else MaterialTheme.colorScheme.surfaceVariant,
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text(if (currentlyVerified && state.telemetryFreshness == ComponentStatusFreshness.LIVE) "En vivo" else "Sin datos en vivo",
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                    style = MaterialTheme.typography.labelMedium)
-                            }
-                        }
-                    }
-                    item {
-                        val readings = if (currentlyVerified &&
-                            state.telemetryFreshness == ComponentStatusFreshness.LIVE)
-                            state.authoritativeTelemetry.orEmpty() else emptyList()
-                        val temp = ComponentTelemetryCodec.find(readings, "temperature")
-                            ?.takeIf { it.valid && it.status == "fresh" && it.value.isFinite() }?.value
-                        val humid = ComponentTelemetryCodec.find(readings, "humidity")
-                            ?.takeIf { it.valid && it.status == "fresh" && it.value.isFinite() }?.value
-                        val light = ComponentTelemetryCodec.find(readings, "ambient_light")
-                            ?.takeIf { it.valid && it.status == "fresh" && it.value.isFinite() }?.value
-                        val raw = ComponentTelemetryCodec.find(readings, "ambient_light_raw")
-                            ?.takeIf { it.valid && it.status == "fresh" && it.value.isFinite() }?.value
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            StationMetric("Temperatura",
-                                temp?.let { "%.1f°".format(java.util.Locale.ROOT, it) } ?: "—",
-                                Icons.Default.Thermostat, Modifier.weight(1f))
-                            StationMetric("Humedad",
-                                humid?.let { "%.0f%%".format(java.util.Locale.ROOT, it) } ?: "—",
-                                Icons.Default.WaterDrop, Modifier.weight(1f))
-                            StationMetric("Luz", light?.let {
-                                "%.0f%%".format(java.util.Locale.ROOT, it)
-                            } ?: raw?.let { "%.0f".format(java.util.Locale.ROOT, it) } ?: "—",
-                                Icons.Default.Lightbulb, Modifier.weight(1f))
-                        }
-                        if (light == null && raw != null) {
-                            Text("LDR sin calibrar · lectura ADC cruda (0–4095)",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                    item {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { scope.launch { vm.refresh() } },
-                                modifier = Modifier.weight(1f)) { Text("Actualizar") }
-                            OutlinedButton(onClick = {
-                                previousOpenedId = openedId
-                                openedId = "ldr_light"
-                            }, modifier = Modifier.weight(1f)) { Text("Calibrar LDR") }
-                        }
-                    }
-                    item(key = "station_sensor_charts") {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Historial de sensores",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold)
-                            SensorDashboard(
-                                id = environmentSensor,
-                                state = state,
-                                active = runtime(environmentSensor)?.active == true,
-                                live = currentlyVerified,
-                                onRefresh = { scope.launch { vm.refresh() } }
+                var stationSection by rememberSaveable { mutableStateOf("Resumen") }
+                Column(Modifier.fillMaxSize()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf("Resumen", "Ambiente", "Iluminación", "OLED", "Audio").forEach { sec ->
+                            FilterChip(
+                                selected = stationSection == sec,
+                                onClick = { stationSection = sec },
+                                label = { Text(sec, fontSize = 12.sp) }
                             )
                         }
                     }
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Caritas OLED", style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold)
-                            Text("Expresiones temporales en la pantalla física",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                for (faces in listOf("happy" to "Feliz",
-                                        "sleepy" to "Sueño", "surprised" to "Sorpresa",
-                                        "pumpkin" to "Calabaza", "cat" to "Gato",
-                                        "dance" to "Baile").chunked(3)) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        for ((face, label) in faces) {
-                                    OutlinedButton(
-                                        onClick = {
-                                            scope.launch {
-                                                val epoch = session.revision
-                                                val authorizedKey = session.key
-                                                try {
-                                                    check(wifiAuthorized) { "Autoriza Wi-Fi para controlar OLED." }
-                                                    session.serialized {
-                                                        check(wifiAuthorized && epoch == session.revision) {
-                                                            "Cambió la conexión antes de enviar la carita."
-                                                        }
-                                                        labClient.showOled(authorizedKey, "face", face)
-                                                    }
-                                                    check(epoch == session.revision) {
-                                                        "La conexión cambió; no se confirmó la expresión."
-                                                    }
-                                                    oledActionMessage = "Carita $label enviada."
-                                                } catch (cancelled: CancellationException) {
-                                                    throw cancelled
-                                                } catch (error: Exception) {
-                                                    oledActionMessage = "OLED: ${error.message}"
-                                                }
-                                            }
-                                        },
-                                        enabled = wifiAuthorized,
-                                        modifier = Modifier.weight(1f).testTag("station_oled_$face"),
-                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 10.dp)
-                                    ) { Text(label, maxLines = 1) }
-                                        }
+
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize().testTag("compi_station_dashboard"),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        if (stationSection == "Resumen" || stationSection == "Ambiente") {
+                            item {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text("Tu estación ambiental", style = MaterialTheme.typography.headlineSmall,
+                                            fontWeight = FontWeight.Bold)
+                                        Text("Sensores, luz, expresiones y sonido",
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    Surface(
+                                        color = if (currentlyVerified && state.telemetryFreshness == ComponentStatusFreshness.LIVE) MaterialTheme.colorScheme.primaryContainer
+                                            else MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text(if (currentlyVerified && state.telemetryFreshness == ComponentStatusFreshness.LIVE) "En vivo" else "Sin datos en vivo",
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                            style = MaterialTheme.typography.labelMedium)
                                     }
                                 }
                             }
-                            var contrastLevel by rememberSaveable { mutableFloatStateOf(128f) }
-                            Text("Intensidad OLED", style = MaterialTheme.typography.titleSmall)
-                            Slider(
-                                value = contrastLevel,
-                                onValueChange = { contrastLevel = it },
-                                valueRange = 8f..255f,
-                                enabled = wifiAuthorized,
-                                modifier = Modifier.testTag("station_oled_contrast_slider")
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("${contrastLevel.toInt()} / 255",
-                                    modifier = Modifier.weight(1f),
-                                    style = MaterialTheme.typography.labelSmall)
-                                Button(
-                                    onClick = {
+                            item {
+                                val readings = if (currentlyVerified &&
+                                    state.telemetryFreshness == ComponentStatusFreshness.LIVE)
+                                    state.authoritativeTelemetry.orEmpty() else emptyList()
+                                val temp = ComponentTelemetryCodec.find(readings, "temperature")
+                                    ?.takeIf { it.valid && it.status == "fresh" && it.value.isFinite() }?.value
+                                val humid = ComponentTelemetryCodec.find(readings, "humidity")
+                                    ?.takeIf { it.valid && it.status == "fresh" && it.value.isFinite() }?.value
+                                val light = ComponentTelemetryCodec.find(readings, "ambient_light")
+                                    ?.takeIf { it.valid && it.status == "fresh" && it.value.isFinite() }?.value
+                                val raw = ComponentTelemetryCodec.find(readings, "ambient_light_raw")
+                                    ?.takeIf { it.valid && it.status == "fresh" && it.value.isFinite() }?.value
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    StationMetric("Temperatura",
+                                        temp?.let { "%.1f°".format(java.util.Locale.ROOT, it) } ?: "—",
+                                        Icons.Default.Thermostat, Modifier.weight(1f))
+                                    StationMetric("Humedad",
+                                        humid?.let { "%.0f%%".format(java.util.Locale.ROOT, it) } ?: "—",
+                                        Icons.Default.WaterDrop, Modifier.weight(1f))
+                                    StationMetric("Luz", light?.let {
+                                        "%.0f%%".format(java.util.Locale.ROOT, it)
+                                    } ?: raw?.let { "%.0f".format(java.util.Locale.ROOT, it) } ?: "—",
+                                        Icons.Default.Lightbulb, Modifier.weight(1f))
+                                }
+                                if (light == null && raw != null) {
+                                    Text("LDR sin calibrar · lectura ADC cruda (0–4095)",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            item {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(onClick = { scope.launch { vm.refresh() } },
+                                        modifier = Modifier.weight(1f)) { Text("Actualizar") }
+                                    OutlinedButton(onClick = {
+                                        previousOpenedId = openedId
+                                        openedId = "ldr_light"
+                                    }, modifier = Modifier.weight(1f)) { Text("Calibrar LDR") }
+                                }
+                            }
+                            item(key = "station_sensor_charts") {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("Historial de sensores",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold)
+                                    SensorDashboard(
+                                        id = environmentSensor,
+                                        state = state,
+                                        active = runtime(environmentSensor)?.active == true,
+                                        live = currentlyVerified,
+                                        onRefresh = { scope.launch { vm.refresh() } }
+                                    )
+                                }
+                            }
+                        }
+
+                        if (stationSection == "Resumen" || stationSection == "Iluminación") {
+                            item {
+                                RgbLightingPanel(
+                                    currentColor = Color(0xFFA88BFF),
+                                    brightness = 0.8f,
+                                    isEnvironmentalMode = false,
+                                    isAuthorized = wifiAuthorized || bleAuthorized,
+                                    onColorChanged = { },
+                                    onBrightnessChanged = { },
+                                    onEnvironmentalModeToggled = { }
+                                )
+                            }
+                            item {
+                                EnvironmentalRgbControlCard(session, labClient, bleManager)
+                            }
+                        }
+
+                        if (stationSection == "Resumen" || stationSection == "OLED") {
+                            item {
+                                OledInteractiveModule(
+                                    isAuthorized = wifiAuthorized,
+                                    onSendExpression = { expr ->
+                                        scope.launch {
+                                            val epoch = session.revision
+                                            val authorizedKey = session.key
+                                            try {
+                                                check(wifiAuthorized) { "Autoriza Wi-Fi para controlar OLED." }
+                                                session.serialized {
+                                                    check(wifiAuthorized && epoch == session.revision) {
+                                                        "Cambió la conexión antes de enviar la carita."
+                                                    }
+                                                    labClient.showOled(authorizedKey, "face", expr)
+                                                }
+                                                oledActionMessage = "Carita $expr enviada."
+                                            } catch (cancelled: CancellationException) {
+                                                throw cancelled
+                                            } catch (error: Exception) {
+                                                oledActionMessage = "OLED: ${error.message}"
+                                            }
+                                        }
+                                    },
+                                    onSetContrast = { level ->
                                         scope.launch {
                                             val epoch = session.revision
                                             try {
@@ -327,10 +329,7 @@ fun ModuleWorkspaceScreen(
                                                     check(wifiAuthorized && epoch == session.revision) {
                                                         "La conexión cambió antes de aplicar el brillo."
                                                     }
-                                                    labClient.showOled(key, "contrast", contrastLevel.toInt().toString())
-                                                }
-                                                check(epoch == session.revision) {
-                                                    "La conexión cambió; no se confirmó el brillo."
+                                                    labClient.showOled(key, "contrast", level.toString())
                                                 }
                                                 oledActionMessage = "Intensidad OLED aplicada."
                                             } catch (cancelled: CancellationException) {
@@ -339,45 +338,34 @@ fun ModuleWorkspaceScreen(
                                                 oledActionMessage = "OLED: ${error.message}"
                                             }
                                         }
-                                    },
-                                    enabled = wifiAuthorized,
-                                    modifier = Modifier.testTag("station_oled_contrast_apply")
-                                ) { Text("Aplicar") }
-                            }
-                            if (!wifiAuthorized) {
-                                Text("Las expresiones requieren Wi-Fi autorizado.",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            oledActionMessage?.let {
-                                Text(it, style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary)
+                                    }
+                                )
                             }
                         }
-                    }
-                    item {
-                        EnvironmentalRgbControlCard(session, labClient, bleManager)
-                    }
-                    item {
-                        OutlinedCard(
-                            onClick = {
-                                previousOpenedId = openedId
-                                openedId = "compi_dfplayer"
-                            },
-                            modifier = Modifier.fillMaxWidth().testTag("station_audio_shortcut")
-                        ) {
-                            Row(Modifier.fillMaxWidth().padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Icon(Icons.Default.Widgets, null,
-                                    tint = MaterialTheme.colorScheme.primary)
-                                Column(Modifier.weight(1f)) {
-                                    Text("Música y avisos", style = MaterialTheme.typography.titleMedium)
-                                    Text("Reproductor y módulo MP3",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                        if (stationSection == "Resumen" || stationSection == "Audio") {
+                            item {
+                                OutlinedCard(
+                                    onClick = {
+                                        previousOpenedId = openedId
+                                        openedId = "compi_dfplayer"
+                                    },
+                                    modifier = Modifier.fillMaxWidth().testTag("station_audio_shortcut")
+                                ) {
+                                    Row(Modifier.fillMaxWidth().padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        Icon(Icons.Default.Widgets, null,
+                                            tint = MaterialTheme.colorScheme.primary)
+                                        Column(Modifier.weight(1f)) {
+                                            Text("Música y avisos", style = MaterialTheme.typography.titleMedium)
+                                            Text("Reproductor y módulo MP3 DFPlayer Mini",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        Icon(Icons.Default.ChevronRight, null)
+                                    }
                                 }
-                                Icon(Icons.Default.ChevronRight, null)
                             }
                         }
                     }

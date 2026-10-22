@@ -40,6 +40,8 @@ inline constexpr ComponentCatalogEntry kCatalog[] = {
      kCapRgb, true},
     {"ssd1306_oled", "SSD1306 OLED", ComponentType::Display, HardwareInterface::I2c, 0x3C,
      kCapDisplay, true},
+    {"audio_dfplayer", "DFPlayer Mini", ComponentType::Actuator, HardwareInterface::Uart, 17,
+     0, true},
 };
 
 inline constexpr size_t kCatalogSize = sizeof(kCatalog) / sizeof(kCatalog[0]);
