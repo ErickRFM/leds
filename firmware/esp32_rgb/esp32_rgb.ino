@@ -1291,6 +1291,12 @@ void setup() {
   } else {
     Serial.println("GPIO16 disponible en perfil sin PSRAM; requiere prueba electrica real.");
   }
+#if COMPI_ENABLE_DFPLAYER
+  // Reserve transport pins against runtime lab reconfiguration while UART2
+  // is enabled. These pins are not free user GPIO in the full lab profile.
+  pinManager.registerSystemPin(COMPI_DFPLAYER_TX, "audio.dfplayer");
+  pinManager.registerSystemPin(COMPI_DFPLAYER_RX, "audio.dfplayer");
+#endif
   pinManager.registerSystemPin(LED_R, "led.rgb");
   pinManager.registerSystemPin(LED_G, "led.rgb");
   pinManager.registerSystemPin(LED_B, "led.rgb");
