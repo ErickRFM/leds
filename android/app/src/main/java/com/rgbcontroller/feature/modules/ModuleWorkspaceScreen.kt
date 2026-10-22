@@ -245,9 +245,12 @@ fun ModuleWorkspaceScreen(
                             Text("Expresiones temporales en la pantalla física",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                for ((face, label) in listOf("happy" to "Feliz",
-                                        "sleepy" to "Sueño", "surprised" to "Sorpresa")) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                for (faces in listOf("happy" to "Feliz",
+                                        "sleepy" to "Sueño", "surprised" to "Sorpresa",
+                                        "pumpkin" to "Calabaza", "cat" to "Gato").chunked(3)) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        for ((face, label) in faces) {
                                     OutlinedButton(
                                         onClick = {
                                             scope.launch {
@@ -276,6 +279,8 @@ fun ModuleWorkspaceScreen(
                                         modifier = Modifier.weight(1f).testTag("station_oled_$face"),
                                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 10.dp)
                                     ) { Text(label, maxLines = 1) }
+                                        }
+                                    }
                                 }
                             }
                             if (!wifiAuthorized) {
@@ -1294,7 +1299,8 @@ private fun ModuleReadings(
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for ((face, label) in listOf("surprised" to "Sorpresa", "angry" to "Alerta")) {
+                        for ((face, label) in listOf("surprised" to "Sorpresa", "angry" to "Alerta",
+                                "pumpkin" to "Calabaza", "cat" to "Gato")) {
                             OutlinedButton(onClick = { onOledFace(face) }, enabled = canControlOled,
                                 modifier = Modifier.weight(1f).testTag("oled_face_$face")) { Text(label) }
                         }

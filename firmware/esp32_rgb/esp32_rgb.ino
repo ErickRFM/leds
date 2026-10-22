@@ -718,6 +718,29 @@ bool oledDisplayCommand(const char* mode, const char* value, void*) {
     oledDriver.fillCircle(34, 34, 13, SSD1306_WHITE);
     oledDriver.fillCircle(94, 34, 13, SSD1306_WHITE);
     oledDriver.drawCircle(64, 56, 5, SSD1306_WHITE);
+  } else if (std::strcmp(value, "pumpkin") == 0) {
+    // A recognisable jack-o'-lantern on the actual 128x64 SSD1306.
+    oledDriver.drawRoundRect(23, 13, 82, 46, 14, SSD1306_WHITE);
+    oledDriver.fillRect(59, 6, 10, 9, SSD1306_WHITE);
+    oledDriver.drawLine(64, 7, 73, 3, SSD1306_WHITE);
+    oledDriver.fillTriangle(38, 30, 51, 22, 52, 35, SSD1306_WHITE);
+    oledDriver.fillTriangle(90, 30, 77, 22, 76, 35, SSD1306_WHITE);
+    oledDriver.fillTriangle(64, 34, 57, 44, 71, 44, SSD1306_WHITE);
+    oledDriver.drawLine(40, 47, 51, 54, SSD1306_WHITE);
+    oledDriver.drawLine(51, 54, 64, 49, SSD1306_WHITE);
+    oledDriver.drawLine(64, 49, 77, 54, SSD1306_WHITE);
+    oledDriver.drawLine(77, 54, 88, 47, SSD1306_WHITE);
+  } else if (std::strcmp(value, "cat") == 0) {
+    oledDriver.drawTriangle(19, 26, 30, 3, 49, 19, SSD1306_WHITE);
+    oledDriver.drawTriangle(79, 19, 98, 3, 109, 26, SSD1306_WHITE);
+    oledDriver.drawRoundRect(22, 16, 84, 45, 18, SSD1306_WHITE);
+    oledDriver.fillCircle(47, 36, 5, SSD1306_WHITE);
+    oledDriver.fillCircle(81, 36, 5, SSD1306_WHITE);
+    oledDriver.fillTriangle(60, 43, 68, 43, 64, 48, SSD1306_WHITE);
+    oledDriver.drawLine(64, 48, 56, 52, SSD1306_WHITE);
+    oledDriver.drawLine(64, 48, 72, 52, SSD1306_WHITE);
+    oledDriver.drawLine(28, 48, 53, 47, SSD1306_WHITE);
+    oledDriver.drawLine(75, 47, 101, 48, SSD1306_WHITE);
   } else if (std::strcmp(value, "happy") == 0) {
     oledDriver.fillRoundRect(19, 22, 29, 29, 12, SSD1306_WHITE);
     oledDriver.fillRoundRect(80, 22, 29, 29, 12, SSD1306_WHITE);
