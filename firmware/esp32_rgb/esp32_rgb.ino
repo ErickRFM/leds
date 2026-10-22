@@ -705,6 +705,21 @@ bool oledDisplayCommand(const char* mode, const char* value, void*) {
     if (shown) lastOledUserCommandAt = millis();
     return shown;
   }
+  // SSD1306 hardware contrast (not an ambient-light sensor or RGB dimmer).
+  // Reject malformed input instead of silently applying an unintended level.
+  if (std::strcmp(mode, "contrast") == 0) {
+    if (value[0] == 0) return false;
+    unsigned int level = 0;
+    for (const char* digit = value; *digit != 0; ++digit) {
+      if (*digit < '0' || *digit > '9') return false;
+      level = level * 10u + static_cast<unsigned int>(*digit - '0');
+      if (level > 255u) return false;
+    }
+    if (level < 8u) return false;
+    oledDriver.ssd1306_command(SSD1306_SETCONTRAST);
+    oledDriver.ssd1306_command(static_cast<uint8_t>(level));
+    return true;
+  }
   if (std::strcmp(mode, "face") != 0) return false;
   oledDriver.clearDisplay();
   oledDriver.setTextColor(SSD1306_WHITE);
@@ -723,6 +738,24 @@ bool oledDisplayCommand(const char* mode, const char* value, void*) {
     oledDriver.fillRoundRect(80, 22, 29, 29, 12, SSD1306_WHITE);
     oledDriver.drawLine(58, 55, 64, 58, SSD1306_WHITE);
     oledDriver.drawLine(64, 58, 70, 55, SSD1306_WHITE);
+  } else if (std::strcmp(value, "pumpkin") == 0) {
+    oledDriver.drawRoundRect(36, 13, 56, 44, 18, SSD1306_WHITE);
+    oledDriver.drawLine(62, 14, 66, 6, SSD1306_WHITE);
+    oledDriver.drawLine(66, 6, 73, 8, SSD1306_WHITE);
+    oledDriver.fillTriangle(47, 32, 56, 23, 59, 35, SSD1306_WHITE);
+    oledDriver.fillTriangle(81, 32, 72, 23, 69, 35, SSD1306_WHITE);
+    oledDriver.drawLine(49, 43, 58, 49, SSD1306_WHITE);
+    oledDriver.drawLine(58, 49, 70, 49, SSD1306_WHITE);
+    oledDriver.drawLine(70, 49, 81, 43, SSD1306_WHITE);
+  } else if (std::strcmp(value, "cat") == 0) {
+    oledDriver.drawTriangle(34, 23, 38, 6, 53, 19, SSD1306_WHITE);
+    oledDriver.drawTriangle(75, 19, 90, 6, 94, 23, SSD1306_WHITE);
+    oledDriver.drawRoundRect(33, 18, 62, 40, 18, SSD1306_WHITE);
+    oledDriver.fillCircle(50, 35, 3, SSD1306_WHITE);
+    oledDriver.fillCircle(78, 35, 3, SSD1306_WHITE);
+    oledDriver.fillTriangle(60, 43, 68, 43, 64, 48, SSD1306_WHITE);
+    oledDriver.drawLine(40, 46, 57, 48, SSD1306_WHITE);
+    oledDriver.drawLine(71, 48, 88, 46, SSD1306_WHITE);
   } else {
     return false;
   }
