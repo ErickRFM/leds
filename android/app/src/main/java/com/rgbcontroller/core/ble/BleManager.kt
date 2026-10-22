@@ -343,11 +343,25 @@ class BleManager(private val context: Context) {
         _deviceState.value = "Esperando estado del ESP32"
         _connectionState.value = BleConnectionState.Connecting
         try {
-            gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
-        } catch (e: SecurityException) {
+            val newGatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
+            if (newGatt == null) {
+                lostLink("Android no pudo iniciar la conexión GATT")
+            } else {
+                gatt = newGatt
+            }
+        } catch (_: SecurityException) {
+            // A failed connectGatt must not leave the 15-second timeout armed.
+            handler.removeCallbacks(connectionTimeout)
+            closeConnection()
             _connectionState.value = BleConnectionState.Error("Permiso de conexión denegado")
-        } catch (e: IllegalArgumentException) {
+        } catch (_: IllegalArgumentException) {
+            handler.removeCallbacks(connectionTimeout)
+            closeConnection()
             _connectionState.value = BleConnectionState.Error("Dispositivo BLE inválido")
+        } catch (_: IllegalStateException) {
+            handler.removeCallbacks(connectionTimeout)
+            closeConnection()
+            _connectionState.value = BleConnectionState.Error("Bluetooth no disponible; vuelve a conectar")
         }
     }
 
