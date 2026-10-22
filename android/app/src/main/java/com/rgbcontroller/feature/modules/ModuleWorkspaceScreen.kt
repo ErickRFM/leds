@@ -159,10 +159,12 @@ fun ModuleWorkspaceScreen(
                      else ComponentCatalog.get(id)?.name ?: id,
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.weight(1f))
-                TextButton(
-                    onClick = { editingId = if (id == ModuleWorkspaceGrouping.ENVIRONMENT) environmentSensor else id },
-                    modifier = Modifier.testTag("module_edit_pins")
-                ) { Icon(Icons.Default.Tune, null); Text("GPIO") }
+                if (id != "compi_dfplayer") {
+                    TextButton(
+                        onClick = { editingId = if (id == ModuleWorkspaceGrouping.ENVIRONMENT) environmentSensor else id },
+                        modifier = Modifier.testTag("module_edit_pins")
+                    ) { Icon(Icons.Default.Tune, null); Text("GPIO") }
+                }
             }
             if (id == "compi_dfplayer") {
                 LazyColumn(
