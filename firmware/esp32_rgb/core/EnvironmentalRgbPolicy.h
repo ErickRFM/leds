@@ -41,7 +41,7 @@ class EnvironmentalRgbPolicy {
     if (hasBand_) {
       const float boundaries[4] = {20.0f, 26.0f, 30.0f, 35.0f};
       if (band > band_ && t < boundaries[band_] + 0.25f) band = band_;
-      if (band < band_ && t >= boundaries[band - 1] - 0.25f) band = band_;
+      if (band < band_ && t >= boundaries[band] - 0.25f) band = band_;
     }
     hasBand_ = true;
     band_ = band;
