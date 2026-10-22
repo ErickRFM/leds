@@ -85,6 +85,11 @@ class CompiLabSession {
         operationStatus = LabOperationStatus(name, LabOperationPhase.QUEUED)
         return try {
             val value = serialized {
+                // A command queued before a route/transport/key change must not
+                // execute against the new session after acquiring the mutex.
+                if (startingRevision != revision) {
+                    throw CancellationException("La conexión cambió mientras el comando esperaba.")
+                }
                 if (id == latestOperationId) {
                     operationStatus = LabOperationStatus(name, LabOperationPhase.RUNNING)
                 }
