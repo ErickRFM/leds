@@ -870,33 +870,54 @@ class BleManager(private val context: Context) {
      */
     suspend fun readComponentSnapshot(kind: BleSnapshotAssembler.Kind): String? =
         snapshotMutex.withLock {
-            if (_connectionState.value != BleConnectionState.Ready ||
-                _securityState.value != BleSecurityState.Authorized ||
-                enrollmentPhase != EnrollmentPhase.IDLE) return@withLock null
-            snapshotRequestId = snapshotRequestId % 65535 + 1
-            val request = snapshotRequestId
-            val deferred = CompletableDeferred<BleSnapshotAssembler.Snapshot>()
-            snapshotAssembler.begin(kind, request)
-            pendingSnapshot = deferred
-            val enqueued = synchronized(pending) {
-                if (pending.size >= 16) false
-                else {
-                    pending.addLast("SNP,${kind.code},$request")
-                    true
+            // A busy response is transient while the device drains the previous
+            // framed notification. Retry with a NEW sequence, never reuse stale data.
+            repeat(3) { attempt ->
+                if (_connectionState.value != BleConnectionState.Ready ||
+                    _securityState.value != BleSecurityState.Authorized ||
+                    enrollmentPhase != EnrollmentPhase.IDLE) return@withLock null
+                snapshotRequestId = snapshotRequestId % 65535 + 1
+                val request = snapshotRequestId
+                val deferred = CompletableDeferred<BleSnapshotAssembler.Snapshot>()
+                snapshotAssembler.begin(kind, request)
+                pendingSnapshot = deferred
+                val enqueued = synchronized(pending) {
+                    if (pending.size >= 16) false
+                    else {
+                        pending.addLast("SNP,${kind.code},$request")
+                        true
+                    }
+                }
+                if (!enqueued) {
+                    pendingSnapshot = null
+                    snapshotAssembler.reset()
+                    return@withLock null
+                }
+                drainQueue()
+                var busy = false
+                try {
+                    val result = withTimeoutOrNull(6_000L) { deferred.await() }?.json
+                    if (result != null) return@withLock result
+                    return@withLock null
+                } catch (failure: IllegalStateException) {
+                    if (failure.message?.contains("SNP,BUSY") == true) {
+                        busy = true
+                    } else {
+                        throw failure
+                    }
+                } finally {
+                    if (pendingSnapshot === deferred) pendingSnapshot = null
+                    snapshotAssembler.reset()
+                }
+                if (busy && attempt < 2) {
+                    kotlinx.coroutines.delay(350L * (attempt + 1))
+                } else if (busy) {
+                    throw IllegalStateException(
+                        "ESP32 ocupado transmitiendo instantáneas BLE. Reintenta al terminar."
+                    )
                 }
             }
-            if (!enqueued) {
-                pendingSnapshot = null
-                snapshotAssembler.reset()
-                return@withLock null
-            }
-            drainQueue()
-            try {
-                withTimeoutOrNull(6_000L) { deferred.await() }?.json
-            } finally {
-                if (pendingSnapshot === deferred) pendingSnapshot = null
-                snapshotAssembler.reset()
-            }
+            null
         }
 
     /**
