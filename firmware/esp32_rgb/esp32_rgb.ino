@@ -946,9 +946,10 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
     entry.pins[1] = COMPI_DFPLAYER_RX;
     // UART is configured but no inbound ACK or SD detection is checked here.
     // Do not advertise the player as physically detected/active.
-    entry.active = false;
+    entry.active = dfplayerResponded;
     entry.pinCount = 2;
-    entry.state = esp32core::ComponentState::Catalog;
+    entry.state = entry.active ? esp32core::ComponentState::Active
+                               : esp32core::ComponentState::Catalog;
   }
 #endif
 
@@ -1363,7 +1364,37 @@ esp32core::EnvironmentalVoicePolicy voicePolicy;
 // Single active UART owner for MP3 commands in this sketch.
 HardwareSerial dfplayerSerial(2);
 bool automaticVoiceEnabled = true;
+bool dfplayerResponded = false;
+bool dfplayerSdPresent = false;
+uint8_t dfplayerRxFrame[10] = {};
+uint8_t dfplayerRxCount = 0;
 uint32_t lastVoiceSampleAt = 0;
+// Parse only complete framed packets with a valid checksum; never infer
+// that writing a command means the MP3 module was detected.
+void pollDfplayerReplies() {
+  while (dfplayerSerial.available() > 0) {
+    const int nextByte = dfplayerSerial.read();
+    if (nextByte < 0) break;
+    const uint8_t byteValue = static_cast<uint8_t>(nextByte);
+    if (dfplayerRxCount == 0 && byteValue != 0x7E) continue;
+    dfplayerRxFrame[dfplayerRxCount++] = byteValue;
+    if (dfplayerRxCount < sizeof(dfplayerRxFrame)) continue;
+    dfplayerRxCount = 0;
+    if (dfplayerRxFrame[0] != 0x7E || dfplayerRxFrame[1] != 0xFF ||
+        dfplayerRxFrame[2] != 0x06 || dfplayerRxFrame[9] != 0xEF) continue;
+    const uint16_t actual = static_cast<uint16_t>(dfplayerRxFrame[7] << 8) |
+                            dfplayerRxFrame[8];
+    uint16_t sum = 0;
+    for (uint8_t i = 1; i <= 6; ++i) sum += dfplayerRxFrame[i];
+    if (actual != static_cast<uint16_t>(0u - sum)) continue;
+    dfplayerResponded = true;
+    const uint8_t event = dfplayerRxFrame[3];
+    if (event == 0x3A) dfplayerSdPresent = true;
+    else if (event == 0x3B) dfplayerSdPresent = false;
+    else if (event == 0x3F) dfplayerSdPresent = (dfplayerRxFrame[6] & 0x02u) != 0;
+  }
+}
+
 bool dfplayerCommand(uint8_t command, uint16_t parameter) {
   const uint8_t packet[10] = {
     0x7E, 0xFF, 0x06, command, 0x00,
@@ -1417,6 +1448,7 @@ void setup() {
   dfplayerSerial.begin(9600, SERIAL_8N1, COMPI_DFPLAYER_RX, COMPI_DFPLAYER_TX);
   delay(250);
   dfplayerCommand(0x06, 1); // volume 1/30 until amplifier power is verified
+  dfplayerCommand(0x3F, 0); // query online devices; never assume SD or playback
 #endif
 
   Serial.begin(115200);
@@ -1604,6 +1636,9 @@ void loop() {
     Serial.println("BOOT: BLE reannounced after disconnect");
   }
   processBleCommands();
+#if COMPI_ENABLE_DFPLAYER
+  pollDfplayerReplies();
+#endif
   ownerSession.tick(now);
   servePhysicalWindow(now);
   wifiLab.tick(now);
