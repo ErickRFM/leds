@@ -841,6 +841,12 @@ bool collectComponentTelemetry(char* output, size_t capacity, void*) {
 // Authoritative runtime component status. The firmware owns every pin; this
 // report exposes the exact pins currently leased by each started module and its
 // lifecycle, so clients never infer GPIO ownership from their local config.
+// The UART response flag is defined with the DFPlayer runtime below.
+// Declare it before the component-status collector to keep C++ name lookup valid.
+#if COMPI_ENABLE_DFPLAYER
+extern bool dfplayerResponded;
+#endif
+
 bool collectComponentStatus(char* output, size_t capacity, void*) {
   esp32core::ComponentStatusEntry entries[8];
   size_t count = 0;
