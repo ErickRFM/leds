@@ -1362,7 +1362,7 @@ esp32core::EnvironmentalVoicePolicy voicePolicy;
 HardwareSerial dfplayerSerial(2);
 bool automaticVoiceEnabled = true;
 uint32_t lastVoiceSampleAt = 0;
-void dfplayerCommand(uint8_t command, uint16_t parameter) {
+bool dfplayerCommand(uint8_t command, uint16_t parameter) {
   const uint8_t packet[10] = {
     0x7E, 0xFF, 0x06, command, 0x00,
     static_cast<uint8_t>(parameter >> 8),
@@ -1374,35 +1374,31 @@ void dfplayerCommand(uint8_t command, uint16_t parameter) {
       (0xFFu + 0x06u + command + frame[4] + frame[5] + frame[6]));
   frame[7] = checksum >> 8;
   frame[8] = checksum & 0xFFu;
-  dfplayerSerial.write(frame, sizeof(frame));
+  // UART accepted all bytes; this does NOT prove DFPlayer playback or SD presence.
+  return dfplayerSerial.write(frame, sizeof(frame)) == sizeof(frame);
 }
-void dfplayerTrack(uint16_t track) {
-  if (track == 0 || track > 9999) return;
-  dfplayerCommand(0x12, track);
+bool dfplayerTrack(uint16_t track) {
+  if (track == 0 || track > 9999) return false;
+  return dfplayerCommand(0x12, track);
 }
 bool audioControlCommand(const char* verb, int param, void*) {
   if (verb == nullptr) return false;
   if (std::strcmp(verb, "play") == 0) {
     if (param < 1 || param > 99) return false;
-    dfplayerTrack(static_cast<uint16_t>(param));
-    return true;
+    return dfplayerTrack(static_cast<uint16_t>(param));
   }
   if (std::strcmp(verb, "volume") == 0) {
     if (param < 0 || param > 30) return false;
-    dfplayerCommand(0x06, static_cast<uint16_t>(param));
-    return true;
+    return dfplayerCommand(0x06, static_cast<uint16_t>(param));
   }
   if (std::strcmp(verb, "stop") == 0) {
-    dfplayerCommand(0x16, 0);
-    return true;
+    return dfplayerCommand(0x16, 0);
   }
   if (std::strcmp(verb, "pause") == 0) {
-    dfplayerCommand(0x0E, 0);
-    return true;
+    return dfplayerCommand(0x0E, 0);
   }
   if (std::strcmp(verb, "resume") == 0) {
-    dfplayerCommand(0x0D, 0);
-    return true;
+    return dfplayerCommand(0x0D, 0);
   }
   if (std::strcmp(verb, "voice") == 0) {
     if (param != 0 && param != 1) return false;
