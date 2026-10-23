@@ -105,6 +105,7 @@ fun ModuleWorkspaceScreen(
     var applyMessage by remember { mutableStateOf<String?>(null) }
     var ldrCalibrationMessage by remember { mutableStateOf<String?>(null) }
     var oledActionMessage by remember { mutableStateOf<String?>(null) }
+    var dfplayerActionMessage by remember { mutableStateOf<String?>(null) }
     var applying by remember { mutableStateOf(false) }
     // Physical Back should close a nested component editor/detail before leaving Modules.
     BackHandler(enabled = editingId != null || openedId != null) {
@@ -413,7 +414,46 @@ fun ModuleWorkspaceScreen(
                             }
                         }
                     }
-                    item(key = "dfplayer_audio_controls") { CompiAudioPlayerCard() }
+                    item(key = "dfplayer_audio_controls") {
+                        CompiAudioPlayerCard(
+                            canControlDfplayer = wifiAuthorized,
+                            hardwareFeedback = dfplayerActionMessage,
+                            onPlayDfplayerTrack = { track ->
+                                scope.launch {
+                                    val epoch = session.revision
+                                    try {
+                                        check(wifiAuthorized) { "Autoriza Wi-Fi para controlar el DFPlayer." }
+                                        session.serialized {
+                                            check(wifiAuthorized && epoch == session.revision) { "Conexión cambiada antes del comando MP3." }
+                                            labClient.playAudio(session.key, track)
+                                        }
+                                        dfplayerActionMessage = "ESP32 aceptó solicitud para pista $track; reproducción física no confirmada."
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
+                                    } catch (error: Exception) {
+                                        dfplayerActionMessage = "DFPlayer: ${error.message}"
+                                    }
+                                }
+                            },
+                            onSetEnvironmentalVoice = { enabled ->
+                                scope.launch {
+                                    val epoch = session.revision
+                                    try {
+                                        check(wifiAuthorized) { "Autoriza Wi-Fi para controlar voz ambiental." }
+                                        session.serialized {
+                                            check(wifiAuthorized && epoch == session.revision) { "Conexión cambiada antes del comando de voz." }
+                                            labClient.setAudioVoice(session.key, enabled)
+                                        }
+                                        dfplayerActionMessage = "ESP32 aceptó solicitud de voz ambiental; reproducción física no confirmada."
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
+                                    } catch (error: Exception) {
+                                        dfplayerActionMessage = "DFPlayer: ${error.message}"
+                                    }
+                                }
+                            }
+                        )
+                    }
                     item(key = "dfplayer_hardware_status") {
                         Card(shape = RoundedCornerShape(22.dp),
                             colors = CardDefaults.cardColors(
