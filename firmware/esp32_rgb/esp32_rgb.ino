@@ -944,9 +944,11 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
     entry.interfaceType = esp32core::HardwareInterface::Uart;
     entry.pins[0] = COMPI_DFPLAYER_TX;
     entry.pins[1] = COMPI_DFPLAYER_RX;
-    entry.active = true;
+    // UART is configured but no inbound ACK or SD detection is checked here.
+    // Do not advertise the player as physically detected/active.
+    entry.active = false;
     entry.pinCount = 2;
-    entry.state = esp32core::ComponentState::Active;
+    entry.state = esp32core::ComponentState::Catalog;
   }
 #endif
 
