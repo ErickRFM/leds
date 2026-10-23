@@ -32,10 +32,20 @@ fun SensorDashboard(
     var showDiagnostics by rememberSaveable(id) { mutableStateOf(false) }
     val readings = if (live) state.authoritativeTelemetry else state.persistedTelemetry
     val current = active && live && state.connected && state.authorityError == null
-    fun metric(type: String): Float? {
-        if (!current) return null
-        return ComponentTelemetryCodec.find(readings.orEmpty(), type)
-            ?.takeIf { it.valid && it.status == "fresh" && it.value.isFinite() }?.value
+    val now = System.currentTimeMillis()
+    // The latest firmware sample may be temporarily stale during a DHT retry.
+    // Display recent, verified history as last-known, never as live telemetry.
+    // History is scoped to the selected device/component by state.series().
+    fun metric(type: String): Pair<Float?, String> {
+        val fresh = if (current) ComponentTelemetryCodec.find(readings.orEmpty(), type)
+            ?.takeIf { it.valid && it.status == "fresh" && it.value.isFinite() } else null
+        if (fresh != null) return fresh.value to "● En vivo"
+        val last = state.series(id, type).lastOrNull {
+            it.isPlottable && it.recordedAtMs in (now - 120_000L)..now
+        }
+        return if (last != null) {
+            last.value to "Última lectura · hace ${((now - last.recordedAtMs) / 1000L).coerceAtLeast(0L)} s"
+        } else null to "Sin lectura válida"
     }
     val temperature = metric("temperature")
     val humidity = metric("humidity")
@@ -45,7 +55,6 @@ fun SensorDashboard(
         .orEmpty().firstOrNull { it.id == "sensor.$id" }
     val fault = diagnostic?.diagnostic
     val windowMs = minutes * 60_000L
-    val now = System.currentTimeMillis()
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Lecturas ${id.uppercase(Locale.ROOT)}",
@@ -57,9 +66,9 @@ fun SensorDashboard(
             )
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            SensorMetric("Temperatura", temperature, "°C", current,
+            SensorMetric("Temperatura", temperature.first, "°C", temperature.second,
                 Modifier.weight(1f).testTag("sensor_temperature_$id"))
-            SensorMetric("Humedad relativa", humidity, "%", current,
+            SensorMetric("Humedad relativa", humidity.first, "%", humidity.second,
                 Modifier.weight(1f).testTag("sensor_humidity_$id"))
         }
         OutlinedButton(onClick = { showDiagnostics = !showDiagnostics },
@@ -152,7 +161,7 @@ fun SensorDashboard(
 @Composable
 private fun SensorMetric(
     title: String, value: Float?, unit: String,
-    live: Boolean, modifier: Modifier
+    statusLabel: String, modifier: Modifier
 ) {
     Card(modifier = modifier, shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
@@ -165,11 +174,7 @@ private fun SensorMetric(
             Text(value?.let { String.format(Locale.getDefault(), "%.1f %s", it, unit) }
                 ?: "-- $unit", style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold)
-            Text(when {
-                value == null -> "Sin lectura válida"
-                live -> "● En vivo"
-                else -> "Histórico"
-            },
+            Text(statusLabel,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
