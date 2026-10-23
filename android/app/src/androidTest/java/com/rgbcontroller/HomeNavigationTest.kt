@@ -47,17 +47,17 @@ class HomeNavigationTest {
 
     @Test
     fun homeReturnsFromLedWithoutConnectingToEsp32() {
-        composeRule.onNodeWithTag("home_active_module").assertExists()
+        composeRule.onNodeWithTag("home_climate_hero").assertExists()
         composeRule.onNodeWithTag("open_led").performClick()
         composeRule.onNodeWithTag("module_workspace_list").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
-        composeRule.onNodeWithText("Compi").assertExists()
+        composeRule.onNodeWithText("COMPI").assertExists()
 
         // Re-entry must work too: no restored LED route may replace Home.
         composeRule.onNodeWithTag("open_led").performClick()
         composeRule.onNodeWithTag("module_workspace_list").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
-        composeRule.onNodeWithText("Compi").assertExists()
+        composeRule.onNodeWithText("COMPI").assertExists()
     }
 
     @Test
@@ -66,12 +66,12 @@ class HomeNavigationTest {
         composeRule.onNodeWithTag("modules_connection").performClick()
         composeRule.onNodeWithText("Dispositivos cercanos").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
-        composeRule.onNodeWithText("Compi").assertExists()
+        composeRule.onNodeWithText("COMPI").assertExists()
     }
 
     @Test
     fun hardwareSectionsAreReachableWithoutADevice() {
-        composeRule.onNodeWithTag("open_hardware").performScrollTo().performClick()
+        composeRule.onNodeWithTag("nav_hub").performClick()
         composeRule.onNodeWithText("Hardware Lab").assertExists()
 
         composeRule.waitUntil(10_000) {
@@ -98,12 +98,12 @@ class HomeNavigationTest {
         composeRule.onNodeWithTag("project_portable").assertExists()
 
         composeRule.onNodeWithTag("nav_home").performClick()
-        composeRule.onNodeWithText("Compi").assertExists()
+        composeRule.onNodeWithText("COMPI").assertExists()
     }
 
     @Test
     fun studioKeepsIndependentGpioAndRgbDrafts() {
-        composeRule.onNodeWithTag("open_code").performScrollTo().performClick()
+        composeRule.onNodeWithTag("nav_code").performClick()
         composeRule.waitUntil(10_000) {
             composeRule.onAllNodesWithTag("studio_source").fetchSemanticsNodes().isNotEmpty()
         }
@@ -115,8 +115,8 @@ class HomeNavigationTest {
         composeRule.onNodeWithTag("studio_engine_rgb").performClick()
         composeRule.onNodeWithTag("studio_source").assertTextContains("RGB 255 0 0", substring = true)
         composeRule.onNodeWithTag("nav_home").performClick()
-        composeRule.onNodeWithText("Compi").assertExists()
-        composeRule.onNodeWithTag("open_code").performScrollTo().performClick()
+        composeRule.onNodeWithText("COMPI").assertExists()
+        composeRule.onNodeWithTag("nav_code").performClick()
         composeRule.onNodeWithTag("studio_source").assertTextContains("RGB 255 0 0", substring = true)
     }
 
@@ -132,9 +132,9 @@ class HomeNavigationTest {
         composeRule.onNodeWithTag("home_settings").performClick()
         composeRule.onNodeWithTag("settings_screen").assertExists()
         composeRule.onNodeWithTag("nav_back").performClick()
-        composeRule.onNodeWithText("Compi").assertExists()
+        composeRule.onNodeWithText("COMPI").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
-        composeRule.onNodeWithText("Compi").assertExists()
+        composeRule.onNodeWithText("COMPI").assertExists()
     }
 
     @Test
@@ -148,7 +148,7 @@ class HomeNavigationTest {
         composeRule.onNodeWithTag("connect_bluetooth").performClick()
         composeRule.onNodeWithText("Dispositivos cercanos").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
-        composeRule.onNodeWithText("Compi").assertExists()
+        composeRule.onNodeWithText("COMPI").assertExists()
     }
 
     @Test
@@ -195,13 +195,13 @@ class HomeNavigationTest {
         composeRule.onNodeWithTag("nav_hub").performClick()
         composeRule.onNodeWithText("Hardware Lab").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
-        composeRule.onNodeWithText("Compi").assertExists()
+        composeRule.onNodeWithText("COMPI").assertExists()
 
         // A new connection entry must still provide an immediate Back route.
         composeRule.onNodeWithTag("home_device_status").performClick()
         composeRule.onNodeWithTag("connect_bluetooth").assertExists()
         composeRule.onNodeWithTag("nav_back").performClick()
-        composeRule.onNodeWithText("Compi").assertExists()
+        composeRule.onNodeWithText("COMPI").assertExists()
     }
 
     @Test
@@ -219,7 +219,7 @@ class HomeNavigationTest {
         composeRule.onNodeWithTag("module_back").performClick()
         composeRule.onNodeWithTag("module_workspace_list").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
-        composeRule.onNodeWithText("Compi").assertExists()
+        composeRule.onNodeWithText("COMPI").assertExists()
     }
 
     @Test
@@ -233,7 +233,7 @@ class HomeNavigationTest {
             composeRule.onNodeWithTag("module_workspace_list").assertExists()
         }
         composeRule.onNodeWithTag("nav_home").performClick()
-        composeRule.onNodeWithText("Compi").assertExists()
+        composeRule.onNodeWithText("COMPI").assertExists()
     }
 
     @Test
@@ -245,21 +245,21 @@ class HomeNavigationTest {
             .performScrollToNode(androidx.compose.ui.test.hasTestTag("module_catalog_dht11"))
         composeRule.onNodeWithTag("module_catalog_dht11").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
-        composeRule.onNodeWithText("Compi").assertExists()
+        composeRule.onNodeWithText("COMPI").assertExists()
     }
 
     @Test
     fun homeReturnsFromOtherPrimaryModules() {
-        composeRule.onNodeWithTag("open_code").performScrollTo().performClick()
+        composeRule.onNodeWithTag("nav_code").performClick()
         composeRule.onNodeWithTag("nav_home").performClick()
-        composeRule.onNodeWithText("Compi").assertExists()
+        composeRule.onNodeWithText("COMPI").assertExists()
 
         composeRule.onNodeWithTag("home_device_status").performClick()
         composeRule.onNodeWithTag("nav_back").performClick()
-        composeRule.onNodeWithText("Compi").assertExists()
+        composeRule.onNodeWithText("COMPI").assertExists()
 
-        composeRule.onNodeWithTag("open_hardware").performScrollTo().performClick()
+        composeRule.onNodeWithTag("nav_hub").performClick()
         composeRule.onNodeWithTag("nav_home").performClick()
-        composeRule.onNodeWithText("Compi").assertExists()
+        composeRule.onNodeWithText("COMPI").assertExists()
     }
 }
