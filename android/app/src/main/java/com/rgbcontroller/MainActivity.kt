@@ -93,7 +93,7 @@ private fun NavHostController.navigateTopLevel(screen: Screen) {
     if (screen == Screen.Home) {
         // Pop the actual root rather than navigating to another Home instance with
         // restoreState=true, which can revive the screen the user just left.
-        if (!popBackStack(Screen.Home.route, inclusive = false, saveState = true)) {
+        if (!popBackStack(Screen.Home.route, inclusive = false, saveState = false)) {
             navigate(Screen.Home.route) {
                 popUpTo(graph.findStartDestination().id) { inclusive = true }
                 launchSingleTop = true
