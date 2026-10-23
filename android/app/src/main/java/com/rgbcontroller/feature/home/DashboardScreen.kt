@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
@@ -567,8 +568,11 @@ private fun TelemetryChartSection(
                         .pointerInput(validSamples) {
                             detectTapGestures { offset ->
                                 val width = size.width
-                                val index = ((offset.x / width) * validSamples.size).toInt().coerceIn(0, validSamples.lastIndex)
-                                touchedSample = validSamples.getOrNull(index)
+                                val fraction = (offset.x / width).coerceIn(0f, 1f)
+                                val minTime = validSamples.first().recordedAtMs
+                                val maxTime = validSamples.last().recordedAtMs
+                                val tapTime = minTime + ((maxTime - minTime) * fraction).toLong()
+                                touchedSample = validSamples.minByOrNull { kotlin.math.abs(it.recordedAtMs - tapTime) }
                             }
                         }
                 ) {
