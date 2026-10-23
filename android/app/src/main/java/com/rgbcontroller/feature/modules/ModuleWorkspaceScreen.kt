@@ -154,7 +154,8 @@ fun ModuleWorkspaceScreen(
     } }
 
     if (openedId != null) {
-        val id = openedId!!
+        // Hardware DFPlayer and Music always share a single player route.
+        val id = if (openedId == "dfplayer_mp3") "compi_dfplayer" else openedId!!
         Column(Modifier.fillMaxSize()) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
@@ -423,7 +424,11 @@ fun ModuleWorkspaceScreen(
                                     fontWeight = FontWeight.SemiBold)
                                 Text("Reproducción por bocina externa",
                                     style = MaterialTheme.typography.bodyMedium)
-                                Text("Requiere una microSD con pistas compatibles. El estado de reproducción física aún no se confirma mediante BUSY.",
+                                Text(when {
+                                    !currentlyVerified -> "Sin estado en vivo del ESP32. No se puede confirmar la detección del módulo ni de la microSD."
+                                    runtime("dfplayer_mp3")?.active == true -> "Firmware reporta actividad UART del DFPlayer; reproducción y microSD siguen sin confirmación BUSY."
+                                    else -> "El ESP32 no confirma el DFPlayer físico. Comprueba UART, alimentación y microSD."
+                                },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text("El audio del teléfono no se transmite al DFPlayer por Bluetooth.",
@@ -855,7 +860,7 @@ fun ModuleWorkspaceScreen(
                         }
                     }
                 }
-                items(configured, key = { "module_${it.id}" }) { group ->
+                items(configured.filterNot { it.id == "dfplayer_mp3" }, key = { "module_${it.id}" }) { group ->
                     val id = group.id
                     val descriptor = ComponentCatalog.get(id)
                     val physical = runtime(id)
