@@ -1378,7 +1378,9 @@ uint32_t lastVoiceSampleAt = 0;
 // Parse only complete framed packets with a valid checksum; never infer
 // that writing a command means the MP3 module was detected.
 void pollDfplayerReplies() {
-  while (dfplayerSerial.available() > 0) {
+  // Bound each tick so a noisy UART cannot starve BLE, Wi-Fi or sensor work.
+  uint8_t consumed = 0;
+  while (consumed++ < 64 && dfplayerSerial.available() > 0) {
     const int nextByte = dfplayerSerial.read();
     if (nextByte < 0) break;
     const uint8_t byteValue = static_cast<uint8_t>(nextByte);
