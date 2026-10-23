@@ -43,7 +43,6 @@
 #include "modules/SoilMoistureModule.h"
 #include "modules/LdrLightModule.h"
 #include "modules/OledSsd1306Module.h"
-#include "modules/DfPlayerMiniModule.h"
 
 // ---------------------------------------------------------------------------
 // Optional modular hardware components.
