@@ -90,7 +90,8 @@ fun CompiAudioPlayerCard(
     canControlDfplayer: Boolean = false,
     onPlayDfplayerTrack: (Int) -> Unit = {},
     onSetEnvironmentalVoice: (Boolean) -> Unit = {},
-    hardwareFeedback: String? = null
+    hardwareFeedback: String? = null,
+    confirmedVoiceEnabled: Boolean? = null
 ) {
     val context = LocalContext.current
     val prefs = remember(context) {
@@ -111,8 +112,7 @@ fun CompiAudioPlayerCard(
 
     var revision by remember { mutableIntStateOf(0) }
     var volume by remember { mutableFloatStateOf(0.6f) }
-    var isEnvVoiceEnabled by remember { mutableStateOf(false) }
-    var dfplayerMessage by remember { mutableStateOf("DFPlayer: estado físico sin confirmar. Requiere respuesta real del ESP32 y del módulo.") }
+        var dfplayerMessage by remember { mutableStateOf("DFPlayer: estado físico sin confirmar. Requiere respuesta real del ESP32 y del módulo.") }
 
     // 24 Tracks Map from firmware specification
     val quickTrackGroups = listOf(
@@ -255,7 +255,7 @@ fun CompiAudioPlayerCard(
                 }
 
                 Switch(
-                    checked = isEnvVoiceEnabled,
+                    checked = confirmedVoiceEnabled == true,
                     onCheckedChange = { requested ->
                         if (canControlDfplayer) {
                             onSetEnvironmentalVoice(requested)
