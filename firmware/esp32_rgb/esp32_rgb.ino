@@ -1374,6 +1374,7 @@ bool dfplayerResponded = false;
 bool dfplayerSdPresent = false;
 uint8_t dfplayerRxFrame[10] = {};
 uint8_t dfplayerRxCount = 0;
+uint32_t dfplayerLastRxByteAt = 0;
 uint32_t lastVoiceSampleAt = 0;
 // Parse only complete framed packets with a valid checksum; never infer
 // that writing a command means the MP3 module was detected.
@@ -1384,6 +1385,12 @@ void pollDfplayerReplies() {
     const int nextByte = dfplayerSerial.read();
     if (nextByte < 0) break;
     const uint8_t byteValue = static_cast<uint8_t>(nextByte);
+    const uint32_t receivedAt = millis();
+    if (dfplayerRxCount != 0 &&
+        static_cast<uint32_t>(receivedAt - dfplayerLastRxByteAt) > 100u) {
+      dfplayerRxCount = 0; // Drop an incomplete stale frame.
+    }
+    dfplayerLastRxByteAt = receivedAt;
     if (dfplayerRxCount == 0 && byteValue != 0x7E) continue;
     dfplayerRxFrame[dfplayerRxCount++] = byteValue;
     if (dfplayerRxCount < sizeof(dfplayerRxFrame)) continue;
