@@ -106,6 +106,7 @@ fun ModuleWorkspaceScreen(
     var ldrCalibrationMessage by remember { mutableStateOf<String?>(null) }
     var oledActionMessage by remember { mutableStateOf<String?>(null) }
     var dfplayerActionMessage by remember { mutableStateOf<String?>(null) }
+    var dfplayerVoiceRequested by remember { mutableStateOf<Boolean?>(null) }
     var applying by remember { mutableStateOf(false) }
     // Physical Back should close a nested component editor/detail before leaving Modules.
     BackHandler(enabled = editingId != null || openedId != null) {
@@ -418,6 +419,7 @@ fun ModuleWorkspaceScreen(
                         CompiAudioPlayerCard(
                             canControlDfplayer = wifiAuthorized,
                             hardwareFeedback = dfplayerActionMessage,
+                            confirmedVoiceEnabled = dfplayerVoiceRequested,
                             onPlayDfplayerTrack = { track ->
                                 scope.launch {
                                     val epoch = session.revision
@@ -444,7 +446,8 @@ fun ModuleWorkspaceScreen(
                                             check(wifiAuthorized && epoch == session.revision) { "Conexión cambiada antes del comando de voz." }
                                             labClient.setAudioVoice(session.key, enabled)
                                         }
-                                        dfplayerActionMessage = "ESP32 aceptó solicitud de voz ambiental; reproducción física no confirmada."
+                                        dfplayerVoiceRequested = enabled
+                                        dfplayerActionMessage = "ESP32 aceptó la configuración de voz ambiental; reproducción física no confirmada."
                                     } catch (cancelled: CancellationException) {
                                         throw cancelled
                                     } catch (error: Exception) {
