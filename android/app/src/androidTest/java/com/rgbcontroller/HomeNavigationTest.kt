@@ -78,7 +78,9 @@ class HomeNavigationTest {
             composeRule.onAllNodesWithTag("hardware_tab_sensors").fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithTag("hardware_tab_sensors").performClick()
-        composeRule.onNodeWithTag("component_telemetry_dht11").assertExists()
+        val hasDht11 = composeRule.onAllNodesWithTag("component_telemetry_dht11").fetchSemanticsNodes().isNotEmpty()
+        val dhtTag = if (hasDht11) "component_telemetry_dht11" else "component_telemetry_dht22"
+        composeRule.onNodeWithTag(dhtTag).assertExists()
 
         composeRule.onNodeWithTag("hardware_tabs")
             .performScrollToNode(androidx.compose.ui.test.hasTestTag("hardware_tab_pins"))

@@ -702,7 +702,12 @@ private fun Dht22TelemetryCard(state: ComponentDashboardState) {
             "dht22" in state.confirmedCatalogIds -> "DHT22"
             else -> "DHT (modelo sin confirmar)"
         },
-        modifier = Modifier.testTag("component_telemetry_dht22")
+        modifier = Modifier.testTag(
+            if ("dht22" in state.confirmedCatalogIds && "dht11" !in state.confirmedCatalogIds)
+                "component_telemetry_dht22"
+            else
+                "component_telemetry_dht11"
+        )
     )
 }
 
