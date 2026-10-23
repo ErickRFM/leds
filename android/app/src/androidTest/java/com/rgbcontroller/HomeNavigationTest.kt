@@ -48,13 +48,14 @@ class HomeNavigationTest {
     @Test
     fun homeReturnsFromLedWithoutConnectingToEsp32() {
         composeRule.onNodeWithTag("home_climate_hero").assertExists()
-        composeRule.onNodeWithTag("open_led").performClick()
+        // The quick action row scrolls with the dashboard on small screens.
+        composeRule.onNodeWithTag("open_led").performScrollTo().performClick()
         composeRule.onNodeWithTag("module_workspace_list").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.onNodeWithText("COMPI").assertExists()
 
         // Re-entry must work too: no restored LED route may replace Home.
-        composeRule.onNodeWithTag("open_led").performClick()
+        composeRule.onNodeWithTag("open_led").performScrollTo().performClick()
         composeRule.onNodeWithTag("module_workspace_list").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.onNodeWithText("COMPI").assertExists()
@@ -62,7 +63,7 @@ class HomeNavigationTest {
 
     @Test
     fun homeReturnsFromNestedBluetoothDevices() {
-        composeRule.onNodeWithTag("open_led").performClick()
+        composeRule.onNodeWithTag("open_led").performScrollTo().performClick()
         composeRule.onNodeWithTag("modules_connection").performClick()
         composeRule.onNodeWithText("Dispositivos cercanos").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()

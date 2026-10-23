@@ -68,6 +68,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -219,10 +221,17 @@ fun DashboardScreen(
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CompiBadge(
-                    label = if (ready) "Conectado" else "Desconectado",
-                    type = if (ready) CompiBadgeType.LIVE else CompiBadgeType.OFFLINE
-                )
+                Surface(
+                    onClick = onDevices,
+                    modifier = Modifier.testTag("home_device_status"),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                    color = androidx.compose.ui.graphics.Color.Transparent
+                ) {
+                    CompiBadge(
+                        label = if (ready) "Conectado" else "Desconectado",
+                        type = if (ready) CompiBadgeType.LIVE else CompiBadgeType.OFFLINE
+                    )
+                }
                 IconButton(
                     onClick = onSettings,
                     modifier = Modifier.testTag("home_settings")
@@ -421,7 +430,7 @@ fun DashboardScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            QuickActionTile("Módulos", Icons.Default.ColorLens, onLed, Modifier.weight(1f))
+            QuickActionTile("Módulos", Icons.Default.ColorLens, onLed, Modifier.weight(1f).testTag("open_led"))
             QuickActionTile("Hardware", Icons.Default.Memory, onHardware, Modifier.weight(1f))
             QuickActionTile("Studio", Icons.Default.Code, onCode, Modifier.weight(1f))
         }

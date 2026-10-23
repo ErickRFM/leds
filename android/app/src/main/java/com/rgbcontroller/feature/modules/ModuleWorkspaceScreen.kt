@@ -279,16 +279,30 @@ fun ModuleWorkspaceScreen(
                         }
 
                         if (stationSection == "Resumen" || stationSection == "Iluminación") {
-                            item {
-                                RgbLightingPanel(
-                                    currentColor = Color(0xFFA88BFF),
-                                    brightness = 0.8f,
-                                    isEnvironmentalMode = false,
-                                    isAuthorized = wifiAuthorized || bleAuthorized,
-                                    onColorChanged = { },
-                                    onBrightnessChanged = { },
-                                    onEnvironmentalModeToggled = { }
-                                )
+                            item(key = "station_rgb_shortcut") {
+                                // Route to the audited BLE/Wi-Fi RGB module instead of
+                                // rendering local sliders that cannot drive hardware.
+                                OutlinedCard(
+                                    onClick = {
+                                        previousOpenedId = openedId
+                                        openedId = "led_rgb"
+                                    },
+                                    modifier = Modifier.fillMaxWidth().testTag("station_rgb_shortcut")
+                                ) {
+                                    Row(Modifier.fillMaxWidth().padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        Icon(Icons.Default.Lightbulb, null,
+                                            tint = MaterialTheme.colorScheme.primary)
+                                        Column(Modifier.weight(1f)) {
+                                            Text("Control RGB", style = MaterialTheme.typography.titleMedium)
+                                            Text("Color, brillo y efectos por BLE o Wi-Fi",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        Icon(Icons.Default.ChevronRight, null)
+                                    }
+                                }
                             }
                             item {
                                 EnvironmentalRgbControlCard(session, labClient, bleManager)
