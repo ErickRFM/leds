@@ -58,7 +58,7 @@
 // User's physical test build: set to 1 only after wiring all sensors,
 // DFPlayer and suitable 3W/4ohm speaker. Default 0 preserves safe rollout.
 #ifndef COMPI_FULL_LAB_PROFILE
-#define COMPI_FULL_LAB_PROFILE 0
+#define COMPI_FULL_LAB_PROFILE 1
 #endif
 #ifndef COMPI_BUILD_DHT11
 #define COMPI_BUILD_DHT11 1
