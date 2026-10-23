@@ -738,19 +738,25 @@ class LocalWifiControl final {
 
     server_.on("/v2/audio/stop", HTTP_POST, [this]() {
       if (!authorized()) return;
-      if (audio_ != nullptr) audio_("stop", 0, audioContext_);
+      if (audio_ == nullptr || !audio_("stop", 0, audioContext_)) {
+        jsonError(409, "audio_stop_failed"); return;
+      }
       server_.send(200, "application/json", "{\"status\":\"STOPPED\"}");
     });
 
     server_.on("/v2/audio/pause", HTTP_POST, [this]() {
       if (!authorized()) return;
-      if (audio_ != nullptr) audio_("pause", 0, audioContext_);
+      if (audio_ == nullptr || !audio_("pause", 0, audioContext_)) {
+        jsonError(409, "audio_pause_failed"); return;
+      }
       server_.send(200, "application/json", "{\"status\":\"PAUSED\"}");
     });
 
     server_.on("/v2/audio/resume", HTTP_POST, [this]() {
       if (!authorized()) return;
-      if (audio_ != nullptr) audio_("resume", 0, audioContext_);
+      if (audio_ == nullptr || !audio_("resume", 0, audioContext_)) {
+        jsonError(409, "audio_resume_failed"); return;
+      }
       server_.send(200, "application/json", "{\"status\":\"PLAYING\"}");
     });
 
