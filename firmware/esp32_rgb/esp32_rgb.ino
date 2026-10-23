@@ -43,7 +43,6 @@
 #include "modules/SoilMoistureModule.h"
 #include "modules/LdrLightModule.h"
 #include "modules/OledSsd1306Module.h"
-#include "modules/DfPlayerMiniModule.h"
 
 // ---------------------------------------------------------------------------
 // Optional modular hardware components.
@@ -1359,7 +1358,9 @@ void servePhysicalWindow(uint32_t now) {
 
 #if COMPI_ENABLE_DFPLAYER
 esp32core::EnvironmentalVoicePolicy voicePolicy;
+// Single active UART owner for MP3 commands in this sketch.
 HardwareSerial dfplayerSerial(2);
+bool automaticVoiceEnabled = true;
 uint32_t lastVoiceSampleAt = 0;
 void dfplayerCommand(uint8_t command, uint16_t parameter) {
   const uint8_t packet[10] = {
@@ -1404,6 +1405,8 @@ bool audioControlCommand(const char* verb, int param, void*) {
     return true;
   }
   if (std::strcmp(verb, "voice") == 0) {
+    if (param != 0 && param != 1) return false;
+    automaticVoiceEnabled = (param == 1);
     return true;
   }
   return false;
@@ -1608,7 +1611,8 @@ void loop() {
   wifiLab.tick(now);
   moduleRegistry.tickAll(millis());
 #if COMPI_ENABLE_DFPLAYER
-  if (static_cast<uint32_t>(now - lastVoiceSampleAt) >= 250u) {
+  if (automaticVoiceEnabled &&
+      static_cast<uint32_t>(now - lastVoiceSampleAt) >= 250u) {
     lastVoiceSampleAt = now;
     esp32core::VoiceSample voiceSample{};
 #if COMPI_BUILD_DHT11
