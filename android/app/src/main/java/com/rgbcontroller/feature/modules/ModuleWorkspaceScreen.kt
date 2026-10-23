@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -184,6 +185,7 @@ fun ModuleWorkspaceScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
                             .padding(horizontal = 16.dp, vertical = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -191,7 +193,7 @@ fun ModuleWorkspaceScreen(
                             FilterChip(
                                 selected = stationSection == sec,
                                 onClick = { stationSection = sec },
-                                label = { Text(sec, fontSize = 12.sp) }
+                                label = { Text(sec, fontSize = 12.sp, maxLines = 1, softWrap = false) }
                             )
                         }
                     }
@@ -1193,7 +1195,8 @@ private fun ModuleReadings(
                 Card(Modifier.fillMaxWidth().testTag("ldr_light_readings")) {
                     Column(Modifier.padding(16.dp).animateContentSize(animationSpec = tween(250)),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Luz ambiental · LDR", style = MaterialTheme.typography.titleMedium)
+                        Text("Sensor de luminosidad", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text("LDR · luz relativa medida por el ESP32", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(
@@ -1227,7 +1230,7 @@ private fun ModuleReadings(
                             },
                             style = MaterialTheme.typography.bodySmall
                         )
-                        Text("ADC1 crudo: ${raw?.toString() ?: "—"} (0–4095)",
+                        Text("Lectura física ADC1: ${raw?.toString() ?: "—"} / 4095",
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.testTag("ldr_light_raw"))
                         OutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) {
