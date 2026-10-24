@@ -107,4 +107,39 @@ class TelemetryChartTest {
             TelemetryChart.classify(sample(recordedAtMs = now), now, 100_000)
         )
     }
+    @Test fun shortLiveHistoryDoesNotCollapseAtRightEdge() {
+        val now = 1_000_000L
+        val chart = TelemetryChart.build(
+            "dht11", "temperature",
+            listOf(
+                sample(value = 22.6f, recordedAtMs = now - 14_000),
+                sample(value = 22.6f, recordedAtMs = now - 7_000),
+                sample(value = 22.6f, recordedAtMs = now)
+            ),
+            nowMs = now,
+            windowMs = 30 * 60 * 1000L
+        )
+        assertEquals(3, chart.points.size)
+        assertTrue(chart.points[0].fractionX < 0.85f)
+        assertTrue(chart.points[1].fractionX > chart.points[0].fractionX)
+        assertEquals(1f, chart.points.last().fractionX, 0.001f)
+        assertTrue(chart.points.all { it.fractionY == 0.5f })
+    }
+
+    @Test fun invalidSamplesRemainGapsWhileChartZooms() {
+        val now = 1_000_000L
+        val chart = TelemetryChart.build(
+            "dht11", "humidity",
+            listOf(
+                sample(type = "humidity", value = 54.8f, recordedAtMs = now - 12_000),
+                sample(type = "humidity", status = "sensor_error", value = null, valid = false, recordedAtMs = now - 6_000),
+                sample(type = "humidity", value = 54.9f, recordedAtMs = now)
+            ),
+            nowMs = now
+        )
+        assertEquals(2, chart.segments.size)
+        assertEquals(1, chart.invalidCount)
+        assertEquals(2, chart.validCount)
+    }
+
 }
