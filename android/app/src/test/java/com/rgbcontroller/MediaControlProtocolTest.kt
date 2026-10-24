@@ -40,6 +40,13 @@ class MediaControlProtocolTest {
         }
     }
 
+    @Test fun `partial telemetry permits playback unless count is explicitly zero`() {
+        val partial = MediaControlProtocol.parseReply("AUD,8,OK,1,1,-1,UNKNOWN,-1,-1,0,0")!!.audio!!
+        assertTrue(partial.canPlay)
+        val empty = MediaControlProtocol.parseReply("AUD,8,OK,1,1,0,STOPPED,-1,10,0,1")!!.audio!!
+        assertFalse(empty.canPlay)
+    }
+
     @Test fun `OLED readback determines scene and controls`() {
         val oled = MediaControlProtocol.parseReply("OLD,9,OK,1,dance,128,1,0")!!.oled!!
         assertEquals("dance", oled.scene)
