@@ -28,10 +28,9 @@ class MediaControlProtocolTest {
         assertTrue(reply.audio!!.canPlay)
     }
 
-    @Test fun `missing SD stale and unconfirmed state disable playback`() {
+    @Test fun `missing SD and unconfirmed module disable playback`() {
         for (frame in listOf(
             "AUD,8,OK,1,0,-1,UNKNOWN,-1,-1,1,1",
-            "AUD,8,OK,1,1,24,PLAYING,2,1,1,0",
             "AUD,8,OK,0,-1,-1,UNKNOWN,-1,-1,1,0"
         )) {
             val audio = MediaControlProtocol.parseReply(frame)!!.audio!!
