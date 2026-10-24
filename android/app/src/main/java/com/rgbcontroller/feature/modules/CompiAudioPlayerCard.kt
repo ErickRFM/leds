@@ -6,6 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.rgbcontroller.core.ble.AudioHardwareState
 
 /** Uses real queried UART state; MP3 filenames cannot be enumerated via UART. */
@@ -19,18 +20,21 @@ fun CompiAudioPlayerCard(
 ) {
     var trackText by remember { mutableStateOf("1") }
     var volume by remember(hardware?.volume) { mutableFloatStateOf((hardware?.volume ?: 1).coerceAtLeast(0).toFloat()) }
-    val available = authorized && hardware?.canPlay == true && !busy
-    Card(Modifier.fillMaxWidth().testTag("dfplayer_physical_controls")) {
+    val available = authorized && hardware?.modulePresent == true && hardware.sdPresent == 1 && !busy
+    val sdCount = hardware?.tracks ?: -1
+    Card(Modifier.fillMaxWidth().testTag("dfplayer_physical_controls"), shape = RoundedCornerShape(22.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("DFPlayer · bocina externa", style = MaterialTheme.typography.titleMedium)
+            Text("Reproductor Compi", style = MaterialTheme.typography.titleLarge)
+            Text("DFPlayer Mini · microSD", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(when {
                 !authorized -> "Conecta y autoriza Bluetooth o Wi-Fi."
                 hardware == null -> "Esperando estado del firmware…"
                 !hardware.modulePresent -> "Módulo sin detectar. Revisa alimentación y UART."
                 hardware.sdPresent == 0 -> "MicroSD ausente."
                 hardware.sdPresent != 1 -> "MicroSD sin confirmar."
-                !hardware.fresh -> "Módulo y microSD detectados · algunas métricas aún sin confirmar."
-                else -> "MicroSD detectada · ${hardware.tracks.takeIf { it >= 0 }?.toString() ?: "—"} archivos reportados"
+                !hardware.fresh -> "Módulo y microSD detectados · lectura parcial."
+                sdCount == 0 -> "MicroSD reconocida · 0 archivos reportados. Revisa FAT32 y /MP3/0001.mp3."
+                else -> "MicroSD detectada · ${sdCount.takeIf { it >= 0 }?.toString() ?: "—"} archivos reportados"
             }, modifier = Modifier.testTag("dfplayer_status"))
             Text(when {
                 hardware == null || !hardware.modulePresent || hardware.playback == "UNKNOWN" -> "Reproducción sin confirmar"
@@ -43,10 +47,10 @@ fun CompiAudioPlayerCard(
                 onValueChange = { if (it.length <= 4 && it.all { c -> c in '0'..'9' }) trackText = it },
                 label = { Text("Número de archivo MP3 (1–2999)") }, singleLine = true,
                 modifier = Modifier.fillMaxWidth().testTag("dfplayer_track"))
-            Text("Requiere /MP3/${trackText.padStart(4, '0')}.mp3. El total de archivos y el índice SD no identifican nombres MP3.",
-                style = MaterialTheme.typography.bodySmall)
+            Text("Archivo: /MP3/${trackText.padStart(4, '0')}.mp3", style = MaterialTheme.typography.bodyMedium)
+            if (sdCount == 0) Text("El módulo informa 0 archivos. Revisa la tarjeta antes de intentar reproducir.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             Button(onClick = { onCommand("PLAY", trackText) },
-                enabled = available && trackText.toIntOrNull() in 1..2999,
+                enabled = available && sdCount != 0 && trackText.toIntOrNull() in 1..2999,
                 modifier = Modifier.fillMaxWidth().testTag("dfplayer_play")) { Text("Reproducir archivo") }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedButton(onClick = { onCommand("PAUSE", null) }, enabled = available && hardware?.playing == true,
@@ -69,7 +73,7 @@ fun CompiAudioPlayerCard(
                     enabled = authorized && hardware?.fresh == true && !busy,
                     modifier = Modifier.testTag("dfplayer_voice"))
             }
-            Text("La opción se guarda en el ESP32. UART no mide sonido en la bocina.", style = MaterialTheme.typography.bodySmall)
+            Text("La microSD se administra desde el módulo; el teléfono no transfiere pistas por UART.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             feedback?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             OutlinedButton(onClick = { onCommand("GET", null) }, enabled = authorized && !busy) { Text("Consultar módulo") }
         }
