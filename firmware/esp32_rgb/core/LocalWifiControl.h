@@ -15,6 +15,8 @@
 #include "RgbAutomationClock.h"
 #include "ComponentCatalog.h"
 #include "ComponentApplyReplayGuard.h"
+#include "MediaControlBackend.h"
+#include "BleSensorPinControl.h"
 
 namespace esp32core {
 
@@ -46,6 +48,8 @@ class LocalWifiControl final {
   using OledDisplay = bool (*)(const char* mode, const char* value, void* context);
 
   using AudioCommand = bool (*)(const char* verb, int param, void* context);
+  using AudioStatus = AudioSnapshot (*)(void* context);
+  using OledStatus = OledSnapshot (*)(void* context);
 
   LocalWifiControl(PinManager& pins, RgbState state, RgbCommand manualCommand,
                    RgbCommand runtimeCommand, DeviceId deviceId)
@@ -65,6 +69,7 @@ class LocalWifiControl final {
   void setComponentApply(ComponentApply apply, void* context) {
     apply_ = apply;
     applyContext_ = context;
+    bleSensorPins_.setApply(apply,context);
   }
 
   void setLdrCalibration(LdrCalibration calibrate, void* context) {
@@ -72,14 +77,19 @@ class LocalWifiControl final {
     ldrCalibrationContext_ = context;
   }
 
-  void setOledDisplay(OledDisplay display, void* context) {
-    oledDisplay_ = display;
-    oledContext_ = context;
-  }
+  void setOledDisplay(OledDisplay display,void* context) {media_.setOledDisplay(display,context);}
+  void setAudioControl(AudioCommand audio,void* context) {media_.setAudioControl(audio,context);}
+  void setAudioStatus(AudioStatus source) {media_.setAudioStatus(source);}
+  void setOledStatus(OledStatus source) {media_.setOledStatus(source);}
+  AudioSnapshot audioSnapshot() const {return media_.audioSnapshot();}
+  OledSnapshot oledSnapshot() const {return media_.oledSnapshot();}
+  bool applyAudio(const char* verb,int parameter) {return media_.applyAudio(verb,parameter);}
+  bool applyOled(const char* mode,const char* value) {return media_.applyOled(mode,value);}
+  bool mediaReply(const MediaCommand& command,char* output,size_t capacity) {return media_.mediaReply(command,output,capacity);}
 
-  void setAudioControl(AudioCommand audio, void* context) {
-    audio_ = audio;
-    audioContext_ = context;
+  BlePinApplyResult applySingleSensorPinBle(const BleSensorPinRequest& request) {
+    return bleSensorPins_.apply(request,script_.active() || experiment_.active() ||
+        automation_.active() || environmentalRgbEnabled_ || hasManual());
   }
 
   // One authority for both authorized transports. No duplicate GPIO rules.
@@ -221,14 +231,26 @@ class LocalWifiControl final {
       server_.send(200, "application/json", body);
     });
 
+    server_.on("/v2/display/oled/status", HTTP_GET, [this]() {
+      if (!authorized()) return;
+      char body[160];
+      if (!encodeOledStatus(oledSnapshot(),body,sizeof(body))) {jsonError(500,"oled_encode_failed");return;}
+      server_.send(200,"application/json",body);
+    });
+    server_.on("/v2/audio/status", HTTP_GET, [this]() {
+      if (!authorized()) return;
+      char body[240];
+      if (!encodeAudioStatus(audioSnapshot(),body,sizeof(body))) {jsonError(500,"audio_encode_failed");return;}
+      server_.send(200,"application/json",body);
+    });
     server_.on("/v2/display/oled", HTTP_POST, [this]() {
       if (!authorized()) return;
-      if (oledDisplay_ == nullptr) { jsonError(409, "oled_unavailable"); return; }
+      if (!media_.oledAvailable()) { jsonError(409, "oled_unavailable"); return; }
       const String mode = server_.arg("mode");
       const String value = server_.arg("value");
       const bool face = mode == "face";
       const bool contrast = mode == "contrast";
-      if ((!face && mode != "text" && !contrast) ||
+      if ((!face && mode != "text" && !contrast && mode != "invert" && mode != "pause") ||
           value.isEmpty() || value.length() > 39) {
         jsonError(400, "invalid_oled_command");
         return;
@@ -265,7 +287,7 @@ class LocalWifiControl final {
           return;
         }
       }
-      if (!oledDisplay_(mode.c_str(), value.c_str(), oledContext_)) {
+      if (!applyOled(mode.c_str(), value.c_str())) {
         jsonError(409, "oled_not_ready");
         return;
       }
@@ -719,52 +741,49 @@ class LocalWifiControl final {
     server_.on("/v2/audio/play", HTTP_POST, [this]() {
       if (!authorized()) return;
       int track = -1;
-      if (!parseInt("track", 1, 99, track) || audio_ == nullptr ||
-          !audio_("play", track, audioContext_)) {
+      if (!parseInt("track", 1, 2999, track) || !applyAudio("play", track)) {
         jsonError(400, "audio_play_failed"); return;
       }
-      server_.send(200, "application/json", "{\"status\":\"PLAYING\",\"track\":" + String(track) + "}");
+      server_.send(202, "application/json", "{\"status\":\"ACCEPTED\",\"requestedTrack\":" + String(track) + "}");
     });
 
     server_.on("/v2/audio/volume", HTTP_POST, [this]() {
       if (!authorized()) return;
       int vol = -1;
-      if (!parseInt("volume", 0, 30, vol) || audio_ == nullptr ||
-          !audio_("volume", vol, audioContext_)) {
+      if (!parseInt("volume", 0, 30, vol) || !applyAudio("volume", vol)) {
         jsonError(400, "audio_volume_failed"); return;
       }
-      server_.send(200, "application/json", "{\"status\":\"APPLIED\",\"volume\":" + String(vol) + "}");
+      server_.send(202, "application/json", "{\"status\":\"ACCEPTED\",\"requestedVolume\":" + String(vol) + "}");
     });
 
     server_.on("/v2/audio/stop", HTTP_POST, [this]() {
       if (!authorized()) return;
-      if (audio_ == nullptr || !audio_("stop", 0, audioContext_)) {
+      if (!applyAudio("stop", 0)) {
         jsonError(409, "audio_stop_failed"); return;
       }
-      server_.send(200, "application/json", "{\"status\":\"STOPPED\"}");
+      server_.send(202, "application/json", "{\"status\":\"ACCEPTED\"}");
     });
 
     server_.on("/v2/audio/pause", HTTP_POST, [this]() {
       if (!authorized()) return;
-      if (audio_ == nullptr || !audio_("pause", 0, audioContext_)) {
+      if (!applyAudio("pause", 0)) {
         jsonError(409, "audio_pause_failed"); return;
       }
-      server_.send(200, "application/json", "{\"status\":\"PAUSED\"}");
+      server_.send(202, "application/json", "{\"status\":\"ACCEPTED\"}");
     });
 
     server_.on("/v2/audio/resume", HTTP_POST, [this]() {
       if (!authorized()) return;
-      if (audio_ == nullptr || !audio_("resume", 0, audioContext_)) {
+      if (!applyAudio("resume", 0)) {
         jsonError(409, "audio_resume_failed"); return;
       }
-      server_.send(200, "application/json", "{\"status\":\"PLAYING\"}");
+      server_.send(202, "application/json", "{\"status\":\"ACCEPTED\"}");
     });
 
     server_.on("/v2/audio/voice", HTTP_POST, [this]() {
       if (!authorized()) return;
       int enabled = -1;
-      if (!parseInt("enabled", 0, 1, enabled) || audio_ == nullptr ||
-          !audio_("voice", enabled, audioContext_)) {
+      if (!parseInt("enabled", 0, 1, enabled) || !applyAudio("voice", enabled)) {
         jsonError(400, "audio_voice_failed"); return;
       }
       server_.send(200, "application/json", "{\"status\":\"APPLIED\",\"enabled\":" + String(enabled) + "}");
@@ -859,10 +878,8 @@ class LocalWifiControl final {
   void* statusContext_ = nullptr;
   ComponentApply apply_ = nullptr;
   void* applyContext_ = nullptr;
-  OledDisplay oledDisplay_ = nullptr;
-  void* oledContext_ = nullptr;
-  AudioCommand audio_ = nullptr;
-  void* audioContext_ = nullptr;
+  MediaControlBackend media_;
+  BleSensorPinControl bleSensorPins_;
   LdrCalibration ldrCalibration_ = nullptr;
   void* ldrCalibrationContext_ = nullptr;
   bool environmentalRgbEnabled_ = false;

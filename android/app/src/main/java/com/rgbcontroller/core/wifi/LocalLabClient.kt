@@ -8,6 +8,9 @@ import android.net.NetworkCapabilities
 import com.rgbcontroller.core.lab.LabExperimentLibrary
 import com.rgbcontroller.core.model.RgbDeviceCommand
 import com.rgbcontroller.core.model.RgbDeviceState
+import com.rgbcontroller.core.ble.MediaControlProtocol
+import com.rgbcontroller.core.ble.AudioHardwareState
+import com.rgbcontroller.core.ble.OledHardwareState
 import com.rgbcontroller.core.model.RgbReadback
 import com.rgbcontroller.core.hardware.Esp32BoardPinout
 import kotlinx.coroutines.CancellationException
@@ -108,17 +111,42 @@ class LocalLabClient(private val context: Context) {
 
     /** Explicit user action; HTTP ACK confirms the driver ran, not physical pixels. */
     suspend fun showOled(key: String, mode: String, value: String): JSONObject {
-        require(mode == "text" || mode == "face")
-        require(value.isNotEmpty() && value.length <= 39 &&
-            value.all { it.code in 32..126 })
-        if (mode == "face") {
-            require(value in setOf("happy", "sleepy", "angry", "surprised"))
-        }
+        require(MediaControlProtocol.request("OLD", "wifi", mode.uppercase(), value) != null)
         val response = request("POST", "/v2/display/oled", key,
             mapOf("mode" to mode, "value" to value))
         check(response.optString("status") == "DISPLAYED" &&
             response.optBoolean("runtimeOnly")) {
             "El ESP32 no confirmó el comando OLED."
+        }
+        return response
+    }
+
+    suspend fun audioStatus(key: String): AudioHardwareState {
+        val j = request("GET", "/v2/audio/status", key)
+        val frame = listOf("AUD", "wifi", "OK",
+            if (j.getBoolean("modulePresent")) "1" else "0", j.getInt("sdPresent"),
+            j.getInt("tracks"), j.getString("playback"), j.getInt("track"), j.getInt("volume"),
+            if (j.getBoolean("voiceEnabled")) "1" else "0", if (j.getBoolean("fresh")) "1" else "0"
+        ).joinToString(",")
+        return checkNotNull(MediaControlProtocol.parseReply(frame)?.audio) { "Estado de audio inválido." }
+    }
+
+    suspend fun oledStatus(key: String): OledHardwareState {
+        val j = request("GET", "/v2/display/oled/status", key)
+        val frame = listOf("OLD", "wifi", "OK", if (j.getBoolean("ready")) "1" else "0",
+            j.getString("scene"), j.getInt("contrast"), if (j.getBoolean("inverted")) "1" else "0",
+            if (j.getBoolean("paused")) "1" else "0").joinToString(",")
+        return checkNotNull(MediaControlProtocol.parseReply(frame)?.oled) { "Estado OLED inválido." }
+    }
+
+    suspend fun audioCommand(key: String, verb: String, value: String? = null): JSONObject {
+        require(MediaControlProtocol.request("AUD", "wifi", verb, value) != null && verb != "GET")
+        val argument = when (verb) { "PLAY" -> "track"; "VOLUME" -> "volume"; "VOICE" -> "enabled"; else -> null }
+        val path = when (verb) { "VOLUME" -> "volume"; else -> verb.lowercase() }
+        val response = request("POST", "/v2/audio/$path", key,
+            if (argument != null) mapOf(argument to requireNotNull(value)) else emptyMap())
+        check(response.optString("status") in setOf("ACCEPTED", "APPLIED")) {
+            "El ESP32 no confirmó la solicitud de audio."
         }
         return response
     }
@@ -279,23 +307,6 @@ class LocalLabClient(private val context: Context) {
 
     suspend fun startRgbEffect(key: String, name: String, speed: Int): JSONObject =
         rgb(key, RgbDeviceCommand.effect(name, speed))
-
-    suspend fun playAudio(key: String, track: Int): JSONObject {
-        require(track in 1..99) { "Pista inválida (1 a 99)." }
-        return request("POST", "/v2/audio/play", key, mapOf("track" to track.toString()))
-    }
-    suspend fun setAudioVolume(key: String, volume: Int): JSONObject {
-        require(volume in 0..30) { "Volumen fuera de rango (0 a 30)." }
-        return request("POST", "/v2/audio/volume", key, mapOf("volume" to volume.toString()))
-    }
-    suspend fun stopAudio(key: String): JSONObject =
-        request("POST", "/v2/audio/stop", key)
-    suspend fun pauseAudio(key: String): JSONObject =
-        request("POST", "/v2/audio/pause", key)
-    suspend fun resumeAudio(key: String): JSONObject =
-        request("POST", "/v2/audio/resume", key)
-    suspend fun setAudioVoice(key: String, enabled: Boolean): JSONObject =
-        request("POST", "/v2/audio/voice", key, mapOf("enabled" to if (enabled) "1" else "0"))
 
     suspend fun rgb(key: String, command: String): JSONObject {
         require(RgbDeviceCommand.allowed(command)) { "Invalid RGB command" }

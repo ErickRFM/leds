@@ -43,7 +43,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-boot-timeout: 600
-          script: cd android && gradle connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.rgbcontroller.HardwareDashboardScrollTest,com.rgbcontroller.ModuleWiringRegressionTest,com.rgbcontroller.HomeNavigationTest' --stacktrace
+          script: cd android && gradle connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.rgbcontroller.HardwareDashboardScrollTest,com.rgbcontroller.ModuleWiringRegressionTest,com.rgbcontroller.HomeNavigationTest,com.rgbcontroller.MediaControlsTest' --stacktrace
       - name: Upload emulator instrumentation evidence
         if: always()
         uses: actions/upload-artifact@v4

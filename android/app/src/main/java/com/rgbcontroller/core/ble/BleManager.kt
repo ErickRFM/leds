@@ -103,6 +103,13 @@ class BleManager(private val context: Context) {
     private var pendingSnapshot: CompletableDeferred<BleSnapshotAssembler.Snapshot>? = null
     private var pendingLdrCalibration: CompletableDeferred<Boolean>? = null
     private var pendingLdrCalibrationId = 0
+    private var mediaRequestId = 0L
+    private var pendingMediaId: String? = null
+    private var pendingMediaModule: String? = null
+    private var pendingMedia: CompletableDeferred<MediaControlProtocol.Reply>? = null
+    private var pendingPinToken: String? = null
+    private var pendingPin: CompletableDeferred<BleSensorPinProtocol.Receipt>? = null
+    private var connectionGeneration = 0L
     private val ownerCrypto = BouncyCastleSessionCrypto()
     private val ownerStore = OwnerSessionStore(context)
     private var ownerRecord: OwnerSessionStore.Record? = null
@@ -768,6 +775,23 @@ class BleManager(private val context: Context) {
 
     private fun acceptState(bytes: ByteArray?) {
         val text = bytes?.toString(Charsets.UTF_8) ?: return
+        if (text.startsWith("PIN,")) {
+            val receipt = BleSensorPinProtocol.receipt(text) ?: return
+            if (_connectionState.value == BleConnectionState.Ready &&
+                _securityState.value == BleSecurityState.Authorized && receipt.token == pendingPinToken) {
+                pendingPin?.complete(receipt)
+            }
+            return
+        }
+        if (text.startsWith("AUD,") || text.startsWith("OLD,")) {
+            val reply = MediaControlProtocol.parseReply(text) ?: return
+            if (_connectionState.value == BleConnectionState.Ready &&
+                _securityState.value == BleSecurityState.Authorized &&
+                reply.id == pendingMediaId && text.substringBefore(',') == pendingMediaModule) {
+                pendingMedia?.complete(reply)
+            }
+            return
+        }
         if (text.startsWith("B,") || text.startsWith("D,") ||
             text.startsWith("E,")) {
             if (_connectionState.value == BleConnectionState.Ready &&
@@ -855,6 +879,85 @@ class BleManager(private val context: Context) {
             _rgbState.value = it
             _stateRevision.value += 1
         }
+    }
+
+    /** Correlated firmware response, not the GATT write callback. No automatic
+     * retries of physical commands: replay could start a track twice. */
+    suspend fun mediaCommand(module: String, verb: String, value: String? = null): MediaControlProtocol.Reply =
+        snapshotMutex.withLock {
+            check(_connectionState.value == BleConnectionState.Ready &&
+                _securityState.value == BleSecurityState.Authorized &&
+                enrollmentPhase == EnrollmentPhase.IDLE) { "Autoriza Bluetooth para controlar el módulo." }
+            mediaRequestId = mediaRequestId % 999_999_999L + 1
+            val id = mediaRequestId.toString()
+            val frame = requireNotNull(MediaControlProtocol.request(module, id, verb, value))
+            val deferred = CompletableDeferred<MediaControlProtocol.Reply>()
+            pendingMediaId = id
+            pendingMediaModule = module
+            pendingMedia = deferred
+            try {
+                check(synchronized(pending) {
+                    if (pending.size >= 16) false else { pending.addLast(frame); true }
+                }) { "Cola Bluetooth ocupada; espera a que termine el comando anterior." }
+                drainQueue()
+                val reply = withTimeoutOrNull(5_000L) { deferred.await() }
+                    ?: error("El firmware no confirmó el módulo. Actualiza ESP32 y vuelve a consultar.")
+                check(_connectionState.value == BleConnectionState.Ready &&
+                    _securityState.value == BleSecurityState.Authorized) { "La sesión Bluetooth cambió." }
+                check(reply.result != "REJECTED") { "El ESP32 rechazó el comando del módulo." }
+                reply
+            } finally {
+                synchronized(pending) { pending.remove(frame) }
+                if (pendingMedia === deferred) {
+                    pendingMedia = null
+                    pendingMediaId = null
+                    pendingMediaModule = null
+                }
+            }
+        }
+
+    /** One physical GPIO CAS transaction, followed by authoritative readback.
+     * On timeout never retry with a new nonce: the physical result is unknown. */
+    suspend fun applySensorPinBle(sensor: BleSensorPinProtocol.Sensor, to: Int) {
+        val generation = connectionGeneration
+        val address = connectedAddress.value ?: error("ESP32 no conectado.")
+        fun verify() {
+            check(connectionGeneration == generation && connectedAddress.value == address &&
+                _connectionState.value == BleConnectionState.Ready &&
+                _securityState.value == BleSecurityState.Authorized) { "La sesión Bluetooth cambió." }
+        }
+        val prior = ComponentStatusCodec.decode(readComponentSnapshot(BleSnapshotAssembler.Kind.STATUS))
+            ?.firstOrNull { it.id == sensor.firmwareId } ?: error("El firmware no incluye este sensor.")
+        val from = if (prior.active) prior.pins.singleOrNull()
+            ?: error("GPIO anterior sin confirmar.") else 0
+        val token = UUID.randomUUID().toString().replace("-", "").take(16)
+        val frame = BleSensorPinProtocol.request(token, sensor, from, to)
+        snapshotMutex.withLock {
+            verify()
+            val deferred = CompletableDeferred<BleSensorPinProtocol.Receipt>()
+            pendingPinToken = token
+            pendingPin = deferred
+            try {
+                check(synchronized(pending) {
+                    if (pending.size >= 16) false else { pending.addLast(frame); true }
+                }) { "La cola BLE está ocupada." }
+                drainQueue()
+                val receipt = withTimeoutOrNull(5_000L) { deferred.await() }
+                    ?: throw com.rgbcontroller.core.wifi.ComponentApplyUnconfirmedException("Sin respuesta BLE; consulta GPIO antes de reintentar.")
+                verify()
+                check(receipt.outcome in setOf(BleSensorPinProtocol.Outcome.APPLIED, BleSensorPinProtocol.Outcome.REPLAYED)) {
+                    "El ESP32 rechazó los GPIO: ${receipt.outcome}."
+                }
+            } finally {
+                synchronized(pending) { pending.remove(frame) }
+                if (pendingPin === deferred) { pendingPin = null; pendingPinToken = null }
+            }
+        }
+        val after = ComponentStatusCodec.decode(readComponentSnapshot(BleSnapshotAssembler.Kind.STATUS))
+            ?.firstOrNull { it.id == sensor.firmwareId && it.active }
+        verify()
+        if (after?.pins != listOf(to)) throw com.rgbcontroller.core.wifi.ComponentApplyUnconfirmedException(
+            "El recibo fue aceptado pero los GPIO leídos no coinciden.")
     }
 
     /** Runtime-only LDR calibration over cryptographic owner GATT.
@@ -1033,6 +1136,7 @@ class BleManager(private val context: Context) {
     }
 
     private fun closeConnection() {
+        connectionGeneration++
         handler.removeCallbacks(writeTimeout)
         handler.removeCallbacks(gpioPoll)
         handler.removeCallbacks(gpioReadTimeout)
@@ -1045,6 +1149,13 @@ class BleManager(private val context: Context) {
         pendingLdrCalibration?.cancel()
         pendingLdrCalibration = null
         pendingLdrCalibrationId = 0
+        pendingMedia?.cancel()
+        pendingMedia = null
+        pendingMediaId = null
+        pendingMediaModule = null
+        pendingPin?.cancel()
+        pendingPin = null
+        pendingPinToken = null
         snapshotAssembler.reset()
         _environmentalRgbEnabled.value = null
         _environmentalRgbMessage.value = "Sin sesión BLE autenticada."

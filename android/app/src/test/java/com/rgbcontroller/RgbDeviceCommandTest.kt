@@ -18,7 +18,7 @@ class RgbDeviceCommandTest {
     @Test fun invalidFramesDoNotReachTransport() {
         for (bad in listOf("", "set,1,2,3,4", "SET,256,0,0,0", "SET,-1,0,0,0",
             "SET,1,2,3", "SET,1,2,3,4,5", "FX,UNKNOWN,120", "FX,RAINBOW,9",
-            "FX,FADE,1001", "FX,RAINBOW,100,extra", "GET extra")) {
+            "FX,FADE,1001", "FX,RAINBOW,100,extra", "GET extra", "AUDIO,NEXT", "AUDIO,PLAY,-1")) {
             assertFalse("Accepted: " + bad, RgbDeviceCommand.allowed(bad))
         }
     }

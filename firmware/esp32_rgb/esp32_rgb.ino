@@ -16,6 +16,7 @@
 #include "core/EnvironmentalVoicePolicy.h"
 #include "core/RgbCommandCodec.h"
 #include "core/RgbCommandInbox.h"
+#include "core/BleCommandInbox.h"
 #include "core/DeviceIdentity.h"
 #include "core/RgbSettingsStore.h"
 #include "core/PhysicalProvisioningMode.h"
@@ -34,8 +35,10 @@
 #include "core/SensorTelemetryCodec.h"
 #include "core/EnvironmentalRgbPolicy.h"
 #include "core/BleEnvironmentalCommand.h"
+#include "core/MediaControlProtocol.h"
 #include "core/BleSnapshotFramer.h"
 #include "core/BleLdrCalibration.h"
+#include "core/BleSensorPinRequest.h"
 #include "modules/Dht22Module.h"
 #include "core/DhtFrameCodec.h"
 #include "core/DhtWireDiagnostics.h"
@@ -128,6 +131,9 @@
 #ifndef COMPI_DFPLAYER_TX
 #define COMPI_DFPLAYER_TX 17
 #endif
+#if COMPI_ENABLE_DFPLAYER
+esp32core::AudioSnapshot audioStatusSnapshot(void*);
+#endif
 constexpr uint8_t LED_R = 27, LED_G = 25, LED_B = 26;
 // Runtime-only RGB mapping. Kept in sync with the module after an authorized
 // transaction; fresh boot always returns to the audited pins above.
@@ -170,6 +176,7 @@ esp32core::OwnerEnrollmentSession ownerSession(ownerCrypto, ownerStore);
 volatile esp32core::BleAuthState bleAuthState = esp32core::BleAuthState::DISCONNECTED;
 // Ownership is authoritative: only a live owner session grants AUTHORIZED. The
 // encrypted/bonded link state alone never does.
+void updateBleCommandAuthorization();
 void syncBleAuthState() {
   if (!connected) {
     bleAuthState = esp32core::BleAuthState::DISCONNECTED;
@@ -178,6 +185,7 @@ void syncBleAuthState() {
         ? esp32core::BleAuthState::AUTHORIZED
         : esp32core::BleAuthState::CONNECTED_UNAUTHENTICATED;
   }
+  updateBleCommandAuthorization();
 }
 bool connectedPreviously = false;
 uint32_t physicalProvisionHoldStarted = 0;
@@ -334,6 +342,11 @@ int ldrAdcRead(uint8_t pin, void*) { return analogRead(pin); }
 #include <Adafruit_SSD1306.h>
 #define COMPI_OLED_LIBRARY 1
 Adafruit_SSD1306 oledDriver(128, 64, &Wire, -1);
+uint32_t lastOledUserCommandAt = 0;
+char oledScene[12] = "telemetry";
+esp32core::OledSnapshot oledState;
+bool oledCatDance = false;
+uint32_t lastCatDanceFrameAt = 0;
 bool oledInit(uint8_t address, uint8_t sda, uint8_t scl, void*) {
   Wire.begin(sda, scl);
   // SSD1306.begin() can succeed without an attached display. Require an
@@ -343,17 +356,27 @@ bool oledInit(uint8_t address, uint8_t sda, uint8_t scl, void*) {
   // Keep the explicitly selected SDA/SCL pins; do not call Wire.begin() again.
   if (!oledDriver.begin(SSD1306_SWITCHCAPVCC, address, false, false)) return false;
   oledDriver.setTextColor(SSD1306_WHITE);
+  oledDriver.ssd1306_command(SSD1306_SETCONTRAST);
+  oledDriver.ssd1306_command(127);
+  oledDriver.invertDisplay(false);
   oledDriver.clearDisplay();
   oledDriver.display();
+  Wire.beginTransmission(address);
+  if(Wire.endTransmission()!=0) return false;
+  esp32core::resetOledReadbackAfterInit(oledState,oledScene,oledCatDance,
+      lastOledUserCommandAt,lastCatDanceFrameAt);
   return true;
 }
-bool oledPresent(uint8_t, const char* text, void*) {
+bool oledPresent(uint8_t address, const char* text, void*) {
+  Wire.beginTransmission(address);
+  if(Wire.endTransmission()!=0) return false;
   oledDriver.clearDisplay();
   oledDriver.setTextSize(1);
   oledDriver.setCursor(0, 0);
   oledDriver.println(text ? text : "");
   oledDriver.display();
-  return true;
+  Wire.beginTransmission(address);
+  return Wire.endTransmission()==0;
 }
 #else
 #define COMPI_OLED_LIBRARY 0
@@ -374,7 +397,12 @@ void stopEnvironmentalRgbOnManual();
 // Legacy BLE stack invokes onWrite on a different task. Never mutate the
 // RGB engine/LED state in that callback; the Arduino loop owns all commands.
 portMUX_TYPE bleInboxMux = portMUX_INITIALIZER_UNLOCKED;
-esp32core::RgbCommandInbox bleInbox;
+esp32core::BleCommandInbox bleInbox;
+void updateBleCommandAuthorization() {
+  portENTER_CRITICAL(&bleInboxMux);
+  bleInbox.setAuthorized(bleAuthState==esp32core::BleAuthState::AUTHORIZED);
+  portEXIT_CRITICAL(&bleInboxMux);
+}
 // Owner-enrollment frames are longer than RGB commands (a PAIR/AUTH line can
 // exceed 100 chars), so they get their own small fixed inbox rather than
 // growing the RGB command buffer. Same pattern: enqueue in the BLE callback,
@@ -399,6 +427,7 @@ struct EnrollmentInbox {
     --count;
     return true;
   }
+  void clear() {head=tail=count=0;}
   char lines[kCapacity][kEnrollLineMax + 1] = {};
   size_t head = 0, tail = 0, count = 0;
 };
@@ -498,6 +527,10 @@ class ServerCallbacks : public BLEServerCallbacks {
     // The owner session drops too; ownership itself survives for recovery.
     ownerSession.onDisconnect();
     syncBleAuthState();
+    portENTER_CRITICAL(&bleEnrollMux);
+    enrollInbox.clear();
+    bleEnrollRejected=0;
+    portEXIT_CRITICAL(&bleEnrollMux);
     // Restart asynchronously in loop to avoid a GAP stop/start collision.
     bleDisconnectMs = millis();
     restartBleAdvertising = true;
@@ -614,7 +647,7 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
     const String command = characteristic->getValue();
     if (looksLikeEnrollment(command.c_str())) {
       portENTER_CRITICAL(&bleEnrollMux);
-      const bool accepted = enrollInbox.push(command.c_str());
+      const bool accepted = connected && enrollInbox.push(command.c_str());
       if (!accepted && bleEnrollRejected < 65535) ++bleEnrollRejected;
       portEXIT_CRITICAL(&bleEnrollMux);
       return;
@@ -623,7 +656,11 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
     char kind = 0;
     uint16_t requestId = 0;
     esp32core::BleLdrCalibration calibration{};
+    esp32core::MediaCommand media{};
+    esp32core::BleSensorPinRequest pinRequest{};
     const bool valid = esp32core::parseRgbCommand(command.c_str(), parsed) ||
+                       esp32core::parseMediaCommand(command.c_str(), media) ||
+                       esp32core::parseBleSensorPinRequest(command.c_str(), pinRequest) ||
                        esp32core::isBleEnvironmentalCommand(command.c_str()) ||
                        esp32core::parseBleSnapshotRequest(command.c_str(),
                                                          kind, requestId) ||
@@ -697,9 +734,14 @@ esp32core::OledSsd1306Module oledModule(COMPI_OLED_ADDRESS, COMPI_OLED_SDA,
 #endif
 
 #if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
-uint32_t lastOledUserCommandAt = 0;
-bool oledCatDance = false;
-uint32_t lastCatDanceFrameAt = 0;
+bool oledAcknowledges() {
+  if(!oledModule.ready()) return false;
+  Wire.beginTransmission(oledModule.address());
+  return Wire.endTransmission()==0;
+}
+esp32core::OledSnapshot oledStatusSnapshot(void*) {
+  auto state=oledState;state.ready=oledAcknowledges();state.scene=oledScene;return state;
+}
 void drawCatDanceFrame(bool alternate) {
   oledDriver.clearDisplay();
   oledDriver.setTextColor(SSD1306_WHITE);
@@ -725,10 +767,23 @@ void drawCatDanceFrame(bool alternate) {
   oledDriver.display();
 }
 bool oledDisplayCommand(const char* mode, const char* value, void*) {
-  if (!oledModule.ready() || mode == nullptr || value == nullptr) return false;
+  if (!oledAcknowledges() || mode == nullptr || value == nullptr) return false;
+  if (std::strcmp(mode,"pause")==0) {
+    if(std::strcmp(value,"0") && std::strcmp(value,"1")) return false;
+    oledState.paused=std::strcmp(value,"1")==0;
+    lastOledUserCommandAt=millis();return true;
+  }
+  if (std::strcmp(mode,"invert")==0) {
+    if(std::strcmp(value,"0") && std::strcmp(value,"1")) return false;
+    const bool inverted=std::strcmp(value,"1")==0;
+    oledDriver.invertDisplay(inverted);
+    if(!oledAcknowledges()) return false;
+    oledState.inverted=inverted;return true;
+  }
   if (std::strcmp(mode, "text") == 0) {
     const bool shown = oledModule.setText(value) && oledModule.refreshNow(millis());
     if (shown) {
+      std::strcpy(oledScene,"text");
       oledCatDance = false;
       lastOledUserCommandAt = millis();
     }
@@ -745,14 +800,19 @@ bool oledDisplayCommand(const char* mode, const char* value, void*) {
     if (level < 8u) return false;
     oledDriver.ssd1306_command(SSD1306_SETCONTRAST);
     oledDriver.ssd1306_command(static_cast<uint8_t>(level));
+    if(!oledAcknowledges()) return false;
+    oledState.contrast=static_cast<int>(level);
     return true;
   }
   if (std::strcmp(mode, "face") != 0) return false;
+  if(!esp32core::mediaFace(value)) return false;
   if (std::strcmp(value, "dance") == 0) {
     oledCatDance = true;
     lastOledUserCommandAt = millis();
     lastCatDanceFrameAt = lastOledUserCommandAt;
     drawCatDanceFrame(false);
+    if(!oledAcknowledges()) return false;
+    std::strcpy(oledScene,"dance");
     return true;
   }
   oledDriver.clearDisplay();
@@ -799,6 +859,8 @@ bool oledDisplayCommand(const char* mode, const char* value, void*) {
     return false;
   }
   oledDriver.display();
+  if(!oledAcknowledges()) return false;
+  std::strcpy(oledScene,value);
   oledCatDance = false;
   lastOledUserCommandAt = millis();
   return true;
@@ -944,9 +1006,10 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
     entry.interfaceType = esp32core::HardwareInterface::Uart;
     entry.pins[0] = COMPI_DFPLAYER_TX;
     entry.pins[1] = COMPI_DFPLAYER_RX;
-    entry.active = true;
+    entry.active = audioStatusSnapshot(nullptr).modulePresent;
     entry.pinCount = 2;
-    entry.state = esp32core::ComponentState::Active;
+    entry.state = entry.active ? esp32core::ComponentState::Active :
+        esp32core::ComponentState::Error;
   }
 #endif
 
@@ -1241,8 +1304,12 @@ void processBleCommands() {
     esp32core::BleLdrCalibration calibration{};
     const bool calibrationRequest = esp32core::parseBleLdrCalibration(
         buffer, calibration);
+    esp32core::MediaCommand media{};
+    const bool mediaRequest=esp32core::parseMediaCommand(buffer,media);
+    esp32core::BleSensorPinRequest pinRequest{};
+    const bool sensorPinRequest=esp32core::parseBleSensorPinRequest(buffer,pinRequest);
     esp32core::RgbCommand parsed{};
-    if (!snapshotRequest && !calibrationRequest &&
+    if (!snapshotRequest && !calibrationRequest && !mediaRequest && !sensorPinRequest &&
         environmental == esp32core::BleEnvironmentalAction::Invalid &&
         !esp32core::parseRgbCommand(buffer, parsed)) {
       reject();
@@ -1250,13 +1317,29 @@ void processBleCommands() {
     }
     const bool isStop =
         environmental == esp32core::BleEnvironmentalAction::Stop ||
-        (environmental == esp32core::BleEnvironmentalAction::Invalid &&
+        (!mediaRequest && !sensorPinRequest && environmental == esp32core::BleEnvironmentalAction::Invalid &&
          (parsed.action == esp32core::RgbAction::StopEffect ||
           parsed.action == esp32core::RgbAction::Off));
     const auto channelSource = esp32core::CompiCommandArbiter::mapBleSource(bleAuthState);
     auto evaluation = commandArbiter.evaluate(channelSource, isStop);
     if (!evaluation.allowed) {
       reject();
+      continue;
+    }
+    if(sensorPinRequest) {
+      const auto result=wifiLab.applySingleSensorPinBle(pinRequest);
+      const char* outcome=result==esp32core::BlePinApplyResult::Applied ? "APPLIED" :
+          result==esp32core::BlePinApplyResult::Replayed ? "REPLAYED" :
+          result==esp32core::BlePinApplyResult::Busy ? "BUSY" : "REJECTED";
+      char reply[48]{};
+      std::snprintf(reply,sizeof(reply),"PIN,%s,%s",pinRequest.token,outcome);
+      publishControlReply(reply);
+      continue;
+    }
+    if(mediaRequest) {
+      char reply[125]{};
+      if(wifiLab.mediaReply(media,reply,sizeof(reply))) publishControlReply(reply);
+      else reject();
       continue;
     }
     if (calibrationRequest) {
@@ -1360,52 +1443,31 @@ void servePhysicalWindow(uint32_t now) {
 esp32core::EnvironmentalVoicePolicy voicePolicy;
 // Single active UART owner for MP3 commands in this sketch.
 HardwareSerial dfplayerSerial(2);
-bool automaticVoiceEnabled = true;
+Preferences audioPreferences;
+bool audioPreferencesReady = false;
+bool automaticVoiceEnabled = false;
 uint32_t lastVoiceSampleAt = 0;
-bool dfplayerCommand(uint8_t command, uint16_t parameter) {
-  const uint8_t packet[10] = {
-    0x7E, 0xFF, 0x06, command, 0x00,
-    static_cast<uint8_t>(parameter >> 8),
-    static_cast<uint8_t>(parameter & 0xFF), 0, 0, 0xEF
-  };
-  uint8_t frame[10];
-  for (uint8_t i = 0; i < 10; ++i) frame[i] = packet[i];
-  const uint16_t checksum = static_cast<uint16_t>(0u -
-      (0xFFu + 0x06u + command + frame[4] + frame[5] + frame[6]));
-  frame[7] = checksum >> 8;
-  frame[8] = checksum & 0xFFu;
-  // UART accepted all bytes; this does NOT prove DFPlayer playback or SD presence.
-  return dfplayerSerial.write(frame, sizeof(frame)) == sizeof(frame);
+bool dfplayerSend(const uint8_t* frame, size_t length, void*) {
+  return dfplayerSerial.availableForWrite() >= static_cast<int>(length) &&
+      dfplayerSerial.write(frame,length)==length;
+}
+esp32core::DfPlayerRuntime dfplayerRuntime(dfplayerSend,nullptr);
+esp32core::AudioSnapshot audioStatusSnapshot(void*) {
+  auto state=dfplayerRuntime.snapshot(millis());state.voiceEnabled=automaticVoiceEnabled;return state;
 }
 bool dfplayerTrack(uint16_t track) {
-  if (track == 0 || track > 9999) return false;
-  return dfplayerCommand(0x12, track);
+  return dfplayerRuntime.command("play",track,millis());
 }
 bool audioControlCommand(const char* verb, int param, void*) {
   if (verb == nullptr) return false;
-  if (std::strcmp(verb, "play") == 0) {
-    if (param < 1 || param > 99) return false;
-    return dfplayerTrack(static_cast<uint16_t>(param));
-  }
-  if (std::strcmp(verb, "volume") == 0) {
-    if (param < 0 || param > 30) return false;
-    return dfplayerCommand(0x06, static_cast<uint16_t>(param));
-  }
-  if (std::strcmp(verb, "stop") == 0) {
-    return dfplayerCommand(0x16, 0);
-  }
-  if (std::strcmp(verb, "pause") == 0) {
-    return dfplayerCommand(0x0E, 0);
-  }
-  if (std::strcmp(verb, "resume") == 0) {
-    return dfplayerCommand(0x0D, 0);
-  }
   if (std::strcmp(verb, "voice") == 0) {
-    if (param != 0 && param != 1) return false;
+    if ((param != 0 && param != 1) || !audioPreferencesReady) return false;
+    if(audioPreferences.putBool("voice",param==1)!=1) return false;
     automaticVoiceEnabled = (param == 1);
+    voicePolicy=esp32core::EnvironmentalVoicePolicy{};
     return true;
   }
-  return false;
+  return dfplayerRuntime.command(verb,param,millis());
 }
 #endif
 
@@ -1413,8 +1475,9 @@ void setup() {
 #if COMPI_ENABLE_DFPLAYER
   // USB-independent UART2; 16 belongs to DHT11. DFPlayer is externally powered.
   dfplayerSerial.begin(9600, SERIAL_8N1, COMPI_DFPLAYER_RX, COMPI_DFPLAYER_TX);
-  delay(250);
-  dfplayerCommand(0x06, 1); // volume 1/30 until amplifier power is verified
+  audioPreferencesReady=audioPreferences.begin("compi-audio",false);
+  automaticVoiceEnabled=audioPreferencesReady && audioPreferences.getBool("voice",false);
+  dfplayerRuntime.command("volume",1,millis()); // acceptance only; queried later
 #endif
 
   Serial.begin(115200);
@@ -1506,6 +1569,7 @@ void setup() {
   if (oledModule.ready()) {
     oledModule.setText("HOLA, SOY COMPI!\nOLED LISTA  (^_^)");
     if (oledModule.refreshNow(millis())) {
+      std::strcpy(oledScene,"text");
       Serial.println("BOOT: OLED SSD1306 ACK OK, saludo mostrado");
     } else {
       Serial.println("WARN: OLED responde por I2C, pero no confirmo refresco");
@@ -1523,6 +1587,7 @@ void setup() {
   wifiLab.setComponentStatus(collectComponentStatus, nullptr);
 #if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
   wifiLab.setOledDisplay(oledDisplayCommand, nullptr);
+  wifiLab.setOledStatus(oledStatusSnapshot);
 #endif
   wifiLab.setComponentApply(applyComponentPins, nullptr);
 #if COMPI_BUILD_LDR
@@ -1530,6 +1595,7 @@ void setup() {
 #endif
 #if COMPI_ENABLE_DFPLAYER
   wifiLab.setAudioControl(audioControlCommand, nullptr);
+  wifiLab.setAudioStatus(audioStatusSnapshot);
 #endif
   wifiLab.begin();
   Serial.print("BOOT: Wi-Fi mode=");
@@ -1607,7 +1673,14 @@ void loop() {
   wifiLab.tick(now);
   moduleRegistry.tickAll(millis());
 #if COMPI_ENABLE_DFPLAYER
-  if (automaticVoiceEnabled &&
+  // Bound RX work even for a noisy/miswired module. Never wait for UART data.
+  for(uint8_t n=0;n<64 && dfplayerSerial.available()>0;++n)
+    dfplayerRuntime.consume(static_cast<uint8_t>(dfplayerSerial.read()),now);
+  dfplayerRuntime.tick(now);
+  const auto voicePlayerState=dfplayerRuntime.snapshot(now);
+  if (automaticVoiceEnabled && voicePlayerState.modulePresent &&
+      voicePlayerState.sdPresent==1 &&
+      std::strcmp(voicePlayerState.playback,"STOPPED")==0 &&
       static_cast<uint32_t>(now - lastVoiceSampleAt) >= 250u) {
     lastVoiceSampleAt = now;
     esp32core::VoiceSample voiceSample{};
@@ -1639,7 +1712,7 @@ void loop() {
 #if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
   // Two cats alternate poses without delay(): command handling, sensors,
   // BLE and Wi-Fi keep running. Revert to the ambient dashboard after 30 s.
-  if (oledCatDance) {
+  if (oledCatDance && !oledState.paused) {
     if (static_cast<uint32_t>(now - lastOledUserCommandAt) >= 30000u) {
       oledCatDance = false;
     } else if (static_cast<uint32_t>(now - lastCatDanceFrameAt) >= 400u) {
@@ -1653,12 +1726,13 @@ void loop() {
   // Small independent OLED dashboard: never writes PWM and never blocks
   // the network. Limit I2C transfers to 1 Hz to leave time for BLE framing,\n  // Wi-Fi command processing and sensor sampling. Start after the greeting.
   static uint32_t lastOledTelemetryAt = 0;
-  if (oledModule.ready() && now >= 8000U &&
+  if (oledModule.ready() && !oledState.paused && now >= 8000U &&
       (lastOledUserCommandAt == 0 ||
        static_cast<uint32_t>(now - lastOledUserCommandAt) >= 30000u) &&
       (lastOledTelemetryAt == 0 ||
        static_cast<uint32_t>(now - lastOledTelemetryAt) >= 1000U)) {
     lastOledTelemetryAt = now;
+    std::strcpy(oledScene,"telemetry");
     // Mixed view: a friendly face AND live measurements on the physical
     // 128x64 OLED. Raw ADC is labelled RAW until the LDR is calibrated;
     // never present raw samples as invented percent/lux values.

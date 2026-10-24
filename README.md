@@ -1,5 +1,11 @@
 # RGB Controller — Android Kotlin + ESP32 BLE
 
+**Compi Aurora consolidado:** firmware único en `firmware/esp32_rgb` y Android
+en `android/app`. Audio DFPlayer y OLED comparten backend BLE/Wi-Fi con estado
+consultable; sensores, calibración LDR y RGB ambiental conservan las correcciones
+vigentes. Consulta el [contrato y prueba física](docs/COMPI_CONSOLIDATED_PROTOCOL.md)
+y la [auditoría de todas las ramas](docs/audits/COMPI_BRANCH_CONSOLIDATION_2026-10-23.md).
+
 Aplicación Android Kotlin/Jetpack Compose para control RGB por BLE y experimentación ESP32 por Wi-Fi local protegido (exclusivamente en APK debug). No requiere nube.
 
 ## Empezar en Windows
