@@ -7,6 +7,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import com.rgbcontroller.core.ble.AudioHardwareState
 
 /** Uses real queried UART state; MP3 filenames cannot be enumerated via UART. */
@@ -24,7 +27,12 @@ fun CompiAudioPlayerCard(
     val sdCount = hardware?.tracks ?: -1
     Card(Modifier.fillMaxWidth().testTag("dfplayer_physical_controls"), shape = RoundedCornerShape(22.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Reproductor Compi", style = MaterialTheme.typography.titleLarge)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Reproductor Compi", style = MaterialTheme.typography.titleLarge)
+                Text(if (hardware?.modulePresent == true) "● Conectado" else "○ Sin respuesta",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (hardware?.modulePresent == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             Text("DFPlayer Mini · microSD", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(when {
                 !authorized -> "Conecta y autoriza Bluetooth o Wi-Fi."
@@ -51,7 +59,11 @@ fun CompiAudioPlayerCard(
             if (sdCount == 0) Text("El módulo informa 0 archivos. Revisa la tarjeta antes de intentar reproducir.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             Button(onClick = { onCommand("PLAY", trackText) },
                 enabled = available && sdCount != 0 && trackText.toIntOrNull() in 1..2999,
-                modifier = Modifier.fillMaxWidth().testTag("dfplayer_play")) { Text("Reproducir archivo") }
+                modifier = Modifier.fillMaxWidth().testTag("dfplayer_play")) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Reproducir archivo")
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedButton(onClick = { onCommand("PAUSE", null) }, enabled = available && hardware?.playing == true,
                     modifier = Modifier.weight(1f)) { Text("Pausa") }
@@ -75,7 +87,11 @@ fun CompiAudioPlayerCard(
             }
             Text("La microSD se administra desde el módulo; el teléfono no transfiere pistas por UART.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             feedback?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-            OutlinedButton(onClick = { onCommand("GET", null) }, enabled = authorized && !busy) { Text("Consultar módulo") }
+            OutlinedButton(onClick = { onCommand("GET", null) }, enabled = authorized && !busy, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Filled.Refresh, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Actualizar estado del módulo")
+            }
         }
     }
     LocalAudioControls()
