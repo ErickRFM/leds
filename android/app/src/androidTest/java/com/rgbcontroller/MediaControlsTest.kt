@@ -31,6 +31,18 @@ class MediaControlsTest {
         compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
     }
 
+    @Test fun zeroFileCountExplainsWhyPlaybackIsDisabled() {
+        compose.setContent {
+            MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) {
+                CompiAudioPlayerCard(true,
+                    AudioHardwareState(true, 1, 0, "STOPPED", 0, 10, false, true),
+                    false, null, { _, _ -> error("No playback for empty SD") })
+            } }
+        }
+        compose.onNodeWithTag("dfplayer_status").assertTextContains("0 archivos", substring = true)
+        compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
+    }
+
     @Test fun physicalPlayInvokesTheHardwareCommand() {
         var sent: Pair<String, String?>? = null
         compose.setContent {
