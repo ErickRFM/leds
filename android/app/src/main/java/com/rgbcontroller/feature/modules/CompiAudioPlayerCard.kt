@@ -66,7 +66,7 @@ fun CompiAudioPlayerCard(
                 Text("Avisos ambientales")
                 Switch(checked = hardware?.voiceEnabled == true,
                     onCheckedChange = { onCommand("VOICE", if (it) "1" else "0") },
-                    enabled = authorized && hardware != null && !busy,
+                    enabled = authorized && hardware?.fresh == true && !busy,
                     modifier = Modifier.testTag("dfplayer_voice"))
             }
             Text("La opción se guarda en el ESP32. UART no mide sonido en la bocina.", style = MaterialTheme.typography.bodySmall)
