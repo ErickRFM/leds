@@ -56,7 +56,14 @@ int main() {
   result = policy.evaluate(reading);
   assert(result.humidityWasUsed);
   assert(result.band == EnvironmentalRgbBand::Extreme);
-  assert(result.blue == 90);  // (35 * 3 + 255) / 4
+  assert(result.blue == 62);  // (35 * 7 + 255) / 8
+  // Regression: 23 C at 75% humidity must stay green, not cyan.
+  reading.temperatureC = 23.0f;
+  result = policy.evaluate(reading);
+  assert(result.band == EnvironmentalRgbBand::Comfort);
+  assert(result.green > result.blue * 2);
+  assert(result.green > result.red);
+  reading.temperatureC = 35.6f;
   reading.humidityPercent = 25.0f;
   result = policy.evaluate(reading);
   assert(result.humidityWasUsed && result.red == 236);
