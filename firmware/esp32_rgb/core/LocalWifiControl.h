@@ -17,6 +17,7 @@
 #include "ComponentApplyReplayGuard.h"
 #include "MediaControlBackend.h"
 #include "BleSensorPinControl.h"
+#include "EnvironmentalRgbPolicy.h"
 
 namespace esp32core {
 
