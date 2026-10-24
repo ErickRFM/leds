@@ -168,7 +168,9 @@ jobs:
       - name: V5 local Arduino sketch packaging tests (offline, no flash)
         run: python3 -m unittest discover -s tests -p 'test_build_user_sketch.py' -v
       - name: Complete Arduino sketch ZIP regression
-        run: python3 -m unittest discover -s tests -p 'test_package_esp32_source.py' -v
+        run: |
+          python3 scripts/package-esp32-source.py --out dist/esp32_rgb_firmware.zip
+          python3 -m unittest discover -s tests -p 'test_package_esp32_source.py' -v
       - name: OTA slot budget logic regression
         run: python3 scripts/check-firmware-budget.py --self-test
       - name: V4 read-only BLE identity contract
