@@ -93,5 +93,14 @@ int main() {
     if(floodWire.bytes[3]>=0x3f) ++queryCount;
   }
   assert(queryCount>0);
+  // SD initialization alone is insufficient: a verified zero file count blocks PLAY.
+  Wire emptyWire; DfPlayerRuntime empty(send,&emptyWire);
+  empty.tick(100); receive(empty,0x3f,2,110);
+  empty.tick(210); receive(empty,0x42,0,220);
+  empty.tick(320); receive(empty,0x48,0,330);
+  assert(empty.snapshot(330).sdPresent==1);
+  assert(empty.snapshot(330).tracks==0);
+  assert(!empty.command("play",1,340));
+  assert(empty.command("volume",10,340));
   puts("DFPlayer checksum, hardware truth, queue, expiry: ALL OK");
 }
