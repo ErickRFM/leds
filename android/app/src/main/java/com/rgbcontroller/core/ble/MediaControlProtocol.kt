@@ -6,8 +6,8 @@ data class AudioHardwareState(
     val playback: String, val track: Int, val volume: Int,
     val voiceEnabled: Boolean, val fresh: Boolean
 ) {
-    val canPlay: Boolean get() = fresh && modulePresent && sdPresent == 1
-    val playing: Boolean get() = canPlay && playback == "PLAYING"
+    // Playback requires independently confirmed module and SD state, not unrelated\n    // track/count/volume polling. Firmware expires those fields individually.\n    val canPlay: Boolean get() = modulePresent && sdPresent == 1
+    val playing: Boolean get() = modulePresent && playback == "PLAYING"
 }
 
 data class OledHardwareState(
