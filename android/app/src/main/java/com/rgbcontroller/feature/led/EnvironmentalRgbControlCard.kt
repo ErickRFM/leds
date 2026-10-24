@@ -36,6 +36,12 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.ui.Alignment
+
 /** Reuses the same firmware environmental state machine on BLE and Wi-Fi.
  * The UI NEVER treats a GATT write callback as environmental-mode acceptance.
  */
@@ -49,6 +55,7 @@ fun EnvironmentalRgbControlCard(
     val bleConnection by bleManager.connectionState.collectAsState()
     val bleSecurity by bleManager.securityState.collectAsState()
     val bleEnabled by bleManager.environmentalRgbEnabled.collectAsState()
+    val bleSnapshot by bleManager.environmentalRgbSnapshot.collectAsState()
     val bleReply by bleManager.environmentalRgbMessage.collectAsState()
     val authorized = if (wifiMode) {
         session.connectionState == LabConnectionState.AUTHORIZED && session.wifiReady
@@ -57,9 +64,23 @@ fun EnvironmentalRgbControlCard(
             bleSecurity == BleSecurityState.Authorized
     }
     var wifiEnabled by remember { mutableStateOf<Boolean?>(null) }
+    var wifiState by remember { mutableStateOf("DISABLED") }
+    var wifiReason by remember { mutableStateOf("DISABLED") }
+    var wifiBand by remember { mutableStateOf("Comfort") }
+    var wifiRed by remember { mutableStateOf(0) }
+    var wifiGreen by remember { mutableStateOf(0) }
+    var wifiBlue by remember { mutableStateOf(0) }
+    var wifiBrightness by remember { mutableStateOf(0) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("Esperando estado ambiental del ESP32.") }
+
     val enabled = if (wifiMode) wifiEnabled else bleEnabled
+    val currentState = if (wifiMode) wifiState else (bleSnapshot?.state?.name ?: "DISABLED")
+    val currentReason = if (wifiMode) wifiReason else (bleSnapshot?.reason ?: "DISABLED")
+    val currentRed = if (wifiMode) wifiRed else (bleSnapshot?.red ?: 0)
+    val currentGreen = if (wifiMode) wifiGreen else (bleSnapshot?.green ?: 0)
+    val currentBlue = if (wifiMode) wifiBlue else (bleSnapshot?.blue ?: 0)
+    val currentBand = if (wifiMode) wifiBand else (bleSnapshot?.band ?: "Comfort")
 
     LaunchedEffect(authorized, wifiMode, session.revision) {
         if (!authorized) {
@@ -77,9 +98,20 @@ fun EnvironmentalRgbControlCard(
                         val status = session.serialized { client.environmentalRgbStatus(key) }
                         if (authorized && session.revision == version && !busy) {
                             wifiEnabled = status.optBoolean("enabled")
-                            message = if (wifiEnabled == true)
-                                "ESP32 confirmó el modo ambiental activo."
-                            else "ESP32 confirmó el modo manual."
+                            wifiState = status.optString("state", if (wifiEnabled == true) "RUNNING" else "DISABLED")
+                            wifiReason = status.optString("reason", "OK")
+                            wifiBand = status.optString("band", "Comfort")
+                            wifiRed = status.optInt("red", 0)
+                            wifiGreen = status.optInt("green", 0)
+                            wifiBlue = status.optInt("blue", 0)
+                            wifiBrightness = status.optInt("brightness", 80)
+                            message = when (wifiState) {
+                                "RUNNING" -> "ESP32 confirmó RGB ambiental activo ($wifiBand: R:$wifiRed, G:$wifiGreen, B:$wifiBlue, brillo:$wifiBrightness)."
+                                "SUSPENDED" -> "Modo ambiental en espera: temperatura no disponible o desactualizada ($wifiReason)."
+                                "CONFLICT" -> "Modo ambiental suspendido por conflicto ($wifiReason)."
+                                "ERROR" -> "Error en módulo RGB del ESP32 ($wifiReason)."
+                                else -> "ESP32 confirmó el modo manual."
+                            }
                         }
                     } else if (!bleManager.requestEnvironmentalRgb(BleEnvironmentalProtocol.Action.GET)) {
                         message = "Bluetooth aún no autoriza consultas ambientales."
@@ -97,7 +129,26 @@ fun EnvironmentalRgbControlCard(
 
     Card(Modifier.fillMaxWidth().testTag("environmental_rgb_control")) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("RGB ambiental", style = MaterialTheme.typography.titleMedium)
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("RGB ambiental", style = MaterialTheme.typography.titleMedium)
+                val badgeColor = when (currentState) {
+                    "RUNNING" -> Color(0xFF36BA74)
+                    "SUSPENDED" -> Color(0xFFF6B83F)
+                    "CONFLICT" -> Color(0xFFFF7D14)
+                    "ERROR" -> Color(0xFFE62323)
+                    else -> Color.Gray
+                }
+                AssistChip(
+                    onClick = {},
+                    label = { Text(currentState, style = MaterialTheme.typography.labelSmall) },
+                    colors = AssistChipDefaults.assistChipColors(containerColor = badgeColor.copy(alpha = 0.2f), labelColor = badgeColor),
+                    modifier = Modifier.testTag("environmental_rgb_status_chip")
+                )
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 for (color in listOf(
                     Color(0xFF3478ED), Color(0xFF36BA74),
@@ -110,10 +161,26 @@ fun EnvironmentalRgbControlCard(
                     ) {}
                 }
             }
+            if (currentState == "RUNNING" && (currentRed > 0 || currentGreen > 0 || currentBlue > 0)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        modifier = Modifier.size(24.dp),
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(currentRed, currentGreen, currentBlue)
+                    ) {}
+                    Text(
+                        "Color ambiental aplicado: R:$currentRed G:$currentGreen B:$currentBlue ($currentBand)",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
             Text(
-                "Temperatura: azul, verde, ámbar, naranja o rojo. La humedad suaviza el tono " +
-                    "y la LDR calibrada regula el brillo. Sin temperatura válida, " +
-                    "el ESP32 mantiene el último color.",
+                "Temperatura: azul (<20°C), verde (20-26°C), amarillo (26-30°C), naranja (30-35°C) o rojo (≥35°C). " +
+                    "Sin temperatura válida, el ESP32 no realiza cambios.",
                 style = MaterialTheme.typography.bodySmall
             )
             Text(
@@ -152,7 +219,6 @@ fun EnvironmentalRgbControlCard(
                                 check(bleManager.requestEnvironmentalRgb(action)) {
                                     "El ESP32 no aceptó encolar el comando BLE."
                                 }
-                                // BLE mode only changes with ENV,ON / ENV,OFF notification.
                             }
                         } catch (cancelled: CancellationException) {
                             throw cancelled

@@ -392,8 +392,12 @@ bool rgbPersistenceAttempted = false;
 // Pure policy, no competing PWM driver. The authenticated Wi-Fi transport
 // controls opt-in mode, and manual BLE/Wi-Fi commands cancel it.
 esp32core::EnvironmentalRgbPolicy environmentRgbPolicy;
+esp32core::EnvironmentalRgbSnapshot liveEnvironmentalRgbSnapshot{};
 uint32_t lastEnvironmentalRgbAt = 0;
 void stopEnvironmentalRgbOnManual();
+esp32core::EnvironmentalRgbSnapshot getLiveEnvironmentalRgbSnapshot(void*) {
+  return liveEnvironmentalRgbSnapshot;
+}
 // Legacy BLE stack invokes onWrite on a different task. Never mutate the
 // RGB engine/LED state in that callback; the Arduino loop owns all commands.
 portMUX_TYPE bleInboxMux = portMUX_INITIALIZER_UNLOCKED;
@@ -1254,6 +1258,9 @@ esp32core::LocalWifiControl wifiLab(pinManager, stateString, applyRgbCommand,
 void stopEnvironmentalRgbOnManual() {
   wifiLab.disableEnvironmentalRgb();
   environmentRgbPolicy.reset();
+  liveEnvironmentalRgbSnapshot.enabled = false;
+  liveEnvironmentalRgbSnapshot.state = esp32core::EnvironmentalRgbState::Disabled;
+  liveEnvironmentalRgbSnapshot.reason = "DISABLED";
 }
 void stopScriptOnManualBle() { wifiLab.stopScriptFromBle(); }
 
@@ -1376,9 +1383,13 @@ void processBleCommands() {
         if (environmental == esp32core::BleEnvironmentalAction::Stop) {
           wifiLab.disableEnvironmentalRgb();
           environmentRgbPolicy.reset();
+          liveEnvironmentalRgbSnapshot.enabled = false;
+          liveEnvironmentalRgbSnapshot.state = esp32core::EnvironmentalRgbState::Disabled;
+          liveEnvironmentalRgbSnapshot.reason = "DISABLED";
         }
-        publishControlReply(wifiLab.environmentalRgbEnabled()
-                                ? "ENV,ON" : "ENV,OFF");
+        char reply[128] = {};
+        esp32core::encodeBleEnvironmentalStatus(liveEnvironmentalRgbSnapshot, reply, sizeof(reply));
+        publishControlReply(reply);
       }
       continue;
     }
@@ -1597,6 +1608,7 @@ void setup() {
   wifiLab.setAudioControl(audioControlCommand, nullptr);
   wifiLab.setAudioStatus(audioStatusSnapshot);
 #endif
+  wifiLab.setEnvironmentalRgbSnapshot(getLiveEnvironmentalRgbSnapshot, nullptr);
   wifiLab.begin();
   Serial.print("BOOT: Wi-Fi mode=");
   Serial.print(static_cast<int>(WiFi.getMode()));
@@ -1815,8 +1827,26 @@ void loop() {
 #endif
   // Single Arduino loop is the only RGB writer. No BLE ISR or sensor module
   // writes PWM; mode is opt-in via authorized SoftAP and manual control cancels.
-  if (wifiLab.environmentalRgbMayRun() && rgbModule.ready() &&
-      static_cast<uint32_t>(now - lastEnvironmentalRgbAt) >= 1000u) {
+  liveEnvironmentalRgbSnapshot.enabled = wifiLab.environmentalRgbEnabled();
+  if (!liveEnvironmentalRgbSnapshot.enabled) {
+    liveEnvironmentalRgbSnapshot.state = esp32core::EnvironmentalRgbState::Disabled;
+    liveEnvironmentalRgbSnapshot.reason = "DISABLED";
+  } else if (wifiLab.hasManualOverride()) {
+    liveEnvironmentalRgbSnapshot.state = esp32core::EnvironmentalRgbState::Conflict;
+    liveEnvironmentalRgbSnapshot.reason = "MANUAL_OVERRIDE";
+  } else if (wifiLab.scriptActive()) {
+    liveEnvironmentalRgbSnapshot.state = esp32core::EnvironmentalRgbState::Conflict;
+    liveEnvironmentalRgbSnapshot.reason = "SCRIPT_ACTIVE";
+  } else if (wifiLab.automationActive()) {
+    liveEnvironmentalRgbSnapshot.state = esp32core::EnvironmentalRgbState::Conflict;
+    liveEnvironmentalRgbSnapshot.reason = "AUTOMATION_ACTIVE";
+  } else if (wifiLab.experimentActive()) {
+    liveEnvironmentalRgbSnapshot.state = esp32core::EnvironmentalRgbState::Conflict;
+    liveEnvironmentalRgbSnapshot.reason = "EXPERIMENT_ACTIVE";
+  } else if (!rgbModule.ready()) {
+    liveEnvironmentalRgbSnapshot.state = esp32core::EnvironmentalRgbState::Error;
+    liveEnvironmentalRgbSnapshot.reason = "MODULE_NOT_READY";
+  } else if (static_cast<uint32_t>(now - lastEnvironmentalRgbAt) >= 1000u) {
     lastEnvironmentalRgbAt = now;
     esp32core::EnvironmentalRgbInput input{};
 #if COMPI_BUILD_DHT11
@@ -1858,15 +1888,30 @@ void loop() {
     }
 #endif
     const auto decision = environmentRgbPolicy.evaluate(input);
-    // Do not change RGB when temperature is stale or invalid.
-    if (decision.apply &&
-        (!rgb.power || rgb.mode != Mode::NONE || rgb.r != decision.red ||
-         rgb.g != decision.green || rgb.b != decision.blue ||
-         rgb.brightness != decision.brightness)) {
-      const String command = "SET," + String(decision.red) + "," +
-          String(decision.green) + "," + String(decision.blue) + "," +
-          String(decision.brightness);
-      applyRgbRuntimeCommand(command);  // never persists a temporary color
+    if (!decision.apply) {
+      liveEnvironmentalRgbSnapshot.state = esp32core::EnvironmentalRgbState::Suspended;
+      liveEnvironmentalRgbSnapshot.reason = "STALE_TEMPERATURE";
+    } else {
+      liveEnvironmentalRgbSnapshot.state = esp32core::EnvironmentalRgbState::Running;
+      liveEnvironmentalRgbSnapshot.reason = "OK";
+      liveEnvironmentalRgbSnapshot.band = decision.band;
+      liveEnvironmentalRgbSnapshot.red = decision.red;
+      liveEnvironmentalRgbSnapshot.green = decision.green;
+      liveEnvironmentalRgbSnapshot.blue = decision.blue;
+      liveEnvironmentalRgbSnapshot.brightness = decision.brightness;
+      liveEnvironmentalRgbSnapshot.humidityUsed = decision.humidityWasUsed;
+      liveEnvironmentalRgbSnapshot.lightUsed = decision.lightWasUsed;
+      liveEnvironmentalRgbSnapshot.lastAppliedMs = now;
+
+      // Do not change RGB when temperature is stale or invalid.
+      if (!rgb.power || rgb.mode != Mode::NONE || rgb.r != decision.red ||
+          rgb.g != decision.green || rgb.b != decision.blue ||
+          rgb.brightness != decision.brightness) {
+        const String command = "SET," + String(decision.red) + "," +
+            String(decision.green) + "," + String(decision.blue) + "," +
+            String(decision.brightness);
+        applyRgbRuntimeCommand(command);  // never persists a temporary color
+      }
     }
   }
   // Send one small owner-only snapshot chunk per loop interval. Never emit

@@ -50,6 +50,7 @@ class LocalWifiControl final {
   using AudioCommand = bool (*)(const char* verb, int param, void* context);
   using AudioStatus = AudioSnapshot (*)(void* context);
   using OledStatus = OledSnapshot (*)(void* context);
+  using EnvironmentalRgbSnapshotProvider = EnvironmentalRgbSnapshot (*)(void* context);
 
   LocalWifiControl(PinManager& pins, RgbState state, RgbCommand manualCommand,
                    RgbCommand runtimeCommand, DeviceId deviceId)
@@ -99,6 +100,44 @@ class LocalWifiControl final {
         environmentalRgbEnabled_ || hasManual() ||
         bright <= dark || bright - dark < 32u || bright > 4095u) return false;
     return ldrCalibration_(dark, bright, ldrCalibrationContext_);
+  }
+
+  void setEnvironmentalRgbSnapshot(EnvironmentalRgbSnapshotProvider provider, void* context) {
+    envSnapshotProvider_ = provider;
+    envSnapshotContext_ = context;
+  }
+
+  bool scriptActive() const { return script_.active(); }
+  bool automationActive() const { return automation_.active(); }
+  bool experimentActive() const { return experiment_.active(); }
+  bool hasManualOverride() const { return hasManual(); }
+
+  EnvironmentalRgbSnapshot environmentalRgbSnapshot() const {
+    if (envSnapshotProvider_ != nullptr) {
+      return envSnapshotProvider_(envSnapshotContext_);
+    }
+    EnvironmentalRgbSnapshot snapshot{};
+    snapshot.enabled = environmentalRgbEnabled_;
+    if (!snapshot.enabled) {
+      snapshot.state = EnvironmentalRgbState::Disabled;
+      snapshot.reason = "DISABLED";
+    } else if (hasManual()) {
+      snapshot.state = EnvironmentalRgbState::Conflict;
+      snapshot.reason = "MANUAL_OVERRIDE";
+    } else if (script_.active()) {
+      snapshot.state = EnvironmentalRgbState::Conflict;
+      snapshot.reason = "SCRIPT_ACTIVE";
+    } else if (automation_.active()) {
+      snapshot.state = EnvironmentalRgbState::Conflict;
+      snapshot.reason = "AUTOMATION_ACTIVE";
+    } else if (experiment_.active()) {
+      snapshot.state = EnvironmentalRgbState::Conflict;
+      snapshot.reason = "EXPERIMENT_ACTIVE";
+    } else {
+      snapshot.state = EnvironmentalRgbState::Suspended;
+      snapshot.reason = "STALE_TEMPERATURE";
+    }
+    return snapshot;
   }
 
   // No extra RGB driver: the loop reads this opt-in mode and uses the existing
@@ -628,8 +667,18 @@ class LocalWifiControl final {
 
     server_.on("/v2/environment/rgb/status", HTTP_GET, [this]() {
       if (!authorized()) return;
-      String body = String("{\"version\":1,\"enabled\":") +
-          (environmentalRgbEnabled_ ? "true" : "false") +
+      EnvironmentalRgbSnapshot snapshot = environmentalRgbSnapshot();
+      String body = "{\"version\":1,\"enabled\":" +
+          String(snapshot.enabled ? "true" : "false") +
+          ",\"state\":\"" + environmentalRgbStateName(snapshot.state) +
+          "\",\"reason\":\"" + (snapshot.reason != nullptr ? snapshot.reason : "UNKNOWN") +
+          "\",\"band\":\"" + environmentalRgbBandName(snapshot.band) +
+          "\",\"red\":" + String(snapshot.red) +
+          ",\"green\":" + String(snapshot.green) +
+          ",\"blue\":" + String(snapshot.blue) +
+          ",\"brightness\":" + String(snapshot.brightness) +
+          ",\"humidityUsed\":" + String(snapshot.humidityUsed ? "true" : "false") +
+          ",\"lightUsed\":" + String(snapshot.lightUsed ? "true" : "false") +
           ",\"runtimeOnly\":true}";
       server_.send(200, "application/json", body);
     });
@@ -882,6 +931,8 @@ class LocalWifiControl final {
   BleSensorPinControl bleSensorPins_;
   LdrCalibration ldrCalibration_ = nullptr;
   void* ldrCalibrationContext_ = nullptr;
+  EnvironmentalRgbSnapshotProvider envSnapshotProvider_ = nullptr;
+  void* envSnapshotContext_ = nullptr;
   bool environmentalRgbEnabled_ = false;
   ComponentApplyReplayGuard replayGuard_;
   Preferences prefs_;

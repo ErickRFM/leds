@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <iostream>
 #include "../firmware/esp32_rgb/core/EnvironmentalRgbPolicy.h"
+#include "../firmware/esp32_rgb/core/BleEnvironmentalCommand.h"
 
 using namespace esp32core;
 
@@ -13,10 +14,20 @@ int main() {
   assert(!policy.evaluate(reading).apply);
   assert(!policy.initialized());
 
+  // 22.7 °C test: must produce Comfort band green (54, 186, 116)
   reading.temperatureFresh = true;
   reading.temperatureAgeMs = 100;
-  reading.temperatureC = 18.0f;
+  reading.temperatureC = 22.7f;
+  reading.humidityFresh = true;
+  reading.humidityAgeMs = 100;
+  reading.humidityPercent = 50.0f; // Normal humidity (30-70%) must NOT alter green
   auto result = policy.evaluate(reading);
+  assert(result.apply && !result.suspended);
+  assert(result.band == EnvironmentalRgbBand::Comfort);
+  assert(result.red == 54 && result.green == 186 && result.blue == 116);
+
+  reading.temperatureC = 18.0f;
+  result = policy.evaluate(reading);
   assert(result.apply && !result.suspended);
   assert(result.band == EnvironmentalRgbBand::Cold);
   assert(result.blue == 237 && result.brightness == 80);

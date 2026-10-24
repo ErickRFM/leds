@@ -35,6 +35,50 @@ enum class EnvironmentalRgbBand : uint8_t {
   Cold, Comfort, Warm, Hot, Extreme
 };
 
+enum class EnvironmentalRgbState : uint8_t {
+  Disabled,
+  Running,
+  Suspended,
+  Conflict,
+  Error
+};
+
+inline const char* environmentalRgbStateName(EnvironmentalRgbState state) {
+  switch (state) {
+    case EnvironmentalRgbState::Disabled: return "DISABLED";
+    case EnvironmentalRgbState::Running: return "RUNNING";
+    case EnvironmentalRgbState::Suspended: return "SUSPENDED";
+    case EnvironmentalRgbState::Conflict: return "CONFLICT";
+    case EnvironmentalRgbState::Error: return "ERROR";
+  }
+  return "DISABLED";
+}
+
+inline const char* environmentalRgbBandName(EnvironmentalRgbBand band) {
+  switch (band) {
+    case EnvironmentalRgbBand::Cold: return "Cold";
+    case EnvironmentalRgbBand::Comfort: return "Comfort";
+    case EnvironmentalRgbBand::Warm: return "Warm";
+    case EnvironmentalRgbBand::Hot: return "Hot";
+    case EnvironmentalRgbBand::Extreme: return "Extreme";
+  }
+  return "Comfort";
+}
+
+struct EnvironmentalRgbSnapshot {
+  bool enabled = false;
+  EnvironmentalRgbState state = EnvironmentalRgbState::Disabled;
+  const char* reason = "DISABLED";
+  EnvironmentalRgbBand band = EnvironmentalRgbBand::Comfort;
+  uint8_t red = 0;
+  uint8_t green = 0;
+  uint8_t blue = 0;
+  uint8_t brightness = 0;
+  bool humidityUsed = false;
+  bool lightUsed = false;
+  uint32_t lastAppliedMs = 0;
+};
+
 struct EnvironmentalRgbResult {
   bool apply = false;
   bool suspended = true;

@@ -95,6 +95,8 @@ class BleManager(private val context: Context) {
     private val _environmentalRgbEnabled = MutableStateFlow<Boolean?>(null)
     /** Null means unconfirmed or unavailable, never assume an old firmware has V30. */
     val environmentalRgbEnabled: StateFlow<Boolean?> = _environmentalRgbEnabled.asStateFlow()
+    private val _environmentalRgbSnapshot = MutableStateFlow<BleEnvironmentalProtocol.EnvironmentalRgbSnapshot?>(null)
+    val environmentalRgbSnapshot: StateFlow<BleEnvironmentalProtocol.EnvironmentalRgbSnapshot?> = _environmentalRgbSnapshot.asStateFlow()
     private val _environmentalRgbMessage = MutableStateFlow("Sin estado BLE ambiental confirmado.")
     val environmentalRgbMessage: StateFlow<String> = _environmentalRgbMessage.asStateFlow()
     private val snapshotMutex = Mutex()
@@ -836,10 +838,23 @@ class BleManager(private val context: Context) {
                 _securityState.value == BleSecurityState.Authorized) {
                 when (environment) {
                     is BleEnvironmentalProtocol.Reply.State -> {
-                        _environmentalRgbEnabled.value = environment.enabled
-                        _environmentalRgbMessage.value = if (environment.enabled)
-                            "ESP32 confirmó RGB ambiental activo."
-                        else "ESP32 confirmó RGB ambiental detenido."
+                        val snap = environment.snapshot
+                        _environmentalRgbSnapshot.value = snap
+                        _environmentalRgbEnabled.value = snap.enabled
+                        _environmentalRgbMessage.value = when (snap.state) {
+                            BleEnvironmentalProtocol.StateEnum.RUNNING ->
+                                "ESP32 confirmó RGB ambiental activo (${snap.band}: ${snap.red}, ${snap.green}, ${snap.blue})."
+                            BleEnvironmentalProtocol.StateEnum.SUSPENDED ->
+                                "ESP32 en espera ambiental (${snap.reason})."
+                            BleEnvironmentalProtocol.StateEnum.CONFLICT ->
+                                "ESP32 en conflicto ambiental (${snap.reason})."
+                            BleEnvironmentalProtocol.StateEnum.ERROR ->
+                                "Error en módulo RGB del ESP32 (${snap.reason})."
+                            BleEnvironmentalProtocol.StateEnum.ENABLED ->
+                                "ESP32 confirmó modo ambiental habilitado."
+                            BleEnvironmentalProtocol.StateEnum.DISABLED ->
+                                "ESP32 confirmó modo ambiental detenido."
+                        }
                     }
                     BleEnvironmentalProtocol.Reply.Busy -> {
                         _environmentalRgbMessage.value =
