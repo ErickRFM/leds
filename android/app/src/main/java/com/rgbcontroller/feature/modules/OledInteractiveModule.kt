@@ -99,13 +99,9 @@ fun OledInteractiveModule(
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            // Keep status on its own line; do not squeeze the title on small screens.
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.DesktopWindows,
                         contentDescription = null,
@@ -127,11 +123,40 @@ fun OledInteractiveModule(
                         )
                     }
                 }
-
-                CompiBadge(
-                    label = if (canControl) "Confirmada" else "Sin confirmar",
-                    type = if (canControl) CompiBadgeType.LIVE else CompiBadgeType.OFFLINE
-                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    CompiBadge(
+                        label = if (canControl) "Operativa" else "Sin confirmar",
+                        type = if (canControl) CompiBadgeType.LIVE else CompiBadgeType.OFFLINE
+                    )
+                }
+            }
+                    Icon(
+                        imageVector = Icons.Default.DesktopWindows,
+                        contentDescription = null,
+                        tint = CompiTokens.Colors.PrimaryViolet,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Pantalla OLED SSD1306",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "Monocromo 128×64 · I2C GPIO 21, 22",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    CompiBadge(
+                        label = if (canControl) "Operativa" else "Sin confirmar",
+                        type = if (canControl) CompiBadgeType.LIVE else CompiBadgeType.OFFLINE
+                    )
+                }
             }
 
             // Faithful 128x64 Monochrome Canvas Preview
