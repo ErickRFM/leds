@@ -130,34 +130,6 @@ fun OledInteractiveModule(
                     )
                 }
             }
-                    Icon(
-                        imageVector = Icons.Default.DesktopWindows,
-                        contentDescription = null,
-                        tint = CompiTokens.Colors.PrimaryViolet,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Pantalla OLED SSD1306",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Text(
-                            text = "Monocromo 128×64 · I2C GPIO 21, 22",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF94A3B8)
-                        )
-                    }
-                }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    CompiBadge(
-                        label = if (canControl) "Operativa" else "Sin confirmar",
-                        type = if (canControl) CompiBadgeType.LIVE else CompiBadgeType.OFFLINE
-                    )
-                }
-            }
 
             // Faithful 128x64 Monochrome Canvas Preview
             Box(
