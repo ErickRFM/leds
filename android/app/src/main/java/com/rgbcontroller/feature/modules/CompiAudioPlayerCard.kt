@@ -29,11 +29,11 @@ fun CompiAudioPlayerCard(
                 !hardware.modulePresent -> "Módulo sin detectar. Revisa alimentación y UART."
                 hardware.sdPresent == 0 -> "MicroSD ausente."
                 hardware.sdPresent != 1 -> "MicroSD sin confirmar."
-                !hardware.fresh -> "Módulo detectado · esperando estado completo."
+                !hardware.fresh -> "Módulo y microSD detectados · algunas métricas aún sin confirmar."
                 else -> "MicroSD detectada · ${hardware.tracks.takeIf { it >= 0 }?.toString() ?: "—"} archivos reportados"
             }, modifier = Modifier.testTag("dfplayer_status"))
             Text(when {
-                hardware == null || !hardware.fresh -> "Reproducción sin confirmar"
+                hardware == null || !hardware.modulePresent || hardware.playback == "UNKNOWN" -> "Reproducción sin confirmar"
                 hardware.playing -> "Módulo reporta reproducción · índice SD ${hardware.track.takeIf { it >= 0 } ?: "—"}"
                 hardware.playback == "PAUSED" -> "Módulo reporta pausa"
                 hardware.playback == "STOPPED" -> "Módulo reporta detenido"
@@ -53,7 +53,7 @@ fun CompiAudioPlayerCard(
                     modifier = Modifier.weight(1f)) { Text("Pausa") }
                 OutlinedButton(onClick = { onCommand("RESUME", null) }, enabled = available && hardware?.playback == "PAUSED",
                     modifier = Modifier.weight(1f)) { Text("Seguir") }
-                OutlinedButton(onClick = { onCommand("STOP", null) }, enabled = authorized && hardware?.fresh == true && !busy,
+                OutlinedButton(onClick = { onCommand("STOP", null) }, enabled = authorized && hardware?.modulePresent == true && !busy,
                     modifier = Modifier.weight(1f)) { Text("Parar") }
             }
             Text("Volumen DFPlayer: ${hardware?.volume?.takeIf { it >= 0 } ?: "—"}/30")
