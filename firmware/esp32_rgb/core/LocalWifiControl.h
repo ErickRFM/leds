@@ -52,6 +52,11 @@ class LocalWifiControl final {
   using AudioStatus = AudioSnapshot (*)(void* context);
   using OledStatus = OledSnapshot (*)(void* context);
   using EnvironmentalRgbSnapshotProvider = EnvironmentalRgbSnapshot (*)(void* context);
+  struct LoopDiagnostics {
+    uint32_t loopDurationUs = 0;
+    uint32_t loopMaxUs = 0;
+  };
+  using LoopDiagnosticsProvider = LoopDiagnostics (*)(void* context);
 
   LocalWifiControl(PinManager& pins, RgbState state, RgbCommand manualCommand,
                    RgbCommand runtimeCommand, DeviceId deviceId)
@@ -106,6 +111,11 @@ class LocalWifiControl final {
   void setEnvironmentalRgbSnapshot(EnvironmentalRgbSnapshotProvider provider, void* context) {
     envSnapshotProvider_ = provider;
     envSnapshotContext_ = context;
+  }
+
+  void setLoopDiagnostics(LoopDiagnosticsProvider provider, void* context) {
+    loopDiagProvider_ = provider;
+    loopDiagContext_ = context;
   }
 
   bool scriptActive() const { return script_.active(); }
@@ -228,7 +238,13 @@ class LocalWifiControl final {
       body += ",\"uptimeMs\":" + String(millis());
       body += ",\"resetReason\":" + String(static_cast<int>(esp_reset_reason()));
       body += ",\"wifiRssi\":" + String(signal);
-      body += ",\"leasedPins\":" + String(pins_.leasedCount()) + "}";
+      body += ",\"leasedPins\":" + String(pins_.leasedCount());
+      if (loopDiagProvider_ != nullptr) {
+        LoopDiagnostics diag = loopDiagProvider_(loopDiagContext_);
+        body += ",\"loopDurationUs\":" + String(diag.loopDurationUs);
+        body += ",\"loopMaxUs\":" + String(diag.loopMaxUs);
+      }
+      body += "}";
       server_.send(200, "application/json", body);
     });
 
@@ -934,6 +950,8 @@ class LocalWifiControl final {
   void* ldrCalibrationContext_ = nullptr;
   EnvironmentalRgbSnapshotProvider envSnapshotProvider_ = nullptr;
   void* envSnapshotContext_ = nullptr;
+  LoopDiagnosticsProvider loopDiagProvider_ = nullptr;
+  void* loopDiagContext_ = nullptr;
   bool environmentalRgbEnabled_ = false;
   ComponentApplyReplayGuard replayGuard_;
   Preferences prefs_;

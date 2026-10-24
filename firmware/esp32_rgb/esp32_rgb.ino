@@ -394,9 +394,15 @@ bool rgbPersistenceAttempted = false;
 esp32core::EnvironmentalRgbPolicy environmentRgbPolicy;
 esp32core::EnvironmentalRgbSnapshot liveEnvironmentalRgbSnapshot{};
 uint32_t lastEnvironmentalRgbAt = 0;
+uint32_t loopStartUs = 0;
+uint32_t loopDurationUs = 0;
+uint32_t loopMaxUs = 0;
 void stopEnvironmentalRgbOnManual();
 esp32core::EnvironmentalRgbSnapshot getLiveEnvironmentalRgbSnapshot(void*) {
   return liveEnvironmentalRgbSnapshot;
+}
+esp32core::LoopDiagnostics getLoopDiagnostics(void*) {
+  return {loopDurationUs, loopMaxUs};
 }
 // Legacy BLE stack invokes onWrite on a different task. Never mutate the
 // RGB engine/LED state in that callback; the Arduino loop owns all commands.
@@ -1609,6 +1615,7 @@ void setup() {
   wifiLab.setAudioStatus(audioStatusSnapshot);
 #endif
   wifiLab.setEnvironmentalRgbSnapshot(getLiveEnvironmentalRgbSnapshot, nullptr);
+  wifiLab.setLoopDiagnostics(getLoopDiagnostics, nullptr);
   wifiLab.begin();
   Serial.print("BOOT: Wi-Fi mode=");
   Serial.print(static_cast<int>(WiFi.getMode()));
@@ -1672,6 +1679,7 @@ void setup() {
 }
 
 void loop() {
+  loopStartUs = micros();
   uint32_t now = millis();
   if (restartBleAdvertising && !connected &&
       static_cast<uint32_t>(now - bleDisconnectMs) >= 180u) {
@@ -1958,4 +1966,7 @@ void loop() {
   } else if (!connected && connectedPreviously) {
     connectedPreviously = false;
   }
+  const uint32_t loopElapsed = micros() - loopStartUs;
+  loopDurationUs = loopElapsed;
+  if (loopElapsed > loopMaxUs) loopMaxUs = loopElapsed;
 }
