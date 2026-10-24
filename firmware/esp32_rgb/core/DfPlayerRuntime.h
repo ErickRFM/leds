@@ -36,7 +36,7 @@ class DfPlayerRuntime final {
   bool command(const char* verb,int parameter,uint32_t now) {
     if(!verb || count_==4) return false;
     uint8_t command=0;
-    if(!std::strcmp(verb,"play") && parameter>=1 && parameter<=2999 && snapshot(now).sdPresent==1) command=0x12;
+    if(!std::strcmp(verb,"play") && parameter>=1 && parameter<=2999 && snapshot(now).sdPresent==1 && snapshot(now).tracks!=0) command=0x12;
     else if(!std::strcmp(verb,"volume") && parameter>=0 && parameter<=30) command=0x06;
     else if(!std::strcmp(verb,"stop") && parameter==0) command=0x16;
     else if(!std::strcmp(verb,"pause") && parameter==0) command=0x0e;
