@@ -74,9 +74,17 @@ object TelemetryChart {
         val inWindow = samples
             .filter { it.recordedAtMs in from..nowMs }
             .sortedBy { it.recordedAtMs }
-        val spanX = (nowMs - from).toFloat()
+        // When a device has just connected, a 30-minute window contains only
+        // seconds of samples. Drawing them at the far-right pixel makes vertical
+        // spikes. Zoom the drawing domain until enough real history accumulates.
+        val earliest = inWindow.firstOrNull()?.recordedAtMs ?: from
+        val observedDuration = (nowMs - earliest).coerceAtLeast(0L)
+        val effectiveWindow = minOf(windowMs.coerceAtLeast(1L),
+            maxOf(60_000L, observedDuration + observedDuration / 5))
+        val displayFrom = nowMs - effectiveWindow
+        val spanX = effectiveWindow.toFloat()
         fun fractionXFor(recordedAtMs: Long): Float =
-            if (spanX > 0f) ((recordedAtMs - from).toFloat() / spanX).coerceIn(0f, 1f) else 0f
+            ((recordedAtMs - displayFrom).toFloat() / spanX).coerceIn(0f, 1f)
         val classified = inWindow.map {
             ClassifiedSample(it, classify(it, nowMs, staleAfterMs), fractionXFor(it.recordedAtMs))
         }
