@@ -126,10 +126,10 @@
 #define COMPI_ENABLE_DFPLAYER 1
 #endif
 #ifndef COMPI_DFPLAYER_RX
-#define COMPI_DFPLAYER_RX 18
+#define COMPI_DFPLAYER_RX 13
 #endif
 #ifndef COMPI_DFPLAYER_TX
-#define COMPI_DFPLAYER_TX 17
+#define COMPI_DFPLAYER_TX 14
 #endif
 #if COMPI_ENABLE_DFPLAYER
 esp32core::AudioSnapshot audioStatusSnapshot(void*);
@@ -1484,7 +1484,7 @@ bool audioControlCommand(const char* verb, int param, void*) {
 
 void setup() {
 #if COMPI_ENABLE_DFPLAYER
-  // USB-independent UART2; 16 belongs to DHT11. DFPlayer is externally powered.
+  // UART2 ESP32 RX13 <- DFPlayer TX, ESP32 TX14 -> DFPlayer RX (1k series); DHT11 remains GPIO16.
   dfplayerSerial.begin(9600, SERIAL_8N1, COMPI_DFPLAYER_RX, COMPI_DFPLAYER_TX);
   audioPreferencesReady=audioPreferences.begin("compi-audio",false);
   automaticVoiceEnabled=audioPreferencesReady && audioPreferences.getBool("voice",false);
