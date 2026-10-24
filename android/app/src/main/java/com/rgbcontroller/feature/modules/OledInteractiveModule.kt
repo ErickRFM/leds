@@ -105,7 +105,7 @@ fun OledInteractiveModule(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.DesktopWindows,
                         contentDescription = null,
@@ -113,7 +113,7 @@ fun OledInteractiveModule(
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(Modifier.width(10.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Pantalla OLED SSD1306",
                             style = MaterialTheme.typography.titleMedium,
