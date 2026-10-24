@@ -20,7 +20,7 @@ fun CompiAudioPlayerCard(
 ) {
     var trackText by remember { mutableStateOf("1") }
     var volume by remember(hardware?.volume) { mutableFloatStateOf((hardware?.volume ?: 1).coerceAtLeast(0).toFloat()) }
-    val available = authorized && hardware?.modulePresent == true && hardware.sdPresent == 1 && !busy
+    val available = authorized && hardware?.modulePresent == true && hardware?.sdPresent == 1 && !busy
     val sdCount = hardware?.tracks ?: -1
     Card(Modifier.fillMaxWidth().testTag("dfplayer_physical_controls"), shape = RoundedCornerShape(22.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -32,8 +32,8 @@ fun CompiAudioPlayerCard(
                 !hardware.modulePresent -> "Módulo sin detectar. Revisa alimentación y UART."
                 hardware.sdPresent == 0 -> "MicroSD ausente."
                 hardware.sdPresent != 1 -> "MicroSD sin confirmar."
-                !hardware.fresh -> "Módulo y microSD detectados · lectura parcial."
                 sdCount == 0 -> "MicroSD reconocida · 0 archivos reportados. Revisa FAT32 y /MP3/0001.mp3."
+                !hardware.fresh -> "Módulo y microSD detectados · lectura parcial."
                 else -> "MicroSD detectada · ${sdCount.takeIf { it >= 0 }?.toString() ?: "—"} archivos reportados"
             }, modifier = Modifier.testTag("dfplayer_status"))
             Text(when {
