@@ -99,12 +99,8 @@ fun OledInteractiveModule(
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            // Keep status on its own line; do not squeeze the title on small screens.
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.DesktopWindows,
@@ -113,7 +109,7 @@ fun OledInteractiveModule(
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(Modifier.width(10.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Pantalla OLED SSD1306",
                             style = MaterialTheme.typography.titleMedium,
@@ -127,11 +123,12 @@ fun OledInteractiveModule(
                         )
                     }
                 }
-
-                CompiBadge(
-                    label = if (canControl) "Confirmada" else "Sin confirmar",
-                    type = if (canControl) CompiBadgeType.LIVE else CompiBadgeType.OFFLINE
-                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    CompiBadge(
+                        label = if (canControl) "Operativa" else "Sin confirmar",
+                        type = if (canControl) CompiBadgeType.LIVE else CompiBadgeType.OFFLINE
+                    )
+                }
             }
 
             // Faithful 128x64 Monochrome Canvas Preview
