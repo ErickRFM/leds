@@ -21,6 +21,12 @@
 
 namespace esp32core {
 
+struct LoopDiagnostics {
+  uint32_t loopDurationUs = 0;
+  uint32_t loopMaxUs = 0;
+};
+using LoopDiagnosticsProvider = LoopDiagnostics (*)(void* context);
+
 // Laboratory-only local control. NOT a production security design:
 // HTTP is allowed ONLY on a randomly password-protected ESP32 SoftAP,
 // NEVER through the station interface or Internet. An independent admin
@@ -52,11 +58,6 @@ class LocalWifiControl final {
   using AudioStatus = AudioSnapshot (*)(void* context);
   using OledStatus = OledSnapshot (*)(void* context);
   using EnvironmentalRgbSnapshotProvider = EnvironmentalRgbSnapshot (*)(void* context);
-  struct LoopDiagnostics {
-    uint32_t loopDurationUs = 0;
-    uint32_t loopMaxUs = 0;
-  };
-  using LoopDiagnosticsProvider = LoopDiagnostics (*)(void* context);
 
   LocalWifiControl(PinManager& pins, RgbState state, RgbCommand manualCommand,
                    RgbCommand runtimeCommand, DeviceId deviceId)
