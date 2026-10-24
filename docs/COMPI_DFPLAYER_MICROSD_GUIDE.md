@@ -10,7 +10,7 @@
 - DFPlayer VCC: fuente de 5 V regulados, GND: masa común ESP32; ESP32 TX17 -> DFPlayer RX mediante 1 kΩ; DFPlayer TX -> ESP32 RX18 solo con tensión compatible 3.3 V; altavoz 4 Ω / 3 W entre SPK1 y SPK2, **no a GND**.
 - Arranca con volumen 1/30, no aumentes sin verificar alimentación y distorsión.
 - Los avisos dependen de lecturas ambientales válidas; el umbral LDR requiere calibración.
-- No se realiza lectura del contenido real de la tarjeta, confirmación BUSY/ACK ni transmisión Bluetooth A2DP. La app no debe afirmar reproducción confirmada hasta implementar esas comprobaciones.
+- El firmware consulta presencia de SD, total de archivos, índice, volumen y reproducción mediante respuestas UART validadas. No enumera nombres de archivos ni mide sonido por BUSY o micrófono; no transmite Bluetooth A2DP. Un comando aceptado no confirma reproducción. Ver [contrato consolidado](COMPI_CONSOLIDATED_PROTOCOL.md).
 - Si no hay microSD, sensores DHT11/LDR, RGB, Wi-Fi/BLE y OLED continúan funcionando.
 
 ## Prueba física requerida

@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
@@ -491,7 +492,7 @@ private fun TelemetryChartSection(
     moduleState: ComponentDashboardState,
     live: Boolean
 ) {
-    var selectedInterval by remember { mutableStateOf("24h") }
+    var selectedInterval by remember { mutableStateOf("15m") }
     val samples = moduleState.series("dht11", "temperature")
         .ifEmpty { moduleState.series("dht22", "temperature") }
     var touchedSample by remember { mutableStateOf<TelemetrySample?>(null) }
@@ -526,7 +527,7 @@ private fun TelemetryChartSection(
                     )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf("15m", "1h", "6h", "24h").forEach { interval ->
                         FilterChip(
                             selected = selectedInterval == interval,
@@ -538,7 +539,16 @@ private fun TelemetryChartSection(
             }
 
             // Real Canvas Chart
-            val validSamples = samples.filter { it.isPlottable && it.value != null }
+            val intervalMs = when (selectedInterval) {
+                "15m" -> 15 * 60_000L
+                "1h" -> 60 * 60_000L
+                "6h" -> 6 * 60 * 60_000L
+                else -> 24 * 60 * 60_000L
+            }
+            val nowMs = System.currentTimeMillis()
+            val validSamples = samples.filter {
+                it.isPlottable && it.value != null && it.recordedAtMs in (nowMs - intervalMs)..nowMs
+            }.sortedBy { it.recordedAtMs }.distinctBy { it.recordedAtMs }
             if (validSamples.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxWidth().height(140.dp),
@@ -558,8 +568,11 @@ private fun TelemetryChartSection(
                         .pointerInput(validSamples) {
                             detectTapGestures { offset ->
                                 val width = size.width
-                                val index = ((offset.x / width) * validSamples.size).toInt().coerceIn(0, validSamples.lastIndex)
-                                touchedSample = validSamples.getOrNull(index)
+                                val fraction = (offset.x / width).coerceIn(0f, 1f)
+                                val minTime = validSamples.first().recordedAtMs
+                                val maxTime = validSamples.last().recordedAtMs
+                                val tapTime = minTime + ((maxTime - minTime) * fraction).toLong()
+                                touchedSample = validSamples.minByOrNull { kotlin.math.abs(it.recordedAtMs - tapTime) }
                             }
                         }
                 ) {
@@ -574,7 +587,10 @@ private fun TelemetryChartSection(
 
                     validSamples.forEachIndexed { i, sample ->
                         val valF = sample.value!!
-                        val x = (i.toFloat() / (validSamples.size - 1).coerceAtLeast(1)) * w
+                        val earliestMs = validSamples.first().recordedAtMs
+                        val elapsedMs = (sample.recordedAtMs - earliestMs).coerceAtLeast(0L)
+                        val spanMs = (validSamples.last().recordedAtMs - earliestMs).coerceAtLeast(1L)
+                        val x = (elapsedMs.toFloat() / spanMs.toFloat()) * w
                         val y = h - ((valF - minVal) / range) * h
 
                         if (i == 0) {
@@ -583,7 +599,7 @@ private fun TelemetryChartSection(
                             fillPath.lineTo(x, y)
                         } else {
                             val prevVal = validSamples[i - 1].value!!
-                            val prevX = ((i - 1).toFloat() / (validSamples.size - 1).coerceAtLeast(1)) * w
+                            val prevX = ((validSamples[i - 1].recordedAtMs - earliestMs).toFloat() / spanMs.toFloat()) * w
                             val prevY = h - ((prevVal - minVal) / range) * h
                             val cx = (prevX + x) / 2f
                             path.cubicTo(cx, prevY, cx, y, x, y)

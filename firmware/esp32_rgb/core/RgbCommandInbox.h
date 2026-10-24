@@ -13,7 +13,7 @@ namespace esp32core {
 class RgbCommandInbox final {
  public:
   static constexpr size_t kCapacity = 16;
-  static constexpr size_t kMaxCommand = 48;
+  static constexpr size_t kMaxCommand = 64;
 
   bool push(const char* command) {
     if (!command) return false;

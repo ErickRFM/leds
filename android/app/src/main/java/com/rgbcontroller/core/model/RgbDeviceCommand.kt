@@ -26,16 +26,6 @@ object RgbDeviceCommand {
             return fields[2].isNotEmpty() && fields[2].all { ch -> ch in '0'..'9' } &&
                 fields[2].toIntOrNull()?.let { it in 10..1000 } == true
         }
-        if (command.startsWith("AUDIO,")) {
-            val fields = command.split(',')
-            if (fields.size >= 2) {
-                val verb = fields[1]
-                if (verb in setOf("PAUSE", "RESUME", "STOP", "NEXT", "PREV")) return fields.size == 2
-                if (verb in setOf("PLAY", "VOL", "VOICE") && fields.size == 3) {
-                    return fields[2].toIntOrNull() != null
-                }
-            }
-        }
         if (command.startsWith(AUTH_PREFIX)) {
             val key = command.substring(AUTH_PREFIX.length)
             return key.isNotEmpty() && key.length <= MAX_KEY_LENGTH &&

@@ -23,6 +23,8 @@ Thumbs.db
 .env.*
 !.env.example
 *.log
+__pycache__/
+*.pyc
 
 # local Windows build distribution
 android/.tools/

@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import com.rgbcontroller.core.ui.CompiBadge
 import com.rgbcontroller.core.ui.CompiBadgeType
 import com.rgbcontroller.core.ui.CompiTokens
+import com.rgbcontroller.core.ble.OledHardwareState
 
 data class OledExpression(val id: String, val name: String, val symbol: String)
 
@@ -67,12 +68,17 @@ fun OledInteractiveModule(
     isAuthorized: Boolean,
     onSendExpression: (String) -> Unit,
     onSetContrast: (Int) -> Unit,
+    confirmed: OledHardwareState?,
+    onSetInverted: (Boolean) -> Unit,
+    onSetPaused: (Boolean) -> Unit,
+    feedback: String? = null,
     modifier: Modifier = Modifier
 ) {
-    var selectedExpression by remember { mutableStateOf("happy") }
-    var contrastLevel by remember { mutableFloatStateOf(128f) }
-    var isInverted by remember { mutableStateOf(false) }
-    var isAnimActive by remember { mutableStateOf(true) }
+    val selectedExpression = confirmed?.scene ?: "unknown"
+    var contrastLevel by remember(confirmed?.contrast) { mutableFloatStateOf((confirmed?.contrast ?: 128).toFloat()) }
+    val isInverted = confirmed?.inverted == true
+    val isAnimActive = confirmed?.paused == false
+    val canControl = isAuthorized && confirmed?.ready == true
 
     val expressions = listOf(
         OledExpression("happy", "Sonrisa", "◕ ᴗ ◕"),
@@ -123,8 +129,8 @@ fun OledInteractiveModule(
                 }
 
                 CompiBadge(
-                    label = if (isAuthorized) "En Vivo" else "Offline",
-                    type = if (isAuthorized) CompiBadgeType.LIVE else CompiBadgeType.OFFLINE
+                    label = if (canControl) "Confirmada" else "Sin confirmar",
+                    type = if (canControl) CompiBadgeType.LIVE else CompiBadgeType.OFFLINE
                 )
             }
 
@@ -151,6 +157,7 @@ fun OledInteractiveModule(
 
                     // Render Pixel Art Preview based on expression
                     when (selectedExpression) {
+                        "unknown", "telemetry", "text" -> Unit
                         "pumpkin" -> {
                             // Pumpkin Outline
                             drawCircle(
@@ -224,7 +231,7 @@ fun OledInteractiveModule(
                 }
 
                 Text(
-                    text = "VISTA PREVIA OLED (128×64)",
+                    text = "Estado: $selectedExpression · vista ilustrativa",
                     color = if (isInverted) Color.Black.copy(alpha = 0.6f) else Color(0xFF9EE6FF).copy(alpha = 0.6f),
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp)
@@ -248,8 +255,8 @@ fun OledInteractiveModule(
                         shape = CompiTokens.Shapes.Medium,
                         color = if (selectedExpression == expr.id) CompiTokens.Colors.PrimaryVioletContainer else CompiTokens.Colors.SurfaceElevated,
                         modifier = Modifier
-                            .clickable {
-                                selectedExpression = expr.id
+                            .testTag("oled_expression_${expr.id}")
+                            .clickable(enabled = canControl) {
                                 onSendExpression(expr.id)
                             }
                             .border(
@@ -290,13 +297,13 @@ fun OledInteractiveModule(
                         value = contrastLevel,
                         onValueChange = { contrastLevel = it },
                         valueRange = 8f..255f,
-                        enabled = isAuthorized,
+                        enabled = canControl,
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(Modifier.width(10.dp))
                     Button(
                         onClick = { onSetContrast(contrastLevel.toInt()) },
-                        enabled = isAuthorized
+                        enabled = canControl
                     ) {
                         Text("Aplicar")
                     }
@@ -307,8 +314,9 @@ fun OledInteractiveModule(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     OutlinedButton(
-                        onClick = { isInverted = !isInverted },
-                        modifier = Modifier.weight(1f)
+                        onClick = { onSetInverted(!isInverted) },
+                        enabled = canControl,
+                        modifier = Modifier.weight(1f).testTag("oled_invert")
                     ) {
                         Icon(Icons.Default.InvertColors, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
@@ -316,8 +324,9 @@ fun OledInteractiveModule(
                     }
 
                     OutlinedButton(
-                        onClick = { isAnimActive = !isAnimActive },
-                        modifier = Modifier.weight(1f)
+                        onClick = { onSetPaused(isAnimActive) },
+                        enabled = canControl,
+                        modifier = Modifier.weight(1f).testTag("oled_pause")
                     ) {
                         Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
@@ -325,6 +334,7 @@ fun OledInteractiveModule(
                     }
                 }
             }
+            feedback?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         }
     }
 }

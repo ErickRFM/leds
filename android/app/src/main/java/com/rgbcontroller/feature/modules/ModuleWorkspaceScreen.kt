@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -103,7 +104,6 @@ fun ModuleWorkspaceScreen(
     var editingId by remember { mutableStateOf<String?>(null) }
     var applyMessage by remember { mutableStateOf<String?>(null) }
     var ldrCalibrationMessage by remember { mutableStateOf<String?>(null) }
-    var oledActionMessage by remember { mutableStateOf<String?>(null) }
     var applying by remember { mutableStateOf(false) }
     // Physical Back should close a nested component editor/detail before leaving Modules.
     BackHandler(enabled = editingId != null || openedId != null) {
@@ -113,6 +113,10 @@ fun ModuleWorkspaceScreen(
         }
     }
     val labClient = remember(context) { LocalLabClient(context.applicationContext) }
+    val mediaAuthorized = wifiAuthorized || bleAuthorized
+    val media = rememberHardwareMediaControls(session, bleManager, labClient, mediaAuthorized,
+        audioVisible = openedId in setOf("compi_dfplayer", "dfplayer_mp3"),
+        oledVisible = openedId in setOf("compi_station", "ssd1306_oled"))
 
     LaunchedEffect(Unit) {
         vm.loadPersisted()
@@ -153,7 +157,8 @@ fun ModuleWorkspaceScreen(
     } }
 
     if (openedId != null) {
-        val id = openedId!!
+        // Hardware DFPlayer and Music always share a single player route.
+        val id = if (openedId == "dfplayer_mp3") "compi_dfplayer" else openedId!!
         Column(Modifier.fillMaxSize()) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
@@ -184,6 +189,7 @@ fun ModuleWorkspaceScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
                             .padding(horizontal = 16.dp, vertical = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -191,7 +197,7 @@ fun ModuleWorkspaceScreen(
                             FilterChip(
                                 selected = stationSection == sec,
                                 onClick = { stationSection = sec },
-                                label = { Text(sec, fontSize = 12.sp) }
+                                label = { Text(sec, fontSize = 12.sp, maxLines = 1, softWrap = false) }
                             )
                         }
                     }
@@ -312,47 +318,13 @@ fun ModuleWorkspaceScreen(
                         if (stationSection == "Resumen" || stationSection == "OLED") {
                             item {
                                 OledInteractiveModule(
-                                    isAuthorized = wifiAuthorized,
-                                    onSendExpression = { expr ->
-                                        scope.launch {
-                                            val epoch = session.revision
-                                            val authorizedKey = session.key
-                                            try {
-                                                check(wifiAuthorized) { "Autoriza Wi-Fi para controlar OLED." }
-                                                session.serialized {
-                                                    check(wifiAuthorized && epoch == session.revision) {
-                                                        "Cambió la conexión antes de enviar la carita."
-                                                    }
-                                                    labClient.showOled(authorizedKey, "face", expr)
-                                                }
-                                                oledActionMessage = "Carita $expr enviada."
-                                            } catch (cancelled: CancellationException) {
-                                                throw cancelled
-                                            } catch (error: Exception) {
-                                                oledActionMessage = "OLED: ${error.message}"
-                                            }
-                                        }
-                                    },
-                                    onSetContrast = { level ->
-                                        scope.launch {
-                                            val epoch = session.revision
-                                            try {
-                                                check(wifiAuthorized) { "Autoriza Wi-Fi para controlar OLED." }
-                                                val key = session.key
-                                                session.serialized {
-                                                    check(wifiAuthorized && epoch == session.revision) {
-                                                        "La conexión cambió antes de aplicar el brillo."
-                                                    }
-                                                    labClient.showOled(key, "contrast", level.toString())
-                                                }
-                                                oledActionMessage = "Intensidad OLED aplicada."
-                                            } catch (cancelled: CancellationException) {
-                                                throw cancelled
-                                            } catch (error: Exception) {
-                                                oledActionMessage = "OLED: ${error.message}"
-                                            }
-                                        }
-                                    }
+                                    isAuthorized = mediaAuthorized && !media.busy,
+                                    confirmed = media.oled,
+                                    feedback = media.oledMessage,
+                                    onSendExpression = { scope.launch { media.command("OLD", "FACE", it) } },
+                                    onSetContrast = { scope.launch { media.command("OLD", "CONTRAST", it.toString()) } },
+                                    onSetInverted = { scope.launch { media.command("OLD", "INVERT", if (it) "1" else "0") } },
+                                    onSetPaused = { scope.launch { media.command("OLD", "PAUSE", if (it) "1" else "0") } }
                                 )
                             }
                         }
@@ -403,14 +375,22 @@ fun ModuleWorkspaceScreen(
                                 color = MaterialTheme.colorScheme.secondaryContainer,
                                 shape = RoundedCornerShape(12.dp)
                             ) {
-                                Text("Salida actual · Teléfono",
+                                Text("Salidas · DFPlayer y teléfono",
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer)
                             }
                         }
                     }
-                    item(key = "dfplayer_audio_controls") { CompiAudioPlayerCard() }
+                    item(key = "dfplayer_audio_controls") {
+                        CompiAudioPlayerCard(
+                            authorized = mediaAuthorized,
+                            hardware = media.audio,
+                            busy = media.busy,
+                            feedback = media.audioMessage,
+                            onCommand = { verb, value -> scope.launch { media.command("AUD", verb, value) } }
+                        )
+                    }
                     item(key = "dfplayer_hardware_status") {
                         Card(shape = RoundedCornerShape(22.dp),
                             colors = CardDefaults.cardColors(
@@ -421,7 +401,11 @@ fun ModuleWorkspaceScreen(
                                     fontWeight = FontWeight.SemiBold)
                                 Text("Reproducción por bocina externa",
                                     style = MaterialTheme.typography.bodyMedium)
-                                Text("Requiere una microSD con pistas compatibles. El estado de reproducción física aún no se confirma mediante BUSY.",
+                                Text(when {
+                                    !currentlyVerified -> "Sin estado en vivo del ESP32. No se puede confirmar la detección del módulo ni de la microSD."
+                                    runtime("dfplayer_mp3")?.active == true -> "El módulo respondió por UART. Consulta arriba la microSD y el estado actual."
+                                    else -> "El ESP32 no confirma el DFPlayer físico. Comprueba UART, alimentación y microSD."
+                                },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text("El audio del teléfono no se transmite al DFPlayer por Bluetooth.",
@@ -565,29 +549,9 @@ fun ModuleWorkspaceScreen(
                             id, state, onRefresh = { scope.launch { vm.refresh() } },
                             canCalibrateLdr = wifiAuthorized || bleAuthorized,
                             calibrationMessage = ldrCalibrationMessage,
-                            canControlOled = wifiAuthorized,
-                            oledActionMessage = oledActionMessage,
-                            onOledFace = { face ->
-                                scope.launch {
-                                    ldrCalibrationMessage = null
-                                    try {
-                                        val revision = session.revision
-                                        check(wifiAuthorized) { "Conecta al Wi-Fi autorizado." }
-                                        val key = session.key
-                                        session.serialized {
-                                            check(wifiAuthorized && session.revision == revision) {
-                                                "La conexión cambió; no se envió la expresión."
-                                            }
-                                            labClient.showOled(key, "face", face)
-                                        }
-                                        oledActionMessage = "Carita $face confirmada por el ESP32."
-                                    } catch (cancelled: CancellationException) {
-                                        throw cancelled
-                                    } catch (failure: Exception) {
-                                        oledActionMessage = "OLED: ${failure.message}"
-                                    }
-                                }
-                            },
+                            canControlOled = mediaAuthorized && media.oled?.ready == true && !media.busy,
+                            oledActionMessage = media.oledMessage,
+                            onOledFace = { face -> scope.launch { media.command("OLD", "FACE", face) } },
                             onCalibrateLdr = { dark, bright ->
                                 scope.launch {
                                     ldrCalibrationMessage = "Aplicando calibración en el ESP32…"
@@ -853,7 +817,7 @@ fun ModuleWorkspaceScreen(
                         }
                     }
                 }
-                items(configured, key = { "module_${it.id}" }) { group ->
+                items(configured.filterNot { it.id == "dfplayer_mp3" }, key = { "module_${it.id}" }) { group ->
                     val id = group.id
                     val descriptor = ComponentCatalog.get(id)
                     val physical = runtime(id)
@@ -967,8 +931,9 @@ fun ModuleWorkspaceScreen(
         }
         ModulePinWizard(
             componentId = id,
-            canApply = wifiAuthorized && currentlyVerified && current != null &&
-                id in setOf("dht11", "dht22", "soil_moisture", "ldr_light", "ssd1306_oled", "led_rgb"),
+            canApply = currentlyVerified && current != null && (
+                (wifiAuthorized && id in setOf("dht11", "dht22", "soil_moisture", "ldr_light", "ssd1306_oled", "led_rgb")) ||
+                (bleAuthorized && id in setOf("dht11", "ldr_light"))),
             applying = applying,
             applyMessage = applyMessage,
             onApply = { pins ->
@@ -976,18 +941,22 @@ fun ModuleWorkspaceScreen(
                     applying = true
                     applyMessage = null
                     try {
-                        check(wifiAuthorized) { "Se perdió la autorización Wi-Fi." }
                         val revision = session.revision
-                        val key = session.key
-                        session.serialized {
-                            check(wifiAuthorized && session.revision == revision) {
-                                "La sesión cambió antes de aplicar GPIO."
+                        session.userOperation("Aplicar GPIO") {
+                            check(session.revision == revision) { "La sesión cambió antes de aplicar GPIO." }
+                            if (bleAuthorized) {
+                                check(pins.size == 1) { "Solo DHT11 y LDR admiten esta transacción BLE." }
+                                val sensor = when (id) {
+                                    "dht11" -> com.rgbcontroller.core.ble.BleSensorPinProtocol.Sensor.DHT11
+                                    "ldr_light" -> com.rgbcontroller.core.ble.BleSensorPinProtocol.Sensor.LDR
+                                    else -> error("Este módulo requiere Wi-Fi para reasignar GPIO.")
+                                }
+                                bleManager.applySensorPinBle(sensor, pins.single())
+                            } else {
+                                check(wifiAuthorized) { "Se perdió la autorización Wi-Fi." }
+                                labClient.applyComponentPinsConfirmed(session.key, id, pins)
                             }
-                            labClient.applyComponentPinsConfirmed(key, id, pins)
-                        }
-                        if (!wifiAuthorized || session.revision != revision) {
-                            throw ComponentApplyUnconfirmedException(
-                                "La sesión cambió tras el recibo; verifica los GPIO del dispositivo actual.")
+                            check(session.revision == revision) { "La sesión cambió tras aplicar GPIO; consulta el dispositivo actual." }
                         }
                         applyMessage = "Pines confirmados por el firmware. Solo vigentes hasta reiniciar el ESP32."
                         try { vm.refresh() }
@@ -1193,7 +1162,8 @@ private fun ModuleReadings(
                 Card(Modifier.fillMaxWidth().testTag("ldr_light_readings")) {
                     Column(Modifier.padding(16.dp).animateContentSize(animationSpec = tween(250)),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Luz ambiental · LDR", style = MaterialTheme.typography.titleMedium)
+                        Text("Sensor de luminosidad", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text("LDR · luz relativa medida por el ESP32", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(
@@ -1227,7 +1197,7 @@ private fun ModuleReadings(
                             },
                             style = MaterialTheme.typography.bodySmall
                         )
-                        Text("ADC1 crudo: ${raw?.toString() ?: "—"} (0–4095)",
+                        Text("Lectura física ADC1: ${raw?.toString() ?: "—"} / 4095",
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.testTag("ldr_light_raw"))
                         OutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) {
@@ -1356,7 +1326,7 @@ private fun ModuleReadings(
                                     else MaterialTheme.colorScheme.primary)
                     }
                     if (!canControlOled) {
-                        Text("Para cambiar expresiones, conecta y autoriza Wi-Fi.",
+                        Text("Conecta y autoriza Bluetooth o Wi-Fi para cambiar expresiones.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.labelMedium)
                     }

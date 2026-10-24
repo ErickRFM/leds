@@ -19,6 +19,23 @@ package = module.package
 
 
 class PackageArduinoSketchTests(unittest.TestCase):
+    def test_distributed_archive_contains_only_current_firmware_sources(self):
+        sketch = ROOT / "firmware" / "esp32_rgb"
+        expected = {
+            "esp32_rgb/" + file.relative_to(sketch).as_posix(): file
+            for file in sketch.rglob("*")
+            if file.is_file() and file.suffix.lower() in module.INCLUDED_SUFFIXES
+            and "config" not in file.relative_to(sketch).parts
+        }
+        with zipfile.ZipFile(ROOT / "dist" / "esp32_rgb_firmware.zip") as archive:
+            actual = {name for name in archive.namelist()
+                      if name.startswith("esp32_rgb/") and Path(name).suffix.lower() in module.INCLUDED_SUFFIXES}
+            self.assertEqual(set(expected), actual, "Distributed sketch is missing current headers or contains retired drivers")
+            for name, file in expected.items():
+                self.assertEqual(file.read_bytes().replace(b"\r\n", b"\n"),
+                                 archive.read(name).replace(b"\r\n", b"\n"),
+                                 f"Distributed firmware is stale: {name}")
+
     def test_contents_preserve_arduino_structure_and_exclude_secrets(self):
         with tempfile.TemporaryDirectory() as temp:
             target = Path(temp) / "firmware.zip"
