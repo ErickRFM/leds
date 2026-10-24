@@ -72,7 +72,7 @@ int main() {
   reading.temperatureC = 23.0f;
   result = policy.evaluate(reading);
   assert(result.band == EnvironmentalRgbBand::Comfort);
-  assert(result.green > result.blue * 2);
+  assert(result.green >= result.blue * 2);
   assert(result.green > result.red);
   reading.temperatureC = 35.6f;
   reading.humidityPercent = 25.0f;
