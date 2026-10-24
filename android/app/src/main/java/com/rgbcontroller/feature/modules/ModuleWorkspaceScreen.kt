@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -104,6 +105,8 @@ fun ModuleWorkspaceScreen(
     var applyMessage by remember { mutableStateOf<String?>(null) }
     var ldrCalibrationMessage by remember { mutableStateOf<String?>(null) }
     var oledActionMessage by remember { mutableStateOf<String?>(null) }
+    var dfplayerActionMessage by remember { mutableStateOf<String?>(null) }
+    var dfplayerVoiceRequested by remember { mutableStateOf<Boolean?>(null) }
     var applying by remember { mutableStateOf(false) }
     // Physical Back should close a nested component editor/detail before leaving Modules.
     BackHandler(enabled = editingId != null || openedId != null) {
@@ -153,7 +156,8 @@ fun ModuleWorkspaceScreen(
     } }
 
     if (openedId != null) {
-        val id = openedId!!
+        // Hardware DFPlayer and Music always share a single player route.
+        val id = if (openedId == "dfplayer_mp3") "compi_dfplayer" else openedId!!
         Column(Modifier.fillMaxSize()) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
@@ -184,6 +188,7 @@ fun ModuleWorkspaceScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
                             .padding(horizontal = 16.dp, vertical = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -191,7 +196,7 @@ fun ModuleWorkspaceScreen(
                             FilterChip(
                                 selected = stationSection == sec,
                                 onClick = { stationSection = sec },
-                                label = { Text(sec, fontSize = 12.sp) }
+                                label = { Text(sec, fontSize = 12.sp, maxLines = 1, softWrap = false) }
                             )
                         }
                     }
@@ -410,7 +415,48 @@ fun ModuleWorkspaceScreen(
                             }
                         }
                     }
-                    item(key = "dfplayer_audio_controls") { CompiAudioPlayerCard() }
+                    item(key = "dfplayer_audio_controls") {
+                        CompiAudioPlayerCard(
+                            canControlDfplayer = wifiAuthorized,
+                            hardwareFeedback = dfplayerActionMessage,
+                            confirmedVoiceEnabled = dfplayerVoiceRequested,
+                            onPlayDfplayerTrack = { track ->
+                                scope.launch {
+                                    val epoch = session.revision
+                                    try {
+                                        check(wifiAuthorized) { "Autoriza Wi-Fi para controlar el DFPlayer." }
+                                        session.serialized {
+                                            check(wifiAuthorized && epoch == session.revision) { "Conexión cambiada antes del comando MP3." }
+                                            labClient.playAudio(session.key, track)
+                                        }
+                                        dfplayerActionMessage = "ESP32 aceptó solicitud para pista $track; reproducción física no confirmada."
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
+                                    } catch (error: Exception) {
+                                        dfplayerActionMessage = "DFPlayer: ${error.message}"
+                                    }
+                                }
+                            },
+                            onSetEnvironmentalVoice = { enabled ->
+                                scope.launch {
+                                    val epoch = session.revision
+                                    try {
+                                        check(wifiAuthorized) { "Autoriza Wi-Fi para controlar voz ambiental." }
+                                        session.serialized {
+                                            check(wifiAuthorized && epoch == session.revision) { "Conexión cambiada antes del comando de voz." }
+                                            labClient.setAudioVoice(session.key, enabled)
+                                        }
+                                        dfplayerVoiceRequested = enabled
+                                        dfplayerActionMessage = "ESP32 aceptó la configuración de voz ambiental; reproducción física no confirmada."
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
+                                    } catch (error: Exception) {
+                                        dfplayerActionMessage = "DFPlayer: ${error.message}"
+                                    }
+                                }
+                            }
+                        )
+                    }
                     item(key = "dfplayer_hardware_status") {
                         Card(shape = RoundedCornerShape(22.dp),
                             colors = CardDefaults.cardColors(
@@ -421,7 +467,11 @@ fun ModuleWorkspaceScreen(
                                     fontWeight = FontWeight.SemiBold)
                                 Text("Reproducción por bocina externa",
                                     style = MaterialTheme.typography.bodyMedium)
-                                Text("Requiere una microSD con pistas compatibles. El estado de reproducción física aún no se confirma mediante BUSY.",
+                                Text(when {
+                                    !currentlyVerified -> "Sin estado en vivo del ESP32. No se puede confirmar la detección del módulo ni de la microSD."
+                                    runtime("dfplayer_mp3")?.active == true -> "Firmware reporta actividad UART del DFPlayer; reproducción y microSD siguen sin confirmación BUSY."
+                                    else -> "El ESP32 no confirma el DFPlayer físico. Comprueba UART, alimentación y microSD."
+                                },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text("El audio del teléfono no se transmite al DFPlayer por Bluetooth.",
@@ -853,7 +903,7 @@ fun ModuleWorkspaceScreen(
                         }
                     }
                 }
-                items(configured, key = { "module_${it.id}" }) { group ->
+                items(configured.filterNot { it.id == "dfplayer_mp3" }, key = { "module_${it.id}" }) { group ->
                     val id = group.id
                     val descriptor = ComponentCatalog.get(id)
                     val physical = runtime(id)
@@ -1193,7 +1243,8 @@ private fun ModuleReadings(
                 Card(Modifier.fillMaxWidth().testTag("ldr_light_readings")) {
                     Column(Modifier.padding(16.dp).animateContentSize(animationSpec = tween(250)),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Luz ambiental · LDR", style = MaterialTheme.typography.titleMedium)
+                        Text("Sensor de luminosidad", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text("LDR · luz relativa medida por el ESP32", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(
@@ -1227,7 +1278,7 @@ private fun ModuleReadings(
                             },
                             style = MaterialTheme.typography.bodySmall
                         )
-                        Text("ADC1 crudo: ${raw?.toString() ?: "—"} (0–4095)",
+                        Text("Lectura física ADC1: ${raw?.toString() ?: "—"} / 4095",
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.testTag("ldr_light_raw"))
                         OutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) {

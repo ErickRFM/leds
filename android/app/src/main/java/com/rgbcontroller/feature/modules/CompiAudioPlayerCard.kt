@@ -86,7 +86,13 @@ data class QuickTrackGroup(
  * Android local media playback, and environmental voice toggles.
  */
 @Composable
-fun CompiAudioPlayerCard() {
+fun CompiAudioPlayerCard(
+    canControlDfplayer: Boolean = false,
+    onPlayDfplayerTrack: (Int) -> Unit = {},
+    onSetEnvironmentalVoice: (Boolean) -> Unit = {},
+    hardwareFeedback: String? = null,
+    confirmedVoiceEnabled: Boolean? = null
+) {
     val context = LocalContext.current
     val prefs = remember(context) {
         context.getSharedPreferences("compi_local_audio_v1", Context.MODE_PRIVATE)
@@ -106,8 +112,7 @@ fun CompiAudioPlayerCard() {
 
     var revision by remember { mutableIntStateOf(0) }
     var volume by remember { mutableFloatStateOf(0.6f) }
-    var isEnvVoiceEnabled by remember { mutableStateOf(true) }
-    var dfplayerMessage by remember { mutableStateOf("DFPlayer: estado físico sin confirmar. Requiere respuesta real del ESP32 y del módulo.") }
+        var dfplayerMessage by remember { mutableStateOf("DFPlayer: estado físico sin confirmar. Requiere respuesta real del ESP32 y del módulo.") }
 
     // 24 Tracks Map from firmware specification
     val quickTrackGroups = listOf(
@@ -242,7 +247,7 @@ fun CompiAudioPlayerCard() {
                             color = Color.White
                         )
                         Text(
-                            text = "Anuncios automáticos de voz según temperatura y humedad",
+                            text = if (canControlDfplayer) "Control por ESP32 · estado físico por confirmar" else "Conecta y autoriza Wi-Fi para controlar anuncios",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFF94A3B8)
                         )
@@ -250,8 +255,14 @@ fun CompiAudioPlayerCard() {
                 }
 
                 Switch(
-                    checked = isEnvVoiceEnabled,
-                    onCheckedChange = { isEnvVoiceEnabled = it }
+                    checked = confirmedVoiceEnabled == true,
+                    onCheckedChange = { requested ->
+                        if (canControlDfplayer) {
+                            onSetEnvironmentalVoice(requested)
+                            dfplayerMessage = "Solicitud de voz ambiental enviada; respuesta del ESP32 pendiente."
+                        }
+                    },
+                    enabled = canControlDfplayer
                 )
             }
         }
@@ -300,8 +311,9 @@ fun CompiAudioPlayerCard() {
                                     color = group.color.copy(alpha = 0.15f),
                                     modifier = Modifier
                                         .weight(1f)
-                                        .clickable {
-                                            dfplayerMessage = "Pista $trackNum seleccionada ($label). Control físico UART no conectado a este botón; reproducción sin confirmar."
+                                        .clickable(enabled = canControlDfplayer) {
+                                            onPlayDfplayerTrack(trackNum)
+                                            dfplayerMessage = "Solicitada pista $trackNum ($label). Reproducción física sin confirmar."
                                         }
                                 ) {
                                     Text(
@@ -320,7 +332,7 @@ fun CompiAudioPlayerCard() {
         }
 
         Text(
-            text = dfplayerMessage,
+            text = hardwareFeedback ?: dfplayerMessage,
             style = MaterialTheme.typography.bodySmall,
             color = CompiTokens.Colors.PrimaryViolet
         )
