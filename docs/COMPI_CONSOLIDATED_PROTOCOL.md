@@ -40,7 +40,7 @@ y confirma después los pines activos. La reasignación sigue siendo temporal.
 
 ## Lo que realmente demuestra DFPlayer
 
-El único controlador UART2 usa RX18/TX17 a 9600 baudios, valida checksum y
+El único controlador UART2 usa RX13/TX14 a 9600 baudios, valida checksum y
 longitud, espacia envíos, limita la cola y consulta presencia/SD, estado, total
 de archivos, índice SD y volumen. Cada campo caduca. Un envío UART aceptado
 devuelve `ACCEPTED` (HTTP 202); solo las respuestas del módulo actualizan
