@@ -6,7 +6,9 @@ data class AudioHardwareState(
     val playback: String, val track: Int, val volume: Int,
     val voiceEnabled: Boolean, val fresh: Boolean
 ) {
-    // Playback requires independently confirmed module and SD state, not unrelated\n    // track/count/volume polling. Firmware expires those fields individually.\n    val canPlay: Boolean get() = modulePresent && sdPresent == 1
+    // Playback requires independently confirmed module and SD state, not unrelated
+    // track/count/volume polling, but rejects known empty cards (tracks == 0).
+    val canPlay: Boolean get() = modulePresent && sdPresent == 1 && tracks != 0
     val playing: Boolean get() = modulePresent && playback == "PLAYING"
 }
 
