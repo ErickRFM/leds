@@ -107,8 +107,14 @@ class EnvironmentalRgbPolicy final {
       out.humidityWasUsed = true;
       if (sample.humidityPercent >= 70.0f) {
         // Humid air: gently shift toward blue, independent of temperature.
+        // A humidity accent must never turn the comfortable GREEN band cyan.
+        // Limit added blue to a small accent and preserve the dominant channel.
+        const unsigned suggestedBlue =
+            (static_cast<unsigned>(out.blue) * 7u + 255u) / 8u;
+        const unsigned greenSafeBlue = (band_ == EnvironmentalRgbBand::Comfort)
+            ? static_cast<unsigned>(out.green) / 2u : 255u;
         out.blue = static_cast<uint8_t>(
-            (static_cast<unsigned>(out.blue) * 3u + 255u) / 4u);
+            suggestedBlue < greenSafeBlue ? suggestedBlue : greenSafeBlue);
       } else if (sample.humidityPercent <= 30.0f) {
         // Dry air: warm the same base band with a subtle red accent.
         out.red = static_cast<uint8_t>(
