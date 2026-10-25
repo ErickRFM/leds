@@ -293,7 +293,7 @@ fun OledInteractiveModule(
                 }
             }
 
-            TextButton(onClick = { showScreenTuning = !showScreenTuning }) {
+            TextButton(onClick = { showScreenTuning = !showScreenTuning }, modifier = Modifier.testTag("oled_advanced_settings")) {
                 Text(if (showScreenTuning) "Ocultar ajustes OLED" else "Contraste y ajustes OLED")
             }
             // Screen Controls: Contrast, Invert, Sleep, Anim
