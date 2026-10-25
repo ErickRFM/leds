@@ -153,7 +153,7 @@ fun EnvironmentalRgbControlCard(
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 for (color in listOf(
-                    Color(0xFF3478ED), Color(0xFF36BA74),
+                    Color(0xFF3478ED), Color(0xFF0CDC0C),
                     Color(0xFFF6B83F), Color(0xFFFF7D14), Color(0xFFE62323)
                 )) {
                     Surface(
