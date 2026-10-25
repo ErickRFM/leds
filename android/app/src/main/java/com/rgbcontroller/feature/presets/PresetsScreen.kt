@@ -84,8 +84,14 @@ fun PresetsScreen(bleManager: BleManager, preferencesRepository: PreferencesRepo
             cards.forEach { preset ->
                 val rgb = ColorUtils.hexToRgb(preset.hex) ?: return@forEach
                 val uiColor = Color(rgb.r, rgb.g, rgb.b)
+                val selected = ready && current != null &&
+                    ColorUtils.rgbToHex(current.red, current.green, current.blue).equals(preset.hex, ignoreCase = true)
                 Card(
-                    Modifier.width(144.dp).clickable(enabled = ready) { apply(preset.hex) }
+                    modifier = Modifier.width(144.dp).clickable(enabled = ready) { apply(preset.hex) },
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceVariant
+                    )
                 ) {
                     Column(Modifier.fillMaxWidth().padding(14.dp)) {
                         Box(
@@ -93,7 +99,7 @@ fun PresetsScreen(bleManager: BleManager, preferencesRepository: PreferencesRepo
                                 .background(uiColor, RoundedCornerShape(14.dp))
                         )
                         Spacer(Modifier.height(8.dp))
-                        Text(preset.title + if (preset.favorite) " ★" else "",
+                        Text(preset.title + if (selected) " · Activo" else if (preset.favorite) " ★" else "",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold)
                         Text(preset.hex, style = MaterialTheme.typography.labelSmall)
