@@ -298,7 +298,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
             .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("Compi Studio", style = MaterialTheme.typography.headlineLarge, color = CompiV9.title)
+        Text("Compi Studio", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.onBackground)
         CompiInlineMessage(draftStatus, isError = draftRecoveryError)
         val operation = labSession.operationStatus
         if (operation.name.isNotBlank()) {
@@ -319,7 +319,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
         ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.elevatedCardColors(containerColor = CompiV9.surface)
+            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
         ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Editor local", style = MaterialTheme.typography.titleMedium)
