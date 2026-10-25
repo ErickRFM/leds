@@ -128,6 +128,14 @@ object DefaultAutomationRules {
             action = AutomationAction.Notify("Temperatura crítica", AlertSeverity.CRITICAL),
             enabled = true
         ),
+        // DHT11 is Compi's default physical probe (GPIO16). Only the active
+        // sensor series can trigger, so supporting both models is not duplication.
+        AutomationRule(
+            "auto_temp_critical_notice_dht11", "dht11", "temperature",
+            AlertComparison.ABOVE, 45f, hysteresis = 1f,
+            action = AutomationAction.Notify("Temperatura crítica", AlertSeverity.CRITICAL),
+            enabled = true
+        ),
         AutomationRule(
             "auto_soil_dry_notice", "soil_moisture", "soil_moisture",
             AlertComparison.BELOW, 20f, hysteresis = 2f,
