@@ -55,9 +55,9 @@ fun SensorDashboard(
         .orEmpty().firstOrNull { it.id == "sensor.$id" }
     val fault = diagnostic?.diagnostic
     val windowMs = minutes * 60_000L
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Lecturas ${id.uppercase(Locale.ROOT)}",
+            Text("Sensor ${id.uppercase(Locale.ROOT)}",
                 style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text(
                 if (physicalReading) "En vivo" else if (!live) "No en vivo" else "Sin lectura",
@@ -70,6 +70,28 @@ fun SensorDashboard(
                 Modifier.weight(1f).testTag("sensor_temperature_$id"))
             SensorMetric("Humedad relativa", humidity.first, "%", humidity.second,
                 Modifier.weight(1f).testTag("sensor_humidity_$id"))
+        }
+        Text("Tendencias · datos registrados", style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (window in listOf(5, 15, 30)) {
+                FilterChip(selected = minutes == window, onClick = { minutes = window },
+                    label = { Text("$window min") },
+                    modifier = Modifier.testTag("sensor_window_${window}_$id"))
+            }
+        }
+        for ((type, title) in listOf(
+            "temperature" to "Temperatura · °C",
+            "humidity" to "Humedad relativa · %"
+        )) {
+            val geometry = TelemetryChart.build(
+                componentId = id, measurementType = type,
+                samples = state.series(id, type), nowMs = now, windowMs = windowMs,
+                // Old valid measurements remain historical, not "live".
+                staleAfterMs = windowMs, disconnected = !live
+            )
+            TelemetryChartCard(title, geometry, live = physicalReading,
+                modifier = Modifier.testTag("sensor_history_${type}_$id"))
         }
         OutlinedButton(onClick = { showDiagnostics = !showDiagnostics },
             modifier = Modifier.testTag("sensor_diagnostics_toggle_$id")) {
@@ -133,28 +155,6 @@ fun SensorDashboard(
                 }
             }
         }
-        Text("Evolución en tiempo real", style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (window in listOf(5, 15, 30)) {
-                FilterChip(selected = minutes == window, onClick = { minutes = window },
-                    label = { Text("$window min") },
-                    modifier = Modifier.testTag("sensor_window_${window}_$id"))
-            }
-        }
-        for ((type, title) in listOf(
-            "temperature" to "Temperatura · °C",
-            "humidity" to "Humedad relativa · %"
-        )) {
-            val geometry = TelemetryChart.build(
-                componentId = id, measurementType = type,
-                samples = state.series(id, type), nowMs = now, windowMs = windowMs,
-                // Old valid measurements remain historical, not "live".
-                staleAfterMs = windowMs, disconnected = !live
-            )
-            TelemetryChartCard(title, geometry, live = physicalReading,
-                modifier = Modifier.testTag("sensor_history_${type}_$id"))
-        }
     }
 }
 
@@ -167,8 +167,8 @@ private fun SensorMetric(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         )) {
-        Column(Modifier.fillMaxWidth().padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.fillMaxWidth().padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(value?.let { String.format(Locale.getDefault(), "%.1f %s", it, unit) }
