@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
+import com.rgbcontroller.core.ble.BleSecurityState
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.model.RgbControlLink
@@ -30,11 +31,12 @@ private data class NamedColor(
 @OptIn(ExperimentalLayoutApi::class)
 fun PresetsScreen(bleManager: BleManager, preferencesRepository: PreferencesRepository, link: RgbControlLink? = null, embedded: Boolean = false) {
     val connected by bleManager.connectionState.collectAsState()
+    val security by bleManager.securityState.collectAsState()
     val bleCurrent by bleManager.rgbState.collectAsState()
     val current = if (link != null) link.state else bleCurrent
     val stored by preferencesRepository.favoriteColors.collectAsState(initial = "")
     val scope = rememberCoroutineScope()
-    val ready = link?.ready ?: (connected == BleConnectionState.Ready)
+    val ready = link?.ready ?: (connected == BleConnectionState.Ready && security == BleSecurityState.Authorized)
     fun send(command: String) {
         if (link != null) link.sendCommand(command) else bleManager.writeCommand(command)
     }

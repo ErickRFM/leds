@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
+import com.rgbcontroller.core.ble.BleSecurityState
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.model.RgbDeviceCommand
 import com.rgbcontroller.core.model.RgbControlLink
@@ -20,9 +21,10 @@ private data class EffectItem(val id: String, val name: String, val description:
 @Composable
 fun EffectsScreen(bleManager: BleManager, link: RgbControlLink? = null, embedded: Boolean = false) {
     val connection by bleManager.connectionState.collectAsState()
+    val security by bleManager.securityState.collectAsState()
     val bleState by bleManager.rgbState.collectAsState()
     val state = if (link != null) link.state else bleState
-    val ready = link?.ready ?: (connection == BleConnectionState.Ready)
+    val ready = link?.ready ?: (connection == BleConnectionState.Ready && security == BleSecurityState.Authorized)
     fun send(command: String) {
         if (link != null) link.sendCommand(command) else bleManager.writeCommand(command)
     }

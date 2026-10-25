@@ -32,11 +32,13 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,6 +78,7 @@ fun OledInteractiveModule(
 ) {
     val selectedExpression = confirmed?.scene ?: "unknown"
     var contrastLevel by remember(confirmed?.ready) { mutableFloatStateOf((confirmed?.contrast ?: 128).toFloat()) }
+    var showScreenTuning by rememberSaveable { mutableStateOf(false) }
     val isInverted = confirmed?.inverted == true
     val isAnimActive = confirmed?.paused == false
     val canControl = isAuthorized && confirmed?.ready == true
@@ -262,7 +265,7 @@ fun OledInteractiveModule(
                 items(expressions, key = { it.id }) { expr ->
                     Surface(
                         shape = CompiTokens.Shapes.Medium,
-                        color = if (selectedExpression == expr.id) CompiTokens.Colors.PrimaryVioletContainer else CompiTokens.Colors.SurfaceElevated,
+                        color = if (selectedExpression == expr.id) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier
                             .testTag("oled_expression_${expr.id}")
                             .clickable(enabled = canControl) {
@@ -270,7 +273,7 @@ fun OledInteractiveModule(
                             }
                             .border(
                                 width = 2.dp,
-                                color = if (selectedExpression == expr.id) CompiTokens.Colors.PrimaryViolet else Color.Transparent,
+                                color = if (selectedExpression == expr.id) MaterialTheme.colorScheme.primary else Color.Transparent,
                                 shape = CompiTokens.Shapes.Medium
                             )
                     ) {
@@ -290,8 +293,11 @@ fun OledInteractiveModule(
                 }
             }
 
+            TextButton(onClick = { showScreenTuning = !showScreenTuning }, modifier = Modifier.testTag("oled_advanced_settings")) {
+                Text(if (showScreenTuning) "Ocultar ajustes OLED" else "Contraste y ajustes OLED")
+            }
             // Screen Controls: Contrast, Invert, Sleep, Anim
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (showScreenTuning) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,

@@ -12,7 +12,13 @@ protocol = (root / "docs/PROTOCOLO_BLE.md").read_text(encoding="utf-8")
 # Keep the visible OLED actions aligned with the authorized HTTP handler
 # and the actual SSD1306 renderer. A UI-only face is a broken control.
 oled_http = (root / "firmware/esp32_rgb/core/LocalWifiControl.h").read_text(encoding="utf-8")
-station_ui = (root / "android/app/src/main/java/com/rgbcontroller/feature/modules/ModuleWorkspaceScreen.kt").read_text(encoding="utf-8")
+# The Station route and its reusable sensor/OLED renderer are now separate
+# Kotlin components. Audit both together, not only the old monolithic file.
+station_dir = root / "android/app/src/main/java/com/rgbcontroller/feature/modules"
+station_ui = "\n".join(
+    (station_dir / name).read_text(encoding="utf-8")
+    for name in ("ModuleWorkspaceScreen.kt", "ModuleReadings.kt")
+)
 for face in ("happy", "sleepy", "surprised", "pumpkin", "cat", "dance"):
     assert f'"{face}"' in oled_http, f"OLED HTTP route rejects {face}"
     assert f'"{face}"' in firmware, f"OLED firmware cannot render {face}"

@@ -90,6 +90,7 @@ class MediaControlsTest {
                     { inversion = it }, { pause = it })
             } }
         }
+        compose.onNodeWithTag("oled_advanced_settings").performScrollTo().performClick()
         compose.onNodeWithTag("oled_invert").performScrollTo().performClick()
         compose.onNodeWithTag("oled_pause").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(true, inversion); assertEquals(true, pause) }

@@ -203,7 +203,7 @@ fun DashboardScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(CompiTokens.Colors.MatteBackground)
+            .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -219,7 +219,7 @@ fun DashboardScreen(
                     text = "COMPI",
                     style = CompiTokens.Typography.HeadlineTitle,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = if (wifiReady) "Estación Inteligente · Wi-Fi" else "Estación Inteligente · ESP32",
@@ -255,7 +255,7 @@ fun DashboardScreen(
         // Hero Ambient Climate Card
         Card(
             shape = CompiTokens.Shapes.Large,
-            colors = CardDefaults.cardColors(containerColor = CompiTokens.Colors.SurfaceCard),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
             modifier = Modifier.fillMaxWidth().testTag("home_climate_hero")
         ) {
             Column(
@@ -288,12 +288,12 @@ fun DashboardScreen(
                                 text = "Ambiente",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = if (hasRealTemp) "Confirmado por ESP32" else "Esperando lectura real",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFF94A3B8)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -323,7 +323,7 @@ fun DashboardScreen(
                             Text(
                                 text = if (hasRealTemp) "%.1f°C".format(Locale.ROOT, currentTemp) else "— °C",
                                 style = CompiTokens.Typography.MetricValue,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = climateLabel,
@@ -342,7 +342,7 @@ fun DashboardScreen(
                                 Text(
                                     text = if (humidMeasurement != null) "Humedad %.0f%%".format(Locale.ROOT, currentHumid) else "Humedad —",
                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                                    color = Color(0xFFCBD5E1)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -365,7 +365,7 @@ fun DashboardScreen(
         Text(
             text = "Mediciones y módulos",
             style = CompiTokens.Typography.SectionHeader,
-            color = Color.White
+            color = MaterialTheme.colorScheme.onSurface
         )
 
         Row(
@@ -376,7 +376,7 @@ fun DashboardScreen(
             CompactMetricCard(
                 title = "Humedad",
                 value = humidMeasurement?.value?.let { "%.0f%%".format(Locale.ROOT, it) } ?: "—",
-                subtitle = if (humidMeasurement != null) "Ambiente normal" else "Sin lectura",
+                subtitle = if (humidMeasurement != null) "Lectura confirmada" else "Sin lectura",
                 icon = Icons.Default.WaterDrop,
                 iconTint = CompiTokens.Colors.ColdBlue,
                 modifier = Modifier.weight(1f),
@@ -405,7 +405,7 @@ fun DashboardScreen(
         ) {
             // RGB Ambient Card
             CompactMetricCard(
-                title = "RGB Ambiental",
+                title = "LED RGB",
                 value = if (ready) "Consultar" else "Sin enlace",
                 subtitle = "Estado en control RGB",
                 icon = Icons.Default.ColorLens,
@@ -417,8 +417,8 @@ fun DashboardScreen(
             // Audio Player Card
             CompactMetricCard(
                 title = "Audio Compi",
-                value = "Local / MP3",
-                subtitle = "Avisos por voz",
+                value = "Abrir módulo",
+                subtitle = "Revisar MP3 y avisos",
                 icon = Icons.Default.MusicNote,
                 iconTint = CompiTokens.Colors.ActiveGreen,
                 modifier = Modifier.weight(1f),
@@ -430,16 +430,16 @@ fun DashboardScreen(
         Text(
             text = "Accesos rápidos",
             style = CompiTokens.Typography.SectionHeader,
-            color = Color.White
+            color = MaterialTheme.colorScheme.onSurface
         )
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            QuickActionTile("Módulos", Icons.Default.ColorLens, onLed, Modifier.weight(1f).testTag("open_led"))
-            QuickActionTile("Hardware", Icons.Default.Memory, onHardware, Modifier.weight(1f))
-            QuickActionTile("Studio", Icons.Default.Code, onCode, Modifier.weight(1f))
+            QuickActionTile("Estación", Icons.Default.ColorLens, onLed, Modifier.weight(1f).testTag("open_led"))
+            QuickActionTile("Laboratorio", Icons.Default.Memory, onHardware, Modifier.weight(1f))
+            QuickActionTile("Estudio", Icons.Default.Code, onCode, Modifier.weight(1f))
         }
     }
 }
@@ -505,7 +505,7 @@ private fun TelemetryChartSection(
 
     Card(
         shape = CompiTokens.Shapes.Large,
-        colors = CardDefaults.cardColors(containerColor = CompiTokens.Colors.SurfaceCard),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         modifier = Modifier.fillMaxWidth().testTag("home_telemetry_chart")
     ) {
         Column(
@@ -522,7 +522,7 @@ private fun TelemetryChartSection(
                         text = "Tendencia de temperatura",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = touchedSample?.let {
@@ -634,125 +634,6 @@ private fun TelemetryChartSection(
                     )
                 }
             }
-        }
-    }
-}
-
-/**
- * 2-Column Compact Metric Card Component
- */
-@Composable
-private fun CompactMetricCard(
-    title: String,
-    value: String,
-    subtitle: String,
-    icon: ImageVector,
-    iconTint: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        onClick = onClick,
-        shape = CompiTokens.Shapes.Medium,
-        colors = CardDefaults.cardColors(containerColor = CompiTokens.Colors.SurfaceCard),
-        modifier = modifier
-    ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(iconTint.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = iconTint,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = Color(0xFF64748B),
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-
-            Column {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF94A3B8)
-                )
-            }
-        }
-    }
-}
-
-/**
- * Quick Action Button Tile
- */
-@Composable
-private fun QuickActionTile(
-    title: String,
-    icon: ImageVector,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        onClick = onClick,
-        shape = CompiTokens.Shapes.Medium,
-        colors = CardDefaults.cardColors(containerColor = CompiTokens.Colors.SurfaceCard),
-        modifier = modifier
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(CompiTokens.Colors.PrimaryVioletContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = CompiTokens.Colors.PrimaryViolet,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White
-            )
         }
     }
 }
