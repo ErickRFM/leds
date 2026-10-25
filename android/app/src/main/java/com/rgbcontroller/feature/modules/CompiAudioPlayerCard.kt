@@ -23,6 +23,7 @@ fun CompiAudioPlayerCard(
     onCommand: (String, String?) -> Unit
 ) {
     var trackText by rememberSaveable { mutableStateOf("1") }
+    var advancedHelp by rememberSaveable { mutableStateOf(false) }
     // Preserve slider edits across automatic UART polling. Only initialize the
     // local edit when module identity changes, never on each volume readback.
     var volume by remember(hardware?.modulePresent) {
@@ -61,7 +62,10 @@ fun CompiAudioPlayerCard(
                 label = { Text("Número de archivo MP3 (1–2999)") }, singleLine = true,
                 modifier = Modifier.fillMaxWidth().testTag("dfplayer_track"))
             Text("Archivo: /MP3/${trackText.padStart(4, '0')}.mp3", style = MaterialTheme.typography.bodyMedium)
-            Text("La app no puede detectar eléctricamente una bocina ni listar nombres de pistas: muestra únicamente respuestas del DFPlayer.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            TextButton(onClick = { advancedHelp = !advancedHelp }) {
+                Text(if (advancedHelp) "Ocultar detalles del módulo" else "Ver detalles del módulo")
+            }
+            if (advancedHelp) Text("La app no detecta eléctricamente una bocina ni puede listar nombres de pistas. Solo muestra respuestas del DFPlayer por UART.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (sdCount == 0) Text("El módulo informa 0 archivos. Revisa la tarjeta antes de intentar reproducir.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             Button(onClick = { onCommand("PLAY", trackText) },
                 enabled = available && sdCount != 0 && trackText.toIntOrNull() in 1..2999,
@@ -91,10 +95,10 @@ fun CompiAudioPlayerCard(
                     enabled = authorized && hardware?.fresh == true && !busy,
                     modifier = Modifier.testTag("dfplayer_voice"))
             }
-            Text("Estado mostrado únicamente cuando el ESP32 está autorizado; una orden aceptada no certifica sonido.",
+            if (advancedHelp) Text("Estado disponible con ESP32 autorizado; aceptar una orden no certifica sonido.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("La microSD se administra desde el módulo; el teléfono no transfiere pistas por UART.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (advancedHelp) Text("La microSD se administra desde el módulo; el teléfono no transfiere pistas por UART.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             feedback?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             OutlinedButton(onClick = { onCommand("GET", null) }, enabled = authorized && !busy, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Filled.Refresh, contentDescription = null)
