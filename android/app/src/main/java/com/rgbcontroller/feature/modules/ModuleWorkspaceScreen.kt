@@ -261,11 +261,11 @@ fun ModuleWorkspaceScreen(
                                     StationMetric("Humedad",
                                         humid?.let { "%.0f%%".format(java.util.Locale.ROOT, it) } ?: "—",
                                         Icons.Default.WaterDrop, Modifier.weight(1f))
-                                    StationMetric("Luz", light?.let {
-                                        "%.0f%%".format(java.util.Locale.ROOT, it)
-                                    } ?: raw?.let { "%.0f".format(java.util.Locale.ROOT, it) } ?: "—",
-                                        Icons.Default.Lightbulb, Modifier.weight(1f))
                                 }
+                                StationMetric("Luz ambiental", light?.let {
+                                    "%.0f%%".format(java.util.Locale.ROOT, it)
+                                } ?: raw?.let { "ADC %.0f".format(java.util.Locale.ROOT, it) } ?: "—",
+                                    Icons.Default.Lightbulb, Modifier.fillMaxWidth())
                                 if (light == null && raw != null) {
                                     Text("LDR sin calibrar · lectura ADC cruda (0–4095)",
                                         style = MaterialTheme.typography.labelSmall,
@@ -329,7 +329,7 @@ fun ModuleWorkspaceScreen(
                             }
                         }
 
-                        if (stationSection == "Resumen" || stationSection == "OLED") {
+                        if (stationSection == "OLED") {
                             item {
                                 OledInteractiveModule(
                                     isAuthorized = mediaAuthorized && !media.busy,
