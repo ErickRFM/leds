@@ -36,7 +36,9 @@ class HardwareMediaControls(
     suspend fun command(module: String, verb: String, value: String? = null) {
         val manual = verb != "GET"
         if (busy) return
-        if (manual) busy = true
+        // Serialize one foreground write against all background hardware reads.
+        // A poll must not overwrite an unconfirmed user operation.
+        busy = true
         try {
             session.userOperation(if (module == "AUD") "Audio $verb" else "OLED $verb") {
                 verifySession()
@@ -83,7 +85,7 @@ class HardwareMediaControls(
                 oledMessage = "Pantalla OLED sin confirmación actual: ${failure.message}"
             }
         } finally {
-            if (manual) busy = false
+            busy = false
         }
     }
 }
@@ -98,10 +100,8 @@ fun rememberHardwareMediaControls(
     }
     LaunchedEffect(controls, authorized, audioVisible, oledVisible) {
         if (authorized) while (true) {
-            if (!controls.busy) {
-                if (audioVisible) controls.command("AUD", "GET")
-                if (oledVisible) controls.command("OLD", "GET")
-            }
+            if (audioVisible) controls.command("AUD", "GET")
+            if (oledVisible) controls.command("OLD", "GET")
             delay(3_000)
         }
     }
