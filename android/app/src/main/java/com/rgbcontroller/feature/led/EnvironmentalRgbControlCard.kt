@@ -65,14 +65,14 @@ fun EnvironmentalRgbControlCard(
     }
     var wifiEnabled by remember(transport, session.revision) { mutableStateOf<Boolean?>(null) }
     var wifiState by remember(transport, session.revision) { mutableStateOf("UNKNOWN") }
-    var wifiReason by remember { mutableStateOf("DISABLED") }
-    var wifiBand by remember { mutableStateOf("Comfort") }
-    var wifiRed by remember { mutableStateOf(0) }
-    var wifiGreen by remember { mutableStateOf(0) }
-    var wifiBlue by remember { mutableStateOf(0) }
-    var wifiBrightness by remember { mutableStateOf(0) }
-    var busy by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf("Esperando estado ambiental del ESP32.") }
+    var wifiReason by remember(transport, session.revision) { mutableStateOf("AWAITING_STATUS") }
+    var wifiBand by remember(transport, session.revision) { mutableStateOf("Comfort") }
+    var wifiRed by remember(transport, session.revision) { mutableStateOf(0) }
+    var wifiGreen by remember(transport, session.revision) { mutableStateOf(0) }
+    var wifiBlue by remember(transport, session.revision) { mutableStateOf(0) }
+    var wifiBrightness by remember(transport, session.revision) { mutableStateOf(0) }
+    var busy by remember(transport, session.revision) { mutableStateOf(false) }
+    var message by remember(transport, session.revision) { mutableStateOf("Esperando estado ambiental del ESP32.") }
 
     val enabled = if (wifiMode) wifiEnabled else bleEnabled
     val currentState = if (!authorized) "OFFLINE" else if (wifiMode) wifiState else (bleSnapshot?.state?.name ?: "UNKNOWN")
