@@ -87,7 +87,7 @@ fun PresetsScreen(bleManager: BleManager, preferencesRepository: PreferencesRepo
                 val selected = ready && current != null &&
                     ColorUtils.rgbToHex(current.red, current.green, current.blue).equals(preset.hex, ignoreCase = true)
                 Card(
-                    modifier = Modifier.width(144.dp).clickable(enabled = ready) { apply(preset.hex) },
+                    modifier = Modifier.fillMaxWidth(0.47f).clickable(enabled = ready) { apply(preset.hex) },
                     colors = CardDefaults.cardColors(
                         containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
                         else MaterialTheme.colorScheme.surfaceVariant
