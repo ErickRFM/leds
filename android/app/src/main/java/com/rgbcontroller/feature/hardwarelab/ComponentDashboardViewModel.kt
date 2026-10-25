@@ -432,7 +432,7 @@ class ComponentDashboardViewModel(
                                 bleAuthorized() && bleManager != null -> {
                                     val reply = bleManager.mediaCommand("OLD", "TEXT", action.text)
                                     bleAuthorized() && reply.result == "OK" &&
-                                        reply.oled?.ready == true && reply.oled.scene == "text"
+                                        reply.oled?.let { it.ready && it.scene == "text" } == true
                                 }
                                 else -> false
                             }
