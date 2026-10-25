@@ -53,10 +53,10 @@ fun LedModuleScreen(
     val wifiReady = labSession.wifiReady
     val wifiState = labSession.rgbState
     val wifiMessage = labSession.message
-    var wifiBusy by remember { mutableStateOf(false) }
+    var wifiBusy by remember(mode, labSession.revision) { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        if (labSession.transport == LabTransport.WIFI_LAB && labSession.wifiReady) {
+    LaunchedEffect(mode, wifiReady, labSession.revision) {
+        if (mode == LabTransport.WIFI_LAB && wifiReady) {
             val (epoch, key) = labSession.beginVerification()
             try {
                 val response = labSession.serialized { wifiClient.status(key) }
