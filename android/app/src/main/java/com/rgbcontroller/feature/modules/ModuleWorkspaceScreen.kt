@@ -184,7 +184,7 @@ fun ModuleWorkspaceScreen(
                 }
             }
             if (id == "compi_station") {
-                var stationSection by rememberSaveable { mutableStateOf("Resumen") }
+                var stationSection by rememberSaveable(id) { mutableStateOf("Resumen") }
                 Column(Modifier.fillMaxSize()) {
                     Row(
                         modifier = Modifier
@@ -202,6 +202,18 @@ fun ModuleWorkspaceScreen(
                         }
                     }
 
+                    Text(
+                        text = when (stationSection) {
+                            "Ambiente" -> "Temperatura y humedad · datos confirmados por sensores"
+                            "Iluminación" -> "RGB ambiental y luz · control y calibración"
+                            "OLED" -> "Expresiones y estados de la pantalla física"
+                            "Audio" -> "Reproducción y avisos · salida DFPlayer"
+                            else -> "Resumen de dispositivos y telemetría de la estación"
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     LazyColumn(
                         modifier = Modifier.fillMaxSize().testTag("compi_station_dashboard"),
                         contentPadding = PaddingValues(16.dp),
