@@ -25,7 +25,6 @@ class HardwareMediaControls(
         private set
     var busy by mutableStateOf(false)
         private set
-    private var activeOperations = 0
 
     private fun verifySession() {
         check(session.revision == epoch && session.transport == transport) { "La conexión cambió; vuelve a consultar." }
@@ -36,8 +35,7 @@ class HardwareMediaControls(
 
     suspend fun command(module: String, verb: String, value: String? = null) {
         val manual = verb != "GET"
-        if (manual && busy) return
-        activeOperations++
+        if (busy) return
         if (manual) busy = true
         try {
             session.userOperation(if (module == "AUD") "Audio $verb" else "OLED $verb") {
@@ -85,7 +83,6 @@ class HardwareMediaControls(
                 oledMessage = "Pantalla OLED sin confirmación actual: ${failure.message}"
             }
         } finally {
-            activeOperations--
             if (manual) busy = false
         }
     }
