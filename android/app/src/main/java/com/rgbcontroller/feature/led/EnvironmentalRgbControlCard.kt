@@ -98,7 +98,7 @@ fun EnvironmentalRgbControlCard(
                         val status = session.serialized { client.environmentalRgbStatus(key) }
                         if (authorized && session.revision == version && !busy) {
                             wifiEnabled = status.optBoolean("enabled")
-                            wifiState = status.optString("state", if (wifiEnabled == true) "RUNNING" else "DISABLED")
+                            wifiState = status.optString("state", if (wifiEnabled == true) "ENABLED" else "DISABLED")
                             wifiReason = status.optString("reason", "OK")
                             wifiBand = status.optString("band", "Comfort")
                             wifiRed = status.optInt("red", 0)
