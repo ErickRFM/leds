@@ -219,16 +219,16 @@ fun ModuleWorkspaceScreen(
                     )
                     LazyColumn(
                         modifier = Modifier.fillMaxSize().testTag("compi_station_dashboard"),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         if (stationSection == "Resumen") {
                             item {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f)) {
-                                        Text("Tu estación ambiental", style = MaterialTheme.typography.headlineSmall,
+                                        Text("Ambiente actual", style = MaterialTheme.typography.titleLarge,
                                             fontWeight = FontWeight.Bold)
-                                        Text("Sensores, luz, expresiones y sonido",
+                                        Text("DHT11 y luz · lecturas del ESP32",
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             style = MaterialTheme.typography.bodySmall)
                                     }
@@ -238,7 +238,7 @@ fun ModuleWorkspaceScreen(
                                         shape = RoundedCornerShape(12.dp)
                                     ) {
                                         Text(if (currentlyVerified && state.telemetryFreshness == ComponentStatusFreshness.LIVE) "En vivo" else "Sin datos en vivo",
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                             style = MaterialTheme.typography.labelMedium)
                                     }
                                 }
@@ -260,7 +260,7 @@ fun ModuleWorkspaceScreen(
                                         temp?.let { "%.1f°".format(java.util.Locale.ROOT, it) } ?: "—",
                                         Icons.Default.Thermostat, Modifier.weight(1f))
                                     StationMetric("Humedad",
-                                        humid?.let { "%.0f%%".format(java.util.Locale.ROOT, it) } ?: "—",
+                                        humid?.let { "%.1f%%".format(java.util.Locale.ROOT, it) } ?: "—",
                                         Icons.Default.WaterDrop, Modifier.weight(1f))
                                 }
                                 StationMetric("Luz ambiental", light?.let {
@@ -289,7 +289,7 @@ fun ModuleWorkspaceScreen(
                         if (stationSection == "Ambiente") {
                             item(key = "station_sensor_charts") {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text("Lecturas e historial ambiental",
+                                    Text("Historial ambiental",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.SemiBold)
                                     SensorDashboard(
