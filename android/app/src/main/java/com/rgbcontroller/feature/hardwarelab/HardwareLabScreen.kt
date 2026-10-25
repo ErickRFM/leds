@@ -74,11 +74,12 @@ private enum class HardwareSection(val label: String) {
 fun HardwareLabScreen(
     session: CompiLabSession? = null,
     bleManager: BleManager? = null,
-    onOpenLabTools: () -> Unit = {}
+    onOpenLabTools: () -> Unit = {},
+    sharedDashboardVm: ComponentDashboardViewModel? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val viewModel: ComponentDashboardViewModel = viewModel(
+    val viewModel: ComponentDashboardViewModel = sharedDashboardVm ?: viewModel(
         factory = remember(session, bleManager) {
             ComponentDashboardViewModel.factory(context.applicationContext, session, bleManager)
         }
