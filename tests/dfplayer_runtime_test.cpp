@@ -93,6 +93,19 @@ int main() {
     if(floodWire.bytes[3]>=0x3f) ++queryCount;
   }
   assert(queryCount>0);
+  // A temporarily full UART TX buffer must not discard a queued volume command.
+  Wire retryWire; DfPlayerRuntime retry(send,&retryWire);
+  assert(retry.command("volume",17,100));
+  retryWire.accept=false;
+  retry.tick(100);
+  const int blockedWrites=retryWire.count;
+  retryWire.accept=true;
+  retry.tick(200);
+  assert(retryWire.count==blockedWrites+1);
+  assert(retryWire.bytes[3]==0x06 && retryWire.bytes[6]==17);
+  // The command must have been consumed exactly once, then polling resumes.
+  retry.tick(300);
+  assert(retryWire.bytes[3]==0x3f);
   // SD initialization alone is insufficient: a verified zero file count blocks PLAY.
   Wire emptyWire; DfPlayerRuntime empty(send,&emptyWire);
   empty.tick(100); receive(empty,0x3f,2,110);
