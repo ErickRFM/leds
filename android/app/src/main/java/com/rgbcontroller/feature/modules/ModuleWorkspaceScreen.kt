@@ -438,9 +438,9 @@ fun ModuleWorkspaceScreen(
                                     HorizontalDivider()
                                     Text("Alimentación: 5 V regulados y GND compartida.",
                                         style = MaterialTheme.typography.bodyMedium)
-                                    Text("GPIO17 (TX ESP32) → RX DFPlayer, con resistencia de 1 kΩ.",
+                                    Text("GPIO14 (TX ESP32) → RX DFPlayer, con resistencia de 1 kΩ.",
                                         style = MaterialTheme.typography.bodyMedium)
-                                    Text("TX DFPlayer → GPIO18 (RX ESP32), solo si la señal es de hasta 3.3 V.",
+                                    Text("TX DFPlayer → GPIO13 (RX ESP32), solo si la señal es de hasta 3.3 V.",
                                         style = MaterialTheme.typography.bodyMedium)
                                     Text("Bocina Samsung 4 Ω / 3 W → SPK1 y SPK2.",
                                         style = MaterialTheme.typography.bodyMedium)
