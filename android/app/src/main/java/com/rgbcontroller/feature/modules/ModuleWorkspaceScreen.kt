@@ -357,7 +357,7 @@ fun ModuleWorkspaceScreen(
                     }
                 }
             } else if (id == "compi_dfplayer") {
-                var showWiring by rememberSaveable { mutableStateOf(false) }
+                var showWiring by rememberSaveable(id) { mutableStateOf(false) }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize().testTag("dfplayer_module_detail"),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 40.dp),
@@ -1152,8 +1152,8 @@ private fun ModuleReadings(
             }
         }
         "ldr_light" -> {
-            var darkReference by remember { mutableStateOf<Int?>(null) }
-            var brightReference by remember { mutableStateOf<Int?>(null) }
+            var darkReference by rememberSaveable { mutableStateOf<Int?>(null) }
+            var brightReference by rememberSaveable { mutableStateOf<Int?>(null) }
             var showCalibrationHelp by rememberSaveable { mutableStateOf(false) }
             val light = if (active && live) reading("ambient_light")?.value else null
             val raw = if (active && live) reading("ambient_light_raw")?.value?.toInt() else null
