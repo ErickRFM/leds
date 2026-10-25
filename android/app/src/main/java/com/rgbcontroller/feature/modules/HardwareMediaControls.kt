@@ -70,8 +70,18 @@ class HardwareMediaControls(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
-            if (module == "AUD") { audio = null; audioMessage = failure.message }
-            else { oled = null; oledMessage = failure.message }
+            if (module == "AUD") {
+                // Keep the card and its last known settings visible, but revoke
+                // presence/playback claims whenever the latest readback fails.
+                audio = audio?.copy(
+                    modulePresent = false, sdPresent = -1, tracks = -1,
+                    playback = "UNKNOWN", track = -1, fresh = false
+                )
+                audioMessage = "Sin confirmación actual del DFPlayer: ${failure.message}"
+            } else {
+                oled = oled?.copy(ready = false)
+                oledMessage = "Pantalla OLED sin confirmación actual: ${failure.message}"
+            }
         } finally {
             if (manual) busy = false
         }
