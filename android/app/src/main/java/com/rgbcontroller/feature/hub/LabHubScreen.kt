@@ -102,7 +102,7 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
 
     // Sampling belongs to this Composable lifecycle; navigation away cancels the job.
     // No GPS, no background process, no unbounded retention and no device secrets in CSV.
-    LaunchedEffect(samplingAdc, section, secret) {
+    LaunchedEffect(samplingAdc, section, secret, labSession.revision) {
         if (!samplingAdc || section != LabSection.SENSORS) {
             if (samplingAdc && section != LabSection.SENSORS) samplingAdc = false
             return@LaunchedEffect
@@ -129,7 +129,7 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
 
     // Firmware truth, never a simulated GPIO board map. Cancel polling when leaving the
     // GPIO section or when the control key changes; clear stale data on network errors.
-    LaunchedEffect(section, secret) {
+    LaunchedEffect(section, secret, labSession.revision) {
         gpioSnapshot = null
         gpioError = null
         if (section != LabSection.GPIO || !debug || !LocalLabClient.validKey(secret)) return@LaunchedEffect
@@ -155,7 +155,7 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
         }
     }
 
-    LaunchedEffect(section, secret) {
+    LaunchedEffect(section, secret, labSession.revision) {
         automationStatus = null
         automationAvailable = false
         if (section != LabSection.AUTOMATIONS || !debug || !LocalLabClient.validKey(secret))
