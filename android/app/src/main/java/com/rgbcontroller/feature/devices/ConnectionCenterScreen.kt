@@ -57,9 +57,17 @@ fun ConnectionCenterScreen(
     val debug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     val client = remember(context) { LocalLabClient(context.applicationContext) }
     val scope = rememberCoroutineScope()
+    // The USB help tab is local-only. BLE/Wi-Fi selection follows the shared
+    // session so switching transport from LED or Station never leaves a stale tab.
     var tab by rememberSaveable {
         mutableStateOf(if (session.transport == LabTransport.WIFI_LAB) ConnectTab.WIFI
         else ConnectTab.BLUETOOTH)
+    }
+    LaunchedEffect(session.transport) {
+        if (tab != ConnectTab.USB) {
+            tab = if (session.transport == LabTransport.WIFI_LAB)
+                ConnectTab.WIFI else ConnectTab.BLUETOOTH
+        }
     }
     var busy by remember { mutableStateOf(false) }
     var connectionError by remember { mutableStateOf<String?>(null) }
