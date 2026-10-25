@@ -1900,25 +1900,33 @@ void loop() {
       liveEnvironmentalRgbSnapshot.state = esp32core::EnvironmentalRgbState::Suspended;
       liveEnvironmentalRgbSnapshot.reason = "STALE_TEMPERATURE";
     } else {
-      liveEnvironmentalRgbSnapshot.state = esp32core::EnvironmentalRgbState::Running;
-      liveEnvironmentalRgbSnapshot.reason = "OK";
-      liveEnvironmentalRgbSnapshot.band = decision.band;
-      liveEnvironmentalRgbSnapshot.red = decision.red;
-      liveEnvironmentalRgbSnapshot.green = decision.green;
-      liveEnvironmentalRgbSnapshot.blue = decision.blue;
-      liveEnvironmentalRgbSnapshot.brightness = decision.brightness;
-      liveEnvironmentalRgbSnapshot.humidityUsed = decision.humidityWasUsed;
-      liveEnvironmentalRgbSnapshot.lightUsed = decision.lightWasUsed;
-      liveEnvironmentalRgbSnapshot.lastAppliedMs = now;
-
-      // Do not change RGB when temperature is stale or invalid.
-      if (!rgb.power || rgb.mode != Mode::NONE || rgb.r != decision.red ||
-          rgb.g != decision.green || rgb.b != decision.blue ||
-          rgb.brightness != decision.brightness) {
+      // Confirm the command first. An accepted software command is not proof of
+      // electrical PWM, but a rejected command must never report RUNNING.
+      const bool needsApply =
+          !rgb.power || rgb.mode != Mode::NONE ||
+          rgb.r != decision.red || rgb.g != decision.green ||
+          rgb.b != decision.blue || rgb.brightness != decision.brightness;
+      bool accepted = true;
+      if (needsApply) {
         const String command = "SET," + String(decision.red) + "," +
             String(decision.green) + "," + String(decision.blue) + "," +
             String(decision.brightness);
-        applyRgbRuntimeCommand(command);  // never persists a temporary color
+        accepted = applyRgbRuntimeCommand(command);
+      }
+      if (!accepted) {
+        liveEnvironmentalRgbSnapshot.state = esp32core::EnvironmentalRgbState::Error;
+        liveEnvironmentalRgbSnapshot.reason = "COMMAND_REJECTED";
+      } else {
+        liveEnvironmentalRgbSnapshot.state = esp32core::EnvironmentalRgbState::Running;
+        liveEnvironmentalRgbSnapshot.reason = "OK";
+        liveEnvironmentalRgbSnapshot.band = decision.band;
+        liveEnvironmentalRgbSnapshot.red = decision.red;
+        liveEnvironmentalRgbSnapshot.green = decision.green;
+        liveEnvironmentalRgbSnapshot.blue = decision.blue;
+        liveEnvironmentalRgbSnapshot.brightness = decision.brightness;
+        liveEnvironmentalRgbSnapshot.humidityUsed = decision.humidityWasUsed;
+        liveEnvironmentalRgbSnapshot.lightUsed = decision.lightWasUsed;
+        if (needsApply) liveEnvironmentalRgbSnapshot.lastAppliedMs = now;
       }
     }
   }
