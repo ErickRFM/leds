@@ -138,7 +138,16 @@ constexpr uint8_t LED_R = 27, LED_G = 25, LED_B = 26;
 // Runtime-only RGB mapping. Kept in sync with the module after an authorized
 // transaction; fresh boot always returns to the audited pins above.
 uint8_t liveRgbPins[3] = {LED_R, LED_G, LED_B};
-constexpr bool COMMON_ANODE = true;  // Set false for verified common cathode.
+// Set to 0 only when the physical RGB module has been verified as common cathode.
+// Keep 1 for existing common-anode installations. This changes PWM polarity,
+// not temperature bands, wiring order or application protocol.
+#ifndef COMPI_RGB_COMMON_ANODE
+#define COMPI_RGB_COMMON_ANODE 1
+#endif
+#if COMPI_RGB_COMMON_ANODE != 0 && COMPI_RGB_COMMON_ANODE != 1
+#error "COMPI_RGB_COMMON_ANODE must be 0 or 1"
+#endif
+constexpr bool COMMON_ANODE = COMPI_RGB_COMMON_ANODE == 1;
 constexpr char DEVICE_NAME[] = "RGB-ESP32";
 constexpr char SERVICE_UUID[] = "4b9d0001-7a5e-4d4c-ae88-c8c70d3ab211";
 constexpr char WRITE_UUID[] = "4b9d0002-7a5e-4d4c-ae88-c8c70d3ab211";
