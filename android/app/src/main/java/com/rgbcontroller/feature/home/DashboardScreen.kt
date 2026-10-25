@@ -54,6 +54,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -492,7 +493,7 @@ private fun TelemetryChartSection(
     moduleState: ComponentDashboardState,
     live: Boolean
 ) {
-    var selectedInterval by remember { mutableStateOf("15m") }
+    var selectedInterval by rememberSaveable { mutableStateOf("15m") }
     val samples = moduleState.series("dht11", "temperature")
         .ifEmpty { moduleState.series("dht22", "temperature") }
     var touchedSample by remember { mutableStateOf<TelemetrySample?>(null) }
@@ -531,7 +532,7 @@ private fun TelemetryChartSection(
                     listOf("15m", "1h", "6h", "24h").forEach { interval ->
                         FilterChip(
                             selected = selectedInterval == interval,
-                            onClick = { selectedInterval = interval },
+                            onClick = { selectedInterval = interval; touchedSample = null },
                             label = { Text(interval, fontSize = 11.sp) }
                         )
                     }
