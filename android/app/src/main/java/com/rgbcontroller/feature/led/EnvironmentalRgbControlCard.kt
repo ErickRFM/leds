@@ -175,11 +175,17 @@ fun EnvironmentalRgbControlCard(
                         color = Color(currentRed, currentGreen, currentBlue)
                     ) {}
                     Text(
-                        "Color ambiental aplicado: R:$currentRed G:$currentGreen B:$currentBlue ($currentBand)",
+                        "Color ordenado al PWM: R:$currentRed G:$currentGreen B:$currentBlue ($currentBand)",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
             }
+            Text(
+                "Si el foco no coincide con el color mostrado, revisa el orden de canales: rojo GPIO27, verde GPIO25, azul GPIO26; " +
+                    "y confirma si tu módulo es ánodo común (firmware actual) o cátodo común. La app no mide físicamente el PWM.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Text(
                 "Temperatura: azul (<20°C), verde (20-26°C), amarillo (26-30°C), naranja (30-35°C) o rojo (≥35°C). " +
                     "Sin temperatura válida, el ESP32 no realiza cambios.",
