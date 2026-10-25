@@ -76,6 +76,7 @@ fun OledInteractiveModule(
 ) {
     val selectedExpression = confirmed?.scene ?: "unknown"
     var contrastLevel by remember(confirmed?.ready) { mutableFloatStateOf((confirmed?.contrast ?: 128).toFloat()) }
+    var showScreenTuning by rememberSaveable { mutableStateOf(false) }
     val isInverted = confirmed?.inverted == true
     val isAnimActive = confirmed?.paused == false
     val canControl = isAuthorized && confirmed?.ready == true
@@ -290,8 +291,11 @@ fun OledInteractiveModule(
                 }
             }
 
+            TextButton(onClick = { showScreenTuning = !showScreenTuning }) {
+                Text(if (showScreenTuning) "Ocultar ajustes OLED" else "Contraste y ajustes OLED")
+            }
             // Screen Controls: Contrast, Invert, Sleep, Anim
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (showScreenTuning) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
