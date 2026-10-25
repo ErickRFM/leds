@@ -121,7 +121,7 @@ fun RgbLightingPanel(
                 }
 
                 CompiBadge(
-                    label = if (isAuthorized) "ESP32 Confirmado" else "Sin Enlace",
+                    label = if (isAuthorized) "Control autorizado" else "Sin autorización",
                     type = if (isAuthorized) CompiBadgeType.CONFIRMED else CompiBadgeType.OFFLINE
                 )
             }
@@ -171,8 +171,9 @@ fun RgbLightingPanel(
                         Canvas(
                             modifier = Modifier
                                 .size(180.dp)
-                                .pointerInput(Unit) {
+                                .pointerInput(isAuthorized) {
                                     detectDragGestures { change, _ ->
+                                        if (!isAuthorized) return@detectDragGestures
                                         change.consume()
                                         val center = Offset(size.width / 2f, size.height / 2f)
                                         val touch = change.position - center
