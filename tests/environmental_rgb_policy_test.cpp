@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cstring>
 #include <cmath>
 #include <cstdint>
 #include <iostream>
@@ -139,6 +140,28 @@ int main() {
   assert(result.lightWasUsed && result.brightness == 180);
   policy.reset();
   assert(!policy.initialized());
+
+  // RUNNING is never reported before successful software application.
+  EnvironmentalRgbSnapshot live{};
+  live.lastAppliedMs = 42;
+  reading = EnvironmentalRgbInput{};
+  reading.temperatureFresh = true;
+  reading.temperatureC = 23.0f;
+  reading.humidityFresh = true;
+  reading.humidityPercent = 50.0f;
+  const auto desired = policy.evaluate(reading);
+  assert(desired.apply && desired.band == EnvironmentalRgbBand::Comfort);
+  confirmEnvironmentalRgbApplication(live, desired, true, false, 100);
+  assert(live.state == EnvironmentalRgbState::Error);
+  assert(std::strcmp(live.reason,"COMMAND_REJECTED")==0);
+  assert(live.lastAppliedMs == 42);
+  confirmEnvironmentalRgbApplication(live, desired, true, true, 200);
+  assert(live.state == EnvironmentalRgbState::Running);
+  assert(live.green == 186 && live.red == 54 && live.blue == 116);
+  assert(live.lastAppliedMs == 200);
+  // Identical channels: no PWM write, and no invented application timestamp.
+  confirmEnvironmentalRgbApplication(live, desired, false, true, 300);
+  assert(live.lastAppliedMs == 200);
 
   std::cout << "environmental RGB policy: ALL OK\n";
   return 0;

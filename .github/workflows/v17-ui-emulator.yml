@@ -10,6 +10,12 @@ on:
 permissions:
   contents: read
 
+# Keep only the newest emulator run for each pull request branch.
+# Superseded UX builds must not compete for scarce emulator runners.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   mobile-ux-emulator:
     runs-on: ubuntu-latest

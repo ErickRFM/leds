@@ -63,8 +63,8 @@ fun EnvironmentalRgbControlCard(
         bleConnection == BleConnectionState.Ready &&
             bleSecurity == BleSecurityState.Authorized
     }
-    var wifiEnabled by remember { mutableStateOf<Boolean?>(null) }
-    var wifiState by remember { mutableStateOf("DISABLED") }
+    var wifiEnabled by remember(transport, session.revision) { mutableStateOf<Boolean?>(null) }
+    var wifiState by remember(transport, session.revision) { mutableStateOf("UNKNOWN") }
     var wifiReason by remember { mutableStateOf("DISABLED") }
     var wifiBand by remember { mutableStateOf("Comfort") }
     var wifiRed by remember { mutableStateOf(0) }
@@ -75,7 +75,7 @@ fun EnvironmentalRgbControlCard(
     var message by remember { mutableStateOf("Esperando estado ambiental del ESP32.") }
 
     val enabled = if (wifiMode) wifiEnabled else bleEnabled
-    val currentState = if (wifiMode) wifiState else (bleSnapshot?.state?.name ?: "DISABLED")
+    val currentState = if (!authorized) "OFFLINE" else if (wifiMode) wifiState else (bleSnapshot?.state?.name ?: "UNKNOWN")
     val currentReason = if (wifiMode) wifiReason else (bleSnapshot?.reason ?: "DISABLED")
     val currentRed = if (wifiMode) wifiRed else (bleSnapshot?.red ?: 0)
     val currentGreen = if (wifiMode) wifiGreen else (bleSnapshot?.green ?: 0)
@@ -98,8 +98,8 @@ fun EnvironmentalRgbControlCard(
                         val status = session.serialized { client.environmentalRgbStatus(key) }
                         if (authorized && session.revision == version && !busy) {
                             wifiEnabled = status.optBoolean("enabled")
-                            wifiState = status.optString("state", if (wifiEnabled == true) "RUNNING" else "DISABLED")
-                            wifiReason = status.optString("reason", "OK")
+                            wifiState = status.optString("state", if (wifiEnabled == true) "ENABLED" else "DISABLED")
+                            wifiReason = status.optString("reason", "UNKNOWN")
                             wifiBand = status.optString("band", "Comfort")
                             wifiRed = status.optInt("red", 0)
                             wifiGreen = status.optInt("green", 0)
@@ -110,7 +110,9 @@ fun EnvironmentalRgbControlCard(
                                 "SUSPENDED" -> "Modo ambiental en espera: temperatura no disponible o desactualizada ($wifiReason)."
                                 "CONFLICT" -> "Modo ambiental suspendido por conflicto ($wifiReason)."
                                 "ERROR" -> "Error en módulo RGB del ESP32 ($wifiReason)."
-                                else -> "ESP32 confirmó el modo manual."
+                                "DISABLED" -> "ESP32 confirmó el modo ambiental desactivado."
+                                "ENABLED" -> "Modo habilitado; falta confirmar aplicación del color."
+                                else -> "Estado ambiental aún sin confirmar ($wifiReason)."
                             }
                         }
                     } else if (!bleManager.requestEnvironmentalRgb(BleEnvironmentalProtocol.Action.GET)) {
@@ -120,7 +122,7 @@ fun EnvironmentalRgbControlCard(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
-                if (wifiMode) wifiEnabled = null
+                if (wifiMode) { wifiEnabled = null; wifiState = "UNKNOWN" }
                 message = "No se confirmó el modo ambiental: ${failure.message}"
             }
             delay(3_500L)
@@ -173,11 +175,17 @@ fun EnvironmentalRgbControlCard(
                         color = Color(currentRed, currentGreen, currentBlue)
                     ) {}
                     Text(
-                        "Color ambiental aplicado: R:$currentRed G:$currentGreen B:$currentBlue ($currentBand)",
+                        "Color ordenado al PWM: R:$currentRed G:$currentGreen B:$currentBlue ($currentBand)",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
             }
+            Text(
+                "Si el foco no coincide con el color mostrado, revisa el orden de canales: rojo GPIO27, verde GPIO25, azul GPIO26; " +
+                    "y confirma si tu módulo es ánodo común (firmware actual) o cátodo común. La app no mide físicamente el PWM.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Text(
                 "Temperatura: azul (<20°C), verde (20-26°C), amarillo (26-30°C), naranja (30-35°C) o rojo (≥35°C). " +
                     "Sin temperatura válida, el ESP32 no realiza cambios.",
@@ -211,6 +219,7 @@ fun EnvironmentalRgbControlCard(
                                     "Cambió la sesión Wi-Fi; vuelve a verificar."
                                 }
                                 wifiEnabled = null  // await read-back, never assume success
+                                wifiState = "UNKNOWN"
                                 message = "Esperando la confirmación de estado del ESP32…"
                             } else {
                                 val action = if (enabled == true)

@@ -30,7 +30,7 @@ object BleEnvironmentalProtocol {
 
     fun parseReply(frame: String): Reply? {
         if (frame == "ENV,ON") {
-            return Reply.State(EnvironmentalRgbSnapshot(enabled = true, state = StateEnum.RUNNING, reason = "OK"))
+            return Reply.State(EnvironmentalRgbSnapshot(enabled = true, state = StateEnum.ENABLED, reason = "AWAITING_STATUS"))
         }
         if (frame == "ENV,OFF") {
             return Reply.State(EnvironmentalRgbSnapshot(enabled = false, state = StateEnum.DISABLED, reason = "DISABLED"))
@@ -44,7 +44,7 @@ object BleEnvironmentalProtocol {
                 val enabled = parts[2] == "ON" || parts[2] == "ENABLED" || parts[2] == "1"
                 val stateStr = parts[3]
                 val state = runCatching { StateEnum.valueOf(stateStr) }.getOrDefault(
-                    if (enabled) StateEnum.RUNNING else StateEnum.DISABLED
+                    if (enabled) StateEnum.ENABLED else StateEnum.DISABLED
                 )
                 val reason = parts[4]
                 val band = parts[5]

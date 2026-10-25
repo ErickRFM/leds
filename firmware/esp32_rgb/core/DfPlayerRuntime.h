@@ -53,11 +53,15 @@ class DfPlayerRuntime final {
     if(waiting_ && age(now,lastSent_)<500) return;
     waiting_=0;
     if(count_ && commandsSincePoll_<2) {
-      const Pending pending=queue_[head_]; head_=(head_+1)%4; --count_;
+      const Pending pending=queue_[head_];
+      // UART may lack TX buffer space temporarily. Keep the command queued
+      // until a full frame is accepted instead of silently dropping intent.
+      if (!transmit(pending.command,pending.parameter,now)) return;
+      head_=(head_+1)%4; --count_;
       if(pending.command==0x06) known_[4]=false;
       else known_[1]=known_[3]=false;
       ++commandsSincePoll_;
-      transmit(pending.command,pending.parameter,now); return;
+      return;
     }
     if(poll_==0 && age(now,lastCycle_)<1000 && cycleStarted_ && commandsSincePoll_<2) return;
     if(poll_==0) {lastCycle_=now; cycleStarted_=true;}

@@ -31,6 +31,18 @@ class MediaControlsTest {
         compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
     }
 
+    @Test fun missingUartExplainsPhysicalWiringAndBlocksPlayback() {
+        compose.setContent {
+            MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) {
+                CompiAudioPlayerCard(true,
+                    AudioHardwareState(false, -1, -1, "UNKNOWN", -1, -1, false, false),
+                    false, null, { _, _ -> error("No playback without UART response") })
+            } }
+        }
+        compose.onNodeWithTag("dfplayer_status").assertTextContains("TX14", substring = true)
+        compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
+    }
+
     @Test fun zeroFileCountExplainsWhyPlaybackIsDisabled() {
         compose.setContent {
             MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) {
