@@ -88,6 +88,28 @@ struct EnvironmentalRgbResult {
   uint8_t red = 0, green = 0, blue = 0, brightness = 0;
 };
 
+// Shared confirmation contract, exercised by the host-side C++ regression test.
+// A software acceptance is NOT independent electrical readback.
+inline void confirmEnvironmentalRgbApplication(EnvironmentalRgbSnapshot& state,
+    const EnvironmentalRgbResult& output, bool needsApply,
+    bool accepted, uint32_t nowMs) {
+  if (!accepted) {
+    state.state = EnvironmentalRgbState::Error;
+    state.reason = "COMMAND_REJECTED";
+    return;
+  }
+  state.state = EnvironmentalRgbState::Running;
+  state.reason = "OK";
+  state.band = output.band;
+  state.red = output.red;
+  state.green = output.green;
+  state.blue = output.blue;
+  state.brightness = output.brightness;
+  state.humidityUsed = output.humidityWasUsed;
+  state.lightUsed = output.lightWasUsed;
+  if (needsApply) state.lastAppliedMs = nowMs;
+}
+
 class EnvironmentalRgbPolicy final {
  public:
   bool configure(const EnvironmentalRgbConfig& cfg) {
