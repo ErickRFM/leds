@@ -160,7 +160,7 @@ class EnvironmentalRgbPolicy final {
     out.apply = true;
     switch (band_) {
       case EnvironmentalRgbBand::Cold: out.red=52; out.green=120; out.blue=237; break;
-      case EnvironmentalRgbBand::Comfort: out.red=54; out.green=186; out.blue=116; break;
+      case EnvironmentalRgbBand::Comfort: out.red=12; out.green=220; out.blue=12; break;
       case EnvironmentalRgbBand::Warm: out.red=246; out.green=184; out.blue=63; break;
       case EnvironmentalRgbBand::Hot: out.red=255; out.green=125; out.blue=20; break;
       case EnvironmentalRgbBand::Extreme: out.red=230; out.green=35; out.blue=35; break;
