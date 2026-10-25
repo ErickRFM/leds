@@ -15,7 +15,7 @@ int main() {
   assert(!policy.evaluate(reading).apply);
   assert(!policy.initialized());
 
-  // 22.7 °C test: must produce Comfort band green (54, 186, 116)
+  // 22.7 °C: comfort must be visibly GREEN, with minimal blue/red
   reading.temperatureFresh = true;
   reading.temperatureAgeMs = 100;
   reading.temperatureC = 22.7f;
@@ -25,7 +25,7 @@ int main() {
   auto result = policy.evaluate(reading);
   assert(result.apply && !result.suspended);
   assert(result.band == EnvironmentalRgbBand::Comfort);
-  assert(result.red == 54 && result.green == 186 && result.blue == 116);
+  assert(result.red == 12 && result.green == 220 && result.blue == 12);
 
   reading.temperatureC = 18.0f;
   result = policy.evaluate(reading);
@@ -73,7 +73,7 @@ int main() {
   reading.temperatureC = 23.0f;
   result = policy.evaluate(reading);
   assert(result.band == EnvironmentalRgbBand::Comfort);
-  assert(result.green >= result.blue * 2);
+  assert(result.green >= result.blue * 5);
   assert(result.green > result.red);
   reading.temperatureC = 35.6f;
   reading.humidityPercent = 25.0f;
@@ -157,7 +157,7 @@ int main() {
   assert(live.lastAppliedMs == 42);
   confirmEnvironmentalRgbApplication(live, desired, true, true, 200);
   assert(live.state == EnvironmentalRgbState::Running);
-  assert(live.green == 186 && live.red == 54 && live.blue == 116);
+  assert(live.green == 220 && live.red == 12 && live.blue == 12);
   assert(live.lastAppliedMs == 200);
   // Identical channels: no PWM write, and no invented application timestamp.
   confirmEnvironmentalRgbApplication(live, desired, false, true, 300);
