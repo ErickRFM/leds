@@ -302,7 +302,7 @@ fun ModuleWorkspaceScreen(
                             item(key = "station_rgb_shortcut") {
                                 // Route to the audited BLE/Wi-Fi RGB module instead of
                                 // rendering local sliders that cannot drive hardware.
-                                OutlinedCard(
+                                Card(
                                     onClick = {
                                         previousOpenedId = openedId
                                         openedId = "led_rgb"
@@ -345,7 +345,7 @@ fun ModuleWorkspaceScreen(
 
                         if (stationSection == "Resumen" || stationSection == "Audio") {
                             item {
-                                OutlinedCard(
+                                Card(
                                     onClick = {
                                         previousOpenedId = openedId
                                         openedId = "compi_dfplayer"
@@ -429,7 +429,7 @@ fun ModuleWorkspaceScreen(
                         }
                     }
                     item(key = "dfplayer_wiring") {
-                        OutlinedCard(
+                        Card(
                             onClick = { showWiring = !showWiring },
                             modifier = Modifier.fillMaxWidth().testTag("dfplayer_wiring_toggle"),
                             shape = RoundedCornerShape(20.dp)
@@ -527,7 +527,7 @@ fun ModuleWorkspaceScreen(
                             }
                         }
                         item(key = "environmental_audio_library") {
-                            OutlinedCard(
+                            Card(
                                 onClick = {
                                     previousOpenedId = openedId
                                     openedId = "compi_dfplayer"
@@ -660,7 +660,7 @@ fun ModuleWorkspaceScreen(
                 }
             }
             item {
-                OutlinedCard(onClick = onConnect,
+                Card(onClick = onConnect,
                     modifier = Modifier.fillMaxWidth().testTag("modules_connection")) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
