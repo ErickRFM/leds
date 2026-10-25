@@ -17,7 +17,7 @@ class BleEnvironmentalProtocolTest {
     @Test fun recognizesLegacyFirmwareConfirmedStates() {
         assertEquals(
             BleEnvironmentalProtocol.Reply.State(
-                BleEnvironmentalProtocol.EnvironmentalRgbSnapshot(enabled = true, state = BleEnvironmentalProtocol.StateEnum.RUNNING, reason = "OK")
+                BleEnvironmentalProtocol.EnvironmentalRgbSnapshot(enabled = true, state = BleEnvironmentalProtocol.StateEnum.ENABLED, reason = "AWAITING_STATUS")
             ),
             BleEnvironmentalProtocol.parseReply("ENV,ON")
         )
