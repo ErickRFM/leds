@@ -274,7 +274,7 @@ jobs:
           arduino-cli compile --fqbn "$ARDUINO_FQBN" --output-dir build/firmware-full-lab build/full-lab-sketch/esp32_rgb
           python3 scripts/check-firmware-budget.py build/firmware-full-lab
           echo "Git commit: $GITHUB_SHA" > build/firmware-full-lab/build-info.txt
-          echo "COMPI_FULL_LAB_PROFILE=1 (GPIO16 DHT11, GPIO32 LDR, OLED 21/22, DFPlayer 17/18)" >> build/firmware-full-lab/build-info.txt
+          echo "COMPI_FULL_LAB_PROFILE=1 (GPIO16 DHT11, GPIO32 LDR, OLED 21/22, DFPlayer RX13/TX14)" >> build/firmware-full-lab/build-info.txt
           echo "LAB ONLY — confirm speaker, UART voltage levels and power before flashing" >> build/firmware-full-lab/build-info.txt
           (cd build/firmware-full-lab && sha256sum ./*.bin > SHA256SUMS.txt)
       - name: Upload connected full-lab binary
