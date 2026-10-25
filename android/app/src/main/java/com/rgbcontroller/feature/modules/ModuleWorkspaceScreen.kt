@@ -81,10 +81,11 @@ fun ModuleWorkspaceScreen(
     preferencesRepository: PreferencesRepository,
     session: CompiLabSession,
     onConnect: () -> Unit,
-    onHardware: () -> Unit
+    onHardware: () -> Unit,
+    sharedDashboardVm: ComponentDashboardViewModel? = null
 ) {
     val context = LocalContext.current
-    val vm: ComponentDashboardViewModel = viewModel(
+    val vm: ComponentDashboardViewModel = sharedDashboardVm ?: viewModel(
         factory = remember(session, bleManager) {
             ComponentDashboardViewModel.factory(context.applicationContext, session, bleManager)
         }
