@@ -113,12 +113,13 @@ fun DashboardScreen(
     onDevices: () -> Unit,
     onHardware: () -> Unit,
     onSettings: () -> Unit = {},
-    session: CompiLabSession? = null
+    session: CompiLabSession? = null,
+    sharedDashboardVm: ComponentDashboardViewModel? = null
 ) {
     val connection by bleManager.connectionState.collectAsState()
     val bleSecurity by bleManager.securityState.collectAsState()
     val context = LocalContext.current
-    val moduleVm: ComponentDashboardViewModel = viewModel(
+    val moduleVm: ComponentDashboardViewModel = sharedDashboardVm ?: viewModel(
         factory = remember(session, bleManager) {
             ComponentDashboardViewModel.factory(context.applicationContext, session, bleManager)
         }
