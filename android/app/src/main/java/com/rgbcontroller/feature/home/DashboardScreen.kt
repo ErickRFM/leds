@@ -376,7 +376,7 @@ fun DashboardScreen(
             CompactMetricCard(
                 title = "Humedad",
                 value = humidMeasurement?.value?.let { "%.0f%%".format(Locale.ROOT, it) } ?: "—",
-                subtitle = if (humidMeasurement != null) "Ambiente normal" else "Sin lectura",
+                subtitle = if (humidMeasurement != null) "Lectura confirmada" else "Sin lectura",
                 icon = Icons.Default.WaterDrop,
                 iconTint = CompiTokens.Colors.ColdBlue,
                 modifier = Modifier.weight(1f),
@@ -405,7 +405,7 @@ fun DashboardScreen(
         ) {
             // RGB Ambient Card
             CompactMetricCard(
-                title = "RGB Ambiental",
+                title = "LED RGB",
                 value = if (ready) "Consultar" else "Sin enlace",
                 subtitle = "Estado en control RGB",
                 icon = Icons.Default.ColorLens,
@@ -417,8 +417,8 @@ fun DashboardScreen(
             // Audio Player Card
             CompactMetricCard(
                 title = "Audio Compi",
-                value = "Local / MP3",
-                subtitle = "Avisos por voz",
+                value = "Abrir módulo",
+                subtitle = "Revisar MP3 y avisos",
                 icon = Icons.Default.MusicNote,
                 iconTint = CompiTokens.Colors.ActiveGreen,
                 modifier = Modifier.weight(1f),
@@ -437,9 +437,9 @@ fun DashboardScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            QuickActionTile("Módulos", Icons.Default.ColorLens, onLed, Modifier.weight(1f).testTag("open_led"))
-            QuickActionTile("Hardware", Icons.Default.Memory, onHardware, Modifier.weight(1f))
-            QuickActionTile("Studio", Icons.Default.Code, onCode, Modifier.weight(1f))
+            QuickActionTile("Estación", Icons.Default.ColorLens, onLed, Modifier.weight(1f).testTag("open_led"))
+            QuickActionTile("Laboratorio", Icons.Default.Memory, onHardware, Modifier.weight(1f))
+            QuickActionTile("Estudio", Icons.Default.Code, onCode, Modifier.weight(1f))
         }
     }
 }
