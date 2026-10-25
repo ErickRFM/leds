@@ -73,12 +73,12 @@ private sealed class Screen(
     val icon: androidx.compose.ui.graphics.vector.ImageVector
 ) {
     data object Home : Screen("home", "Inicio", Icons.Default.Home)
-    data object Modules : Screen("modules", "Módulos", Icons.Default.ColorLens)
-    data object Code : Screen("code", "Studio", Icons.Default.Code)
+    data object Modules : Screen("modules", "Estación", Icons.Default.ColorLens)
+    data object Code : Screen("code", "Estudio", Icons.Default.Code)
     data object Settings : Screen("settings", "Ajustes", Icons.Default.Settings)
     data object Devices : Screen("devices", "Equipos", Icons.Default.Bluetooth)
     data object Connect : Screen("connect", "Conectar", Icons.Default.Bluetooth)
-    data object Hub : Screen("hub", "Hardware", Icons.Default.Memory)
+    data object Hub : Screen("hub", "Laboratorio", Icons.Default.Memory)
     data object LabTools : Screen("lab-tools", "Laboratorio", Icons.Default.Memory)
 }
 
