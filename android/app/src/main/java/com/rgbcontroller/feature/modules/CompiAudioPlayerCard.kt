@@ -22,7 +22,7 @@ fun CompiAudioPlayerCard(
     onCommand: (String, String?) -> Unit
 ) {
     var trackText by remember { mutableStateOf("1") }
-    var volume by remember(hardware?.volume) { mutableFloatStateOf((hardware?.volume ?: 1).coerceAtLeast(0).toFloat()) }
+    var volume by remember(hardware?.modulePresent, hardware?.volume) { mutableFloatStateOf((hardware?.volume?.takeIf { it >= 0 } ?: 15).toFloat()) }
     val available = authorized && hardware?.modulePresent == true && hardware?.sdPresent == 1 && !busy
     val sdCount = hardware?.tracks ?: -1
     Card(Modifier.fillMaxWidth().testTag("dfplayer_physical_controls"), shape = RoundedCornerShape(22.dp)) {
@@ -37,9 +37,9 @@ fun CompiAudioPlayerCard(
             Text(when {
                 !authorized -> "Conecta y autoriza Bluetooth o Wi-Fi."
                 hardware == null -> "Esperando estado del firmware…"
-                !hardware.modulePresent -> "Módulo sin detectar. Revisa alimentación y UART."
+                !hardware.modulePresent -> "Sin respuesta UART del DFPlayer. Revisa 5 V, GND, ESP32 TX14 → RX y RX13 ← TX."
                 hardware.sdPresent == 0 -> "MicroSD ausente."
-                hardware.sdPresent != 1 -> "MicroSD sin confirmar."
+                hardware.sdPresent != 1 -> "UART respondió, pero microSD sin confirmar. Comprueba FAT32 y reinicia el módulo."
                 sdCount == 0 -> "MicroSD reconocida · 0 archivos reportados. Revisa FAT32 y /MP3/0001.mp3."
                 !hardware.fresh -> "Módulo y microSD detectados · lectura parcial."
                 else -> "MicroSD detectada · ${sdCount.takeIf { it >= 0 }?.toString() ?: "—"} archivos reportados"
@@ -56,6 +56,7 @@ fun CompiAudioPlayerCard(
                 label = { Text("Número de archivo MP3 (1–2999)") }, singleLine = true,
                 modifier = Modifier.fillMaxWidth().testTag("dfplayer_track"))
             Text("Archivo: /MP3/${trackText.padStart(4, '0')}.mp3", style = MaterialTheme.typography.bodyMedium)
+            Text("La app no puede detectar eléctricamente una bocina ni listar nombres de pistas: muestra únicamente respuestas del DFPlayer.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (sdCount == 0) Text("El módulo informa 0 archivos. Revisa la tarjeta antes de intentar reproducir.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             Button(onClick = { onCommand("PLAY", trackText) },
                 enabled = available && sdCount != 0 && trackText.toIntOrNull() in 1..2999,
