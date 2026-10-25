@@ -227,6 +227,18 @@ fun OledInteractiveModule(
                     }
                 }
 
+                if (selectedExpression in setOf("unknown", "telemetry", "text")) {
+                    Text(
+                        text = when (selectedExpression) {
+                            "telemetry" -> "COMPI  ·  Sensores"
+                            "text" -> "Texto mostrado en OLED"
+                            else -> "Esperando escena confirmada"
+                        },
+                        color = if (isInverted) Color(0xFF070B14) else Color(0xFF9EE6FF),
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
                 Text(
                     text = "Estado: $selectedExpression · vista ilustrativa",
                     color = if (isInverted) Color.Black.copy(alpha = 0.6f) else Color(0xFF9EE6FF).copy(alpha = 0.6f),
