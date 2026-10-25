@@ -203,7 +203,7 @@ fun DashboardScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(CompiTokens.Colors.MatteBackground)
+            .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -219,7 +219,7 @@ fun DashboardScreen(
                     text = "COMPI",
                     style = CompiTokens.Typography.HeadlineTitle,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = if (wifiReady) "Estación Inteligente · Wi-Fi" else "Estación Inteligente · ESP32",
@@ -255,7 +255,7 @@ fun DashboardScreen(
         // Hero Ambient Climate Card
         Card(
             shape = CompiTokens.Shapes.Large,
-            colors = CardDefaults.cardColors(containerColor = CompiTokens.Colors.SurfaceCard),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
             modifier = Modifier.fillMaxWidth().testTag("home_climate_hero")
         ) {
             Column(
@@ -288,12 +288,12 @@ fun DashboardScreen(
                                 text = "Ambiente",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = if (hasRealTemp) "Confirmado por ESP32" else "Esperando lectura real",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFF94A3B8)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -323,7 +323,7 @@ fun DashboardScreen(
                             Text(
                                 text = if (hasRealTemp) "%.1f°C".format(Locale.ROOT, currentTemp) else "— °C",
                                 style = CompiTokens.Typography.MetricValue,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = climateLabel,
@@ -342,7 +342,7 @@ fun DashboardScreen(
                                 Text(
                                     text = if (humidMeasurement != null) "Humedad %.0f%%".format(Locale.ROOT, currentHumid) else "Humedad —",
                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                                    color = Color(0xFFCBD5E1)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -365,7 +365,7 @@ fun DashboardScreen(
         Text(
             text = "Mediciones y módulos",
             style = CompiTokens.Typography.SectionHeader,
-            color = Color.White
+            color = MaterialTheme.colorScheme.onSurface
         )
 
         Row(
@@ -430,7 +430,7 @@ fun DashboardScreen(
         Text(
             text = "Accesos rápidos",
             style = CompiTokens.Typography.SectionHeader,
-            color = Color.White
+            color = MaterialTheme.colorScheme.onSurface
         )
 
         Row(
@@ -505,7 +505,7 @@ private fun TelemetryChartSection(
 
     Card(
         shape = CompiTokens.Shapes.Large,
-        colors = CardDefaults.cardColors(containerColor = CompiTokens.Colors.SurfaceCard),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         modifier = Modifier.fillMaxWidth().testTag("home_telemetry_chart")
     ) {
         Column(
@@ -522,7 +522,7 @@ private fun TelemetryChartSection(
                         text = "Tendencia de temperatura",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = touchedSample?.let {
@@ -654,7 +654,7 @@ private fun CompactMetricCard(
     Card(
         onClick = onClick,
         shape = CompiTokens.Shapes.Medium,
-        colors = CardDefaults.cardColors(containerColor = CompiTokens.Colors.SurfaceCard),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         modifier = modifier
     ) {
         Column(
@@ -692,20 +692,20 @@ private fun CompactMetricCard(
                 text = value,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Column {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.labelMedium,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF94A3B8)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -725,7 +725,7 @@ private fun QuickActionTile(
     Card(
         onClick = onClick,
         shape = CompiTokens.Shapes.Medium,
-        colors = CardDefaults.cardColors(containerColor = CompiTokens.Colors.SurfaceCard),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         modifier = modifier
     ) {
         Row(
@@ -751,7 +751,7 @@ private fun QuickActionTile(
                 text = title,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
     }
