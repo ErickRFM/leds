@@ -77,6 +77,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rgbcontroller.core.ble.BleConnectionState
+import com.rgbcontroller.core.ble.BleSecurityState
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.components.model.ComponentMeasurement
 import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
@@ -115,6 +116,7 @@ fun DashboardScreen(
     session: CompiLabSession? = null
 ) {
     val connection by bleManager.connectionState.collectAsState()
+    val bleSecurity by bleManager.securityState.collectAsState()
     val context = LocalContext.current
     val moduleVm: ComponentDashboardViewModel = viewModel(
         factory = remember(session, bleManager) {
@@ -123,10 +125,11 @@ fun DashboardScreen(
     )
     val moduleState by moduleVm.uiState.collectAsState()
     LaunchedEffect(Unit) { moduleVm.loadPersisted() }
-    LaunchedEffect(session?.connectionState, session?.transport) {
+    LaunchedEffect(session?.connectionState, session?.transport, connection, bleSecurity) {
         moduleVm.onConnectionChanged()
     }
-    val bleReady = connection == BleConnectionState.Ready
+    val bleReady = (session == null || session.transport == LabTransport.BLUETOOTH) &&
+        connection == BleConnectionState.Ready && bleSecurity == BleSecurityState.Authorized
     val wifiReady = session?.let {
         it.transport == LabTransport.WIFI_LAB &&
             it.connectionState == LabConnectionState.AUTHORIZED && it.wifiReady
