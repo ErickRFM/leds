@@ -21,8 +21,12 @@ fun CompiAudioPlayerCard(
     feedback: String?,
     onCommand: (String, String?) -> Unit
 ) {
-    var trackText by remember { mutableStateOf("1") }
-    var volume by remember(hardware?.modulePresent, hardware?.volume) { mutableFloatStateOf((hardware?.volume?.takeIf { it >= 0 } ?: 15).toFloat()) }
+    var trackText by rememberSaveable { mutableStateOf("1") }
+    // Preserve slider edits across automatic UART polling. Only initialize the
+    // local edit when module identity changes, never on each volume readback.
+    var volume by remember(hardware?.modulePresent) {
+        mutableFloatStateOf((hardware?.volume?.takeIf { it >= 0 } ?: 15).toFloat())
+    }
     val available = authorized && hardware?.modulePresent == true && hardware?.sdPresent == 1 && !busy
     val sdCount = hardware?.tracks ?: -1
     Card(Modifier.fillMaxWidth().testTag("dfplayer_physical_controls"), shape = RoundedCornerShape(22.dp)) {
