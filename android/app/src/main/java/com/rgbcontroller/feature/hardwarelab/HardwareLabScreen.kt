@@ -110,7 +110,7 @@ fun HardwareLabScreen(
     val bleConnection by (bleManager?.connectionState ?: remember { kotlinx.coroutines.flow.MutableStateFlow(BleConnectionState.Disconnected) }).collectAsState()
     val bleSecurity by (bleManager?.securityState ?: remember { kotlinx.coroutines.flow.MutableStateFlow<BleSecurityState>(BleSecurityState.Disconnected) }).collectAsState()
     val authorized = (session?.transport == com.rgbcontroller.core.wifi.LabTransport.WIFI_LAB &&
-        sessionConnection == LabConnectionState.AUTHORIZED && session.wifiReady) ||
+        sessionConnection == LabConnectionState.AUTHORIZED && session?.wifiReady == true) ||
         (session?.transport == com.rgbcontroller.core.wifi.LabTransport.BLUETOOTH &&
             bleConnection == BleConnectionState.Ready && bleSecurity == BleSecurityState.Authorized)
 
