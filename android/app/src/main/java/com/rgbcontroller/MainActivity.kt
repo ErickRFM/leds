@@ -45,6 +45,9 @@ import com.rgbcontroller.feature.hardwarelab.HardwareLabScreen
 import com.rgbcontroller.feature.modules.ModuleWorkspaceScreen
 import com.rgbcontroller.feature.settings.SettingsScreen
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.rgbcontroller.feature.hardwarelab.ComponentDashboardViewModel
 
 class MainActivity : ComponentActivity() {
     private val model by viewModels<RgbControllerViewModel>()
@@ -124,6 +127,14 @@ fun MainAppNavHost(
     labSession: CompiLabSession? = null
 ) {
     val session = labSession ?: remember { CompiLabSession() }
+    val context = LocalContext.current
+    // One dashboard owner across Home, Station and Hardware: no independently
+    // refreshed repositories or contradictory sensor readiness between tabs.
+    val dashboardVm: ComponentDashboardViewModel = viewModel(
+        factory = remember(session, bleManager) {
+            ComponentDashboardViewModel.factory(context.applicationContext, session, bleManager)
+        }
+    )
     val theme by preferencesRepository.themeMode.collectAsState(initial = "SYSTEM")
     val verifiedAddress by bleManager.connectedAddress.collectAsState()
     // Persist the successful connection regardless of which Compi module is visible.
@@ -202,7 +213,8 @@ fun MainAppNavHost(
                         onDevices = { navController.navigateNested(Screen.Connect.route) },
                         onHardware = { navController.navigateTopLevel(Screen.Hub) },
                         onSettings = { navController.navigateNested(Screen.Settings.route) },
-                        session = session
+                        session = session,
+                        sharedDashboardVm = dashboardVm
                     )
                 }
                 // Retain a migration route for back stacks saved by Compi V8.
@@ -214,7 +226,8 @@ fun MainAppNavHost(
                     ModuleWorkspaceScreen(
                         bleManager, preferencesRepository, session,
                         onConnect = { navController.navigateNested(Screen.Connect.route) },
-                        onHardware = { navController.navigateTopLevel(Screen.Hub) }
+                        onHardware = { navController.navigateTopLevel(Screen.Hub) },
+                        sharedDashboardVm = dashboardVm
                     )
                 }
                 // Keep the legacy route address for restored V8-V16 stacks,
@@ -248,7 +261,8 @@ fun MainAppNavHost(
                     HardwareLabScreen(
                         session = session,
                         bleManager = bleManager,
-                        onOpenLabTools = { navController.navigateNested(Screen.LabTools.route) }
+                        onOpenLabTools = { navController.navigateNested(Screen.LabTools.route) },
+                        sharedDashboardVm = dashboardVm
                     )
                 }
                 // Preserve the existing diagnostics/GPIO/experiment engine instead
