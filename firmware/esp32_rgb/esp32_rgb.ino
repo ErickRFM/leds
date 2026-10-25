@@ -1915,21 +1915,8 @@ void loop() {
             String(decision.brightness);
         accepted = applyRgbRuntimeCommand(command);
       }
-      if (!accepted) {
-        liveEnvironmentalRgbSnapshot.state = esp32core::EnvironmentalRgbState::Error;
-        liveEnvironmentalRgbSnapshot.reason = "COMMAND_REJECTED";
-      } else {
-        liveEnvironmentalRgbSnapshot.state = esp32core::EnvironmentalRgbState::Running;
-        liveEnvironmentalRgbSnapshot.reason = "OK";
-        liveEnvironmentalRgbSnapshot.band = decision.band;
-        liveEnvironmentalRgbSnapshot.red = decision.red;
-        liveEnvironmentalRgbSnapshot.green = decision.green;
-        liveEnvironmentalRgbSnapshot.blue = decision.blue;
-        liveEnvironmentalRgbSnapshot.brightness = decision.brightness;
-        liveEnvironmentalRgbSnapshot.humidityUsed = decision.humidityWasUsed;
-        liveEnvironmentalRgbSnapshot.lightUsed = decision.lightWasUsed;
-        if (needsApply) liveEnvironmentalRgbSnapshot.lastAppliedMs = now;
-      }
+      esp32core::confirmEnvironmentalRgbApplication(
+          liveEnvironmentalRgbSnapshot, decision, needsApply, accepted, now);
     }
   }
   // Send one small owner-only snapshot chunk per loop interval. Never emit
