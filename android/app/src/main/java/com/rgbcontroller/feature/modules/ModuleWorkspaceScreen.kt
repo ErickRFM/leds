@@ -222,7 +222,7 @@ fun ModuleWorkspaceScreen(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        if (stationSection == "Resumen" || stationSection == "Ambiente") {
+                        if (stationSection == "Resumen") {
                             item {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f)) {
@@ -283,9 +283,13 @@ fun ModuleWorkspaceScreen(
                                     }, modifier = Modifier.weight(1f)) { Text("Calibrar LDR") }
                                 }
                             }
+
+                        }
+
+                        if (stationSection == "Ambiente") {
                             item(key = "station_sensor_charts") {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text("Historial de sensores",
+                                    Text("Lecturas e historial ambiental",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.SemiBold)
                                     SensorDashboard(
