@@ -1494,7 +1494,9 @@ void setup() {
   dfplayerSerial.begin(9600, SERIAL_8N1, COMPI_DFPLAYER_RX, COMPI_DFPLAYER_TX);
   audioPreferencesReady=audioPreferences.begin("compi-audio",false);
   automaticVoiceEnabled=audioPreferencesReady && audioPreferences.getBool("voice",false);
-  // A startup level of 1/30 is barely audible on many DFPlayer boards.\n  // Begin at a moderate 15/30; UART readback still determines actual volume.\n  dfplayerRuntime.command("volume",15,millis());
+  // A startup level of 1/30 is barely audible on many DFPlayer boards.
+  // Begin at a moderate 15/30; UART readback still determines actual volume.
+  dfplayerRuntime.command("volume",15,millis());
 #endif
 
   Serial.begin(115200);
