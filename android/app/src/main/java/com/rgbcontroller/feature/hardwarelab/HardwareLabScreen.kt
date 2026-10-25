@@ -84,9 +84,9 @@ fun HardwareLabScreen(
         }
     )
     val state by viewModel.uiState.collectAsState()
-    var showCatalog by remember { mutableStateOf(false) }
-    var showAlertEditor by remember { mutableStateOf(false) }
-    var showAutomationEditor by remember { mutableStateOf(false) }
+    var showCatalog by rememberSaveable { mutableStateOf(false) }
+    var showAlertEditor by rememberSaveable { mutableStateOf(false) }
+    var showAutomationEditor by rememberSaveable { mutableStateOf(false) }
     var showSoilWizard by remember { mutableStateOf(false) }
     var showConfigEditor by remember { mutableStateOf(false) }
     var showSensorDetails by rememberSaveable { mutableStateOf(false) }
@@ -110,7 +110,7 @@ fun HardwareLabScreen(
     val bleConnection by (bleManager?.connectionState ?: remember { kotlinx.coroutines.flow.MutableStateFlow(BleConnectionState.Disconnected) }).collectAsState()
     val bleSecurity by (bleManager?.securityState ?: remember { kotlinx.coroutines.flow.MutableStateFlow<BleSecurityState>(BleSecurityState.Disconnected) }).collectAsState()
     val authorized = (session?.transport == com.rgbcontroller.core.wifi.LabTransport.WIFI_LAB &&
-        sessionConnection == LabConnectionState.AUTHORIZED) ||
+        sessionConnection == LabConnectionState.AUTHORIZED && session.wifiReady) ||
         (session?.transport == com.rgbcontroller.core.wifi.LabTransport.BLUETOOTH &&
             bleConnection == BleConnectionState.Ready && bleSecurity == BleSecurityState.Authorized)
 
