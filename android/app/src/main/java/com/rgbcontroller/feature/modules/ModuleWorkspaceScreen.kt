@@ -1181,11 +1181,13 @@ private fun ModuleReadings(
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(36.dp))
                         }
-                        LinearProgressIndicator(
-                            progress = { (light ?: 0f).coerceIn(0f, 100f) / 100f },
-                            modifier = Modifier.fillMaxWidth().height(9.dp)
-                                .testTag("ldr_calibrated_level")
-                        )
+                        if (light != null) {
+                            LinearProgressIndicator(
+                                progress = { light.coerceIn(0f, 100f) / 100f },
+                                modifier = Modifier.fillMaxWidth().height(9.dp)
+                                    .testTag("ldr_calibrated_level")
+                            )
+                        }
                         Text(
                             when {
                                 !live -> "Sin telemetría en vivo; no se presentan valores almacenados como actuales."
