@@ -82,7 +82,8 @@ class ComponentDashboardViewModel(
     suspend fun setAutomationRules(rules: List<AutomationRule>) =
         repository.setAutomationRules(rules)
 
-    suspend fun refresh() = refreshMutex.withLock {
+    suspend fun refresh() {
+        refreshMutex.withLock {
         repository.setDevice(currentDeviceId())
         if (!isLinkAuthorized()) {
             repository.setConnected(false)
@@ -124,6 +125,7 @@ class ComponentDashboardViewModel(
             repository.runAutomations(automationSink, isLinkAuthorized())
         } else {
             repository.invalidateLiveTelemetry("El firmware entregó telemetría inválida.")
+        }
         }
     }
 
