@@ -159,34 +159,19 @@ class EnvironmentalRgbPolicy final {
     out.suspended = false;
     out.apply = true;
     switch (band_) {
-      case EnvironmentalRgbBand::Cold: out.red=52; out.green=120; out.blue=237; break;
-      case EnvironmentalRgbBand::Comfort: out.red=12; out.green=220; out.blue=12; break;
-      case EnvironmentalRgbBand::Warm: out.red=246; out.green=184; out.blue=63; break;
-      case EnvironmentalRgbBand::Hot: out.red=255; out.green=125; out.blue=20; break;
-      case EnvironmentalRgbBand::Extreme: out.red=230; out.green=35; out.blue=35; break;
+      case EnvironmentalRgbBand::Cold: out.red=0; out.green=0; out.blue=255; break;
+      case EnvironmentalRgbBand::Comfort: out.red=0; out.green=255; out.blue=0; break;
+      case EnvironmentalRgbBand::Warm: out.red=255; out.green=255; out.blue=0; break;
+      case EnvironmentalRgbBand::Hot: out.red=255; out.green=110; out.blue=0; break;
+      case EnvironmentalRgbBand::Extreme: out.red=255; out.green=0; out.blue=0; break;
     }
-    // Temperature owns the five base bands. Valid humidity adds a restrained
-    // tint without changing band thresholds or LDR-driven brightness.
-    if (sample.humidityFresh && sample.humidityAgeMs <= config_.maxSampleAgeMs &&
+    // Humidity is reported for telemetry but must not tint the five defined
+    // temperature colors. Blue/green/red are primary channels; only yellow
+    // and orange deliberately mix red + green.
+    out.humidityWasUsed = sample.humidityFresh &&
+        sample.humidityAgeMs <= config_.maxSampleAgeMs &&
         finite(sample.humidityPercent) && sample.humidityPercent >= 0.0f &&
-        sample.humidityPercent <= 100.0f) {
-      out.humidityWasUsed = true;
-      if (sample.humidityPercent >= 70.0f) {
-        // Humid air: gently shift toward blue, independent of temperature.
-        // A humidity accent must never turn the comfortable GREEN band cyan.
-        // Limit added blue to a small accent and preserve the dominant channel.
-        const unsigned suggestedBlue =
-            (static_cast<unsigned>(out.blue) * 7u + 255u) / 8u;
-        const unsigned greenSafeBlue = (band_ == EnvironmentalRgbBand::Comfort)
-            ? static_cast<unsigned>(out.green) / 2u : 255u;
-        out.blue = static_cast<uint8_t>(
-            suggestedBlue < greenSafeBlue ? suggestedBlue : greenSafeBlue);
-      } else if (sample.humidityPercent <= 30.0f) {
-        // Dry air: warm the same base band with a subtle red accent.
-        out.red = static_cast<uint8_t>(
-            (static_cast<unsigned>(out.red) * 3u + 255u) / 4u);
-      }
-    }
+        sample.humidityPercent <= 100.0f;
     out.brightness = config_.fallbackBrightness;
     if (sample.lightFresh && sample.lightAgeMs <= config_.maxSampleAgeMs &&
         finite(sample.lightPercent) &&
