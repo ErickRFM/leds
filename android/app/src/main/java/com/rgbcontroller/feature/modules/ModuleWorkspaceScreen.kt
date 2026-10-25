@@ -125,12 +125,12 @@ fun ModuleWorkspaceScreen(
         vm.loadPersisted()
         vm.onConnectionChanged()
     }
-    LaunchedEffect(session.connectionState, session.transport, bleReady, bleSecurity) {
+    LaunchedEffect(session.connectionState, session.transport, session.revision, bleReady, bleSecurity) {
         vm.onConnectionChanged()
     }
     // Foreground only: refresh real sensor values while this destination is visible.
     // Cancellation on navigation avoids background Wi-Fi traffic/battery drain.
-    LaunchedEffect(wifiAuthorized, bleAuthorized) {
+    LaunchedEffect(wifiAuthorized, bleAuthorized, session.revision) {
         if (wifiAuthorized || bleAuthorized) {
             while (true) {
                 delay(7_500L)
@@ -150,7 +150,7 @@ fun ModuleWorkspaceScreen(
     // authenticated, sequence-bound snapshot. Bonding alone proves nothing.
     val configured = ModuleWorkspaceGrouping.group(
         (state.desiredConfig.components.map { it.id } + names +
-            (if (bleReady) listOf("led_rgb") else emptyList())).distinct()
+            (if (bleAuthorized) listOf("led_rgb") else emptyList())).distinct()
     )
     val environmentSensor = configured.firstOrNull {
         it.id == ModuleWorkspaceGrouping.ENVIRONMENT
