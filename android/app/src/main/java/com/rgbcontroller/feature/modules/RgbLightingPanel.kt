@@ -263,7 +263,7 @@ fun RgbLightingPanel(
                                     .size(36.dp)
                                     .clip(CircleShape)
                                     .background(color)
-                                    .clickable {
+                                    .clickable(enabled = isAuthorized) {
                                         selectedColor = color
                                         onColorChanged(color)
                                     }
