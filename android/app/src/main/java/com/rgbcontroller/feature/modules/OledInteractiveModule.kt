@@ -75,7 +75,7 @@ fun OledInteractiveModule(
     modifier: Modifier = Modifier
 ) {
     val selectedExpression = confirmed?.scene ?: "unknown"
-    var contrastLevel by remember(confirmed?.contrast) { mutableFloatStateOf((confirmed?.contrast ?: 128).toFloat()) }
+    var contrastLevel by remember(confirmed?.ready) { mutableFloatStateOf((confirmed?.contrast ?: 128).toFloat()) }
     val isInverted = confirmed?.inverted == true
     val isAnimActive = confirmed?.paused == false
     val canControl = isAuthorized && confirmed?.ready == true
@@ -92,7 +92,7 @@ fun OledInteractiveModule(
 
     Card(
         shape = CompiTokens.Shapes.Large,
-        colors = CardDefaults.cardColors(containerColor = CompiTokens.Colors.SurfaceCard),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         modifier = modifier.fillMaxWidth()
     ) {
         Column(
@@ -114,12 +114,12 @@ fun OledInteractiveModule(
                             text = "Pantalla OLED SSD1306",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = "Monocromo 128×64 · I2C GPIO 21, 22",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF94A3B8)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -227,6 +227,18 @@ fun OledInteractiveModule(
                     }
                 }
 
+                if (selectedExpression in setOf("unknown", "telemetry", "text")) {
+                    Text(
+                        text = when (selectedExpression) {
+                            "telemetry" -> "COMPI  ·  Sensores"
+                            "text" -> "Texto mostrado en OLED"
+                            else -> "Esperando escena confirmada"
+                        },
+                        color = if (isInverted) Color(0xFF070B14) else Color(0xFF9EE6FF),
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
                 Text(
                     text = "Estado: $selectedExpression · vista ilustrativa",
                     color = if (isInverted) Color.Black.copy(alpha = 0.6f) else Color(0xFF9EE6FF).copy(alpha = 0.6f),
@@ -240,7 +252,7 @@ fun OledInteractiveModule(
                 text = "Expresiones soportadas por Firmware",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             LazyRow(
@@ -271,7 +283,7 @@ fun OledInteractiveModule(
                             Text(
                                 text = expr.name,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
@@ -285,7 +297,7 @@ fun OledInteractiveModule(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = "Contraste", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                    Text(text = "Contraste", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
                     Text(text = "%.0f%%".format(contrastLevel / 2.55f), style = MaterialTheme.typography.labelMedium, color = CompiTokens.Colors.PrimaryViolet)
                 }
 

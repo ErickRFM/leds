@@ -5,6 +5,7 @@ import com.rgbcontroller.core.ble.*
 import com.rgbcontroller.core.wifi.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
 
 /** UI lifetime state. Recreated whenever transport, authorization or session changes. */
 @Stable
@@ -25,6 +26,8 @@ class HardwareMediaControls(
         private set
     var busy by mutableStateOf(false)
         private set
+    // Polling may be skipped when busy; user commands must queue instead of disappearing.
+    private val mediaMutex = Mutex()
 
     private fun verifySession() {
         check(session.revision == epoch && session.transport == transport) { "La conexión cambió; vuelve a consultar." }
@@ -36,8 +39,12 @@ class HardwareMediaControls(
     suspend fun command(module: String, verb: String, value: String? = null) {
         val manual = verb != "GET"
         if (manual && busy) return
+        if (!manual && (busy || mediaMutex.isLocked)) return
         if (manual) busy = true
+        var locked = false
         try {
+            mediaMutex.lock()
+            locked = true
             session.userOperation(if (module == "AUD") "Audio $verb" else "OLED $verb") {
                 verifySession()
                 if (transport == LabTransport.BLUETOOTH) {
@@ -83,6 +90,7 @@ class HardwareMediaControls(
                 oledMessage = "Pantalla OLED sin confirmación actual: ${failure.message}"
             }
         } finally {
+            if (locked) mediaMutex.unlock()
             if (manual) busy = false
         }
     }

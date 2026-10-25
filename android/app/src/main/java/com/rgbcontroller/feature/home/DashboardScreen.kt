@@ -54,6 +54,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,6 +77,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rgbcontroller.core.ble.BleConnectionState
+import com.rgbcontroller.core.ble.BleSecurityState
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.components.model.ComponentMeasurement
 import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
@@ -114,6 +116,7 @@ fun DashboardScreen(
     session: CompiLabSession? = null
 ) {
     val connection by bleManager.connectionState.collectAsState()
+    val bleSecurity by bleManager.securityState.collectAsState()
     val context = LocalContext.current
     val moduleVm: ComponentDashboardViewModel = viewModel(
         factory = remember(session, bleManager) {
@@ -122,10 +125,11 @@ fun DashboardScreen(
     )
     val moduleState by moduleVm.uiState.collectAsState()
     LaunchedEffect(Unit) { moduleVm.loadPersisted() }
-    LaunchedEffect(session?.connectionState, session?.transport) {
+    LaunchedEffect(session?.connectionState, session?.transport, connection, bleSecurity) {
         moduleVm.onConnectionChanged()
     }
-    val bleReady = connection == BleConnectionState.Ready
+    val bleReady = (session == null || session.transport == LabTransport.BLUETOOTH) &&
+        connection == BleConnectionState.Ready && bleSecurity == BleSecurityState.Authorized
     val wifiReady = session?.let {
         it.transport == LabTransport.WIFI_LAB &&
             it.connectionState == LabConnectionState.AUTHORIZED && it.wifiReady
@@ -169,12 +173,12 @@ fun DashboardScreen(
     val rawLightMeasurement = ComponentTelemetryCodec.find(readings, "ambient_light_raw")
         ?.takeIf { it.valid && it.value.isFinite() }
 
-    val currentTemp = tempMeasurement?.value ?: 24.5f
-    val currentHumid = humidMeasurement?.value ?: 55f
+    val currentTemp = tempMeasurement?.value ?: 0f
+    val currentHumid = humidMeasurement?.value ?: 0f
     val hasRealTemp = tempMeasurement != null
 
     val climateState = when {
-        !ready -> CompiMascotState.OFFLINE
+        !ready || !hasRealTemp -> CompiMascotState.OFFLINE
         currentTemp < 18f -> CompiMascotState.COLD
         currentTemp > 30f -> CompiMascotState.HOT
         else -> CompiMascotState.COMFORTABLE
@@ -182,6 +186,7 @@ fun DashboardScreen(
 
     val climateLabel = when {
         !ready -> "ESP32 sin conexión"
+        !hasRealTemp -> "Sin datos recientes"
         currentTemp < 18f -> "Hace frío ❄️"
         currentTemp > 30f -> "Hace calor ☀️"
         else -> "Ambiente agradable 😌"
@@ -189,6 +194,7 @@ fun DashboardScreen(
 
     val mascotSpeech = when {
         !ready -> "Conecta tu ESP32 para monitorear"
+        !hasRealTemp -> "Esperando lectura válida del sensor"
         currentTemp < 18f -> "¡Siento un poco de frío!"
         currentTemp > 30f -> "¡Uff, que calor hace!"
         else -> "¡Qué rico ambiente tenemos hoy!"
@@ -293,7 +299,7 @@ fun DashboardScreen(
                     }
 
                     CompiBadge(
-                        label = if (telemetryLive) "En vivo" else "Guardado",
+                        label = if (telemetryLive) "En vivo" else "Sin datos vivos",
                         type = if (telemetryLive) CompiBadgeType.LIVE else CompiBadgeType.STALE
                     )
                 }
@@ -308,7 +314,7 @@ fun DashboardScreen(
                         modifier = Modifier.size(140.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularClimateGauge(
+                        if (hasRealTemp) CircularClimateGauge(
                             temperature = currentTemp,
                             minTemp = 10f,
                             maxTemp = 40f
@@ -353,7 +359,7 @@ fun DashboardScreen(
         }
 
         // Interactive Telemetry Chart
-        TelemetryChartSection(moduleState = moduleState, live = ready)
+        TelemetryChartSection(moduleState = moduleState, live = telemetryLive)
 
         // 2-Column Compact Metric Grid
         Text(
@@ -400,8 +406,8 @@ fun DashboardScreen(
             // RGB Ambient Card
             CompactMetricCard(
                 title = "RGB Ambiental",
-                value = if (ready) "Automático" else "Apagado",
-                subtitle = "Sincronizado ESP32",
+                value = if (ready) "Consultar" else "Sin enlace",
+                subtitle = "Estado en control RGB",
                 icon = Icons.Default.ColorLens,
                 iconTint = CompiTokens.Colors.PrimaryViolet,
                 modifier = Modifier.weight(1f),
@@ -492,7 +498,7 @@ private fun TelemetryChartSection(
     moduleState: ComponentDashboardState,
     live: Boolean
 ) {
-    var selectedInterval by remember { mutableStateOf("15m") }
+    var selectedInterval by rememberSaveable { mutableStateOf("15m") }
     val samples = moduleState.series("dht11", "temperature")
         .ifEmpty { moduleState.series("dht22", "temperature") }
     var touchedSample by remember { mutableStateOf<TelemetrySample?>(null) }
@@ -531,7 +537,7 @@ private fun TelemetryChartSection(
                     listOf("15m", "1h", "6h", "24h").forEach { interval ->
                         FilterChip(
                             selected = selectedInterval == interval,
-                            onClick = { selectedInterval = interval },
+                            onClick = { selectedInterval = interval; touchedSample = null },
                             label = { Text(interval, fontSize = 11.sp) }
                         )
                     }

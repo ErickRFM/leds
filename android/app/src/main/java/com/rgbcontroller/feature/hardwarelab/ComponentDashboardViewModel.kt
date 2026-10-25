@@ -16,6 +16,11 @@ import com.rgbcontroller.core.components.status.ComponentStatusRepository
 import com.rgbcontroller.core.components.status.LocalDesiredComponent
 import com.rgbcontroller.core.components.status.LocalDesiredConfig
 import com.rgbcontroller.core.data.DataStoreComponentStatusStorage
+import com.rgbcontroller.core.model.RgbDeviceCommand
+import com.rgbcontroller.core.model.RgbReadback
+import com.rgbcontroller.core.ble.MediaControlProtocol
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import com.rgbcontroller.core.export.ExportParseResult
 import com.rgbcontroller.core.export.BoardCompatibilityEngine
 import com.rgbcontroller.core.export.BoardProfile
@@ -384,21 +389,54 @@ class ComponentDashboardViewModel(
                 // No second transport is created here.
                 val automationSink = AutomationActionSink { action ->
                     when (action) {
-                        is AutomationAction.SetRgb ->
-                            if (authorized() && session != null) {
-                                session.serialized {
-                                    if (!authorized()) false else {
-                                        client.setRgbConfirmed(
-                                            session.key, action.red, action.green,
-                                            action.blue, action.brightness
+                        is AutomationAction.SetRgb -> when {
+                            wifiAuthorized() && session != null -> session.serialized {
+                                if (!wifiAuthorized()) false else {
+                                    client.setRgbConfirmed(
+                                        session.key, action.red, action.green,
+                                        action.blue, action.brightness
+                                    )
+                                    wifiAuthorized()
+                                }
+                            }
+                            bleAuthorized() && bleManager != null -> {
+                                val revision = bleManager.stateRevision.value
+                                bleManager.writeCommand(RgbDeviceCommand.set(
+                                    action.red, action.green, action.blue, action.brightness
+                                ))
+                                // BLE queue acceptance is not execution. Wait for a NEW
+                                // authenticated controller STATE notification.
+                                withTimeoutOrNull(4_000L) {
+                                    bleManager.stateRevision.first { it > revision &&
+                                        bleAuthorized() && RgbReadback.confirmsSet(
+                                            action.red, action.green, action.blue,
+                                            action.brightness, bleManager.rgbState.value
                                         )
-                                        true
+                                    }
+                                    true
+                                } == true
+                            }
+                            else -> false
+                        }
+                        is AutomationAction.UpdateOled -> {
+                            if (MediaControlProtocol.request("OLD", "auto", "TEXT", action.text) == null)
+                                false
+                            else when {
+                                wifiAuthorized() && session != null -> session.serialized {
+                                    if (!wifiAuthorized()) false else {
+                                        client.showOled(session.key, "text", action.text)
+                                        val state = client.oledStatus(session.key)
+                                        wifiAuthorized() && state.ready && state.scene == "text"
                                     }
                                 }
-                            } else {
-                                false
+                                bleAuthorized() && bleManager != null -> {
+                                    val reply = bleManager.mediaCommand("OLD", "TEXT", action.text)
+                                    bleAuthorized() && reply.result == "OK" &&
+                                        reply.oled?.let { it.ready && it.scene == "text" } == true
+                                }
+                                else -> false
                             }
-                        is AutomationAction.UpdateOled -> false
+                        }
                         is AutomationAction.Notify -> true
                     }
                 }

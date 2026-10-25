@@ -9,6 +9,7 @@ import com.rgbcontroller.core.components.automation.AutomationEvent
 import com.rgbcontroller.core.components.automation.AutomationEventStatus
 import com.rgbcontroller.core.components.automation.AutomationRule
 import com.rgbcontroller.core.components.automation.AutomationRulesCodec
+import com.rgbcontroller.core.components.automation.DefaultAutomationRules
 import com.rgbcontroller.core.components.alerts.AlertEngine
 import com.rgbcontroller.core.components.status.ComponentStatusRepository
 import com.rgbcontroller.core.components.telemetry.TelemetryProvenance
@@ -44,6 +45,14 @@ class AutomationEngineTest {
         "auto_rgb", "dht22", "temperature", AlertComparison.ABOVE, 35f, hysteresis = 1f,
         action = AutomationAction.SetRgb(255, 0, 0, 100), enabled = enabled
     )
+
+    @Test fun defaultTemperatureNoticeIncludesConnectedDht11() {
+        val rules = DefaultAutomationRules.defaults()
+        assertTrue(rules.any { it.componentId == "dht11" &&
+            it.measurementType == "temperature" && it.enabled })
+        assertTrue(rules.any { it.componentId == "dht22" &&
+            it.measurementType == "temperature" && it.enabled })
+    }
 
     @Test fun notifyRuleIsRecordedInline() {
         val outcome = AutomationEngine.evaluate(listOf(notifyRule()), latest(40f), emptyMap(), 1000L)

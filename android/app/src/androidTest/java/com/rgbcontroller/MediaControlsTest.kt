@@ -19,6 +19,18 @@ import org.junit.Test
 class MediaControlsTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun unauthorizedAudioNeverClaimsActiveHardware() {
+        compose.setContent {
+            MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) {
+                CompiAudioPlayerCard(false,
+                    AudioHardwareState(true, 1, 24, "PLAYING", 1, 20, false, true),
+                    false, null, { _, _ -> error("Cannot control unauthenticated hardware") })
+            } }
+        }
+        compose.onNodeWithTag("dfplayer_status").assertTextContains("Conecta y autoriza", substring = true)
+        compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
+    }
+
     @Test fun physicalAudioCannotPlayWithoutConfirmedSd() {
         compose.setContent {
             MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) {

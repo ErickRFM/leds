@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
+import com.rgbcontroller.core.ble.BleSecurityState
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.ui.CompiInlineMessage
@@ -30,6 +31,7 @@ fun SettingsScreen(
     onOpenPrograms: () -> Unit
 ) {
     val connection by bleManager.connectionState.collectAsState()
+    val security by bleManager.securityState.collectAsState()
     val frame by bleManager.deviceState.collectAsState()
     val theme by preferencesRepository.themeMode.collectAsState(initial = "SYSTEM")
     val scope = rememberCoroutineScope()
@@ -65,7 +67,8 @@ fun SettingsScreen(
         ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(when (val state = connection) {
-                    BleConnectionState.Ready -> "●  ESP32 listo por Bluetooth"
+                    BleConnectionState.Ready -> if (security == BleSecurityState.Authorized)
+                        "●  ESP32 autorizado por Bluetooth" else "ESP32 conectado · falta autorización"
                     BleConnectionState.Scanning -> "Buscando controladores"
                     BleConnectionState.Connecting -> "Estableciendo conexión…"
                     BleConnectionState.Discovering -> "Sincronizando estado…"
@@ -76,7 +79,7 @@ fun SettingsScreen(
                     CompiInlineMessage((connection as BleConnectionState.Error).message, isError = true)
                 }
                 OutlinedButton(
-                    enabled = connection == BleConnectionState.Ready,
+                    enabled = connection == BleConnectionState.Ready && security == BleSecurityState.Authorized,
                     onClick = { bleManager.writeCommand("GET") }
                 ) { Text("Consultar estado actual") }
                 TextButton(onClick = { showTechnical = !showTechnical }) {
@@ -100,7 +103,7 @@ fun SettingsScreen(
 
         Text("¿No encuentras el dispositivo?", style = MaterialTheme.typography.titleMedium)
         CompiInlineMessage("Comprueba alimentación y Bluetooth. Concede los permisos de la app, " +
-            "abre Centro → Dispositivos y busca RGB-ESP32. Si no aparece, revisa firmware y UUID.")
+            "abre Conectar → Bluetooth y busca RGB-ESP32. Si no aparece, revisa firmware y UUID.")
         Text("Wi-Fi de laboratorio está limitado a compilaciones debug y no implica una conexión " +
             "segura de producción.", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)

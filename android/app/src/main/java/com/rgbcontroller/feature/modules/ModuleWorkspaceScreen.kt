@@ -101,6 +101,7 @@ fun ModuleWorkspaceScreen(
     var showLibrary by rememberSaveable { mutableStateOf(false) }
     var openedId by rememberSaveable { mutableStateOf<String?>(null) }
     var previousOpenedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var stationSection by rememberSaveable { mutableStateOf("Resumen") }
     var editingId by remember { mutableStateOf<String?>(null) }
     var applyMessage by remember { mutableStateOf<String?>(null) }
     var ldrCalibrationMessage by remember { mutableStateOf<String?>(null) }
@@ -115,8 +116,10 @@ fun ModuleWorkspaceScreen(
     val labClient = remember(context) { LocalLabClient(context.applicationContext) }
     val mediaAuthorized = wifiAuthorized || bleAuthorized
     val media = rememberHardwareMediaControls(session, bleManager, labClient, mediaAuthorized,
-        audioVisible = openedId in setOf("compi_dfplayer", "dfplayer_mp3"),
-        oledVisible = openedId in setOf("compi_station", "ssd1306_oled"))
+        audioVisible = openedId in setOf("compi_dfplayer", "dfplayer_mp3") ||
+            (openedId == "compi_station" && stationSection in setOf("Resumen", "Audio")),
+        oledVisible = openedId == "ssd1306_oled" ||
+            (openedId == "compi_station" && stationSection in setOf("Resumen", "OLED")))
 
     LaunchedEffect(Unit) {
         vm.loadPersisted()
@@ -184,7 +187,6 @@ fun ModuleWorkspaceScreen(
                 }
             }
             if (id == "compi_station") {
-                var stationSection by rememberSaveable { mutableStateOf("Resumen") }
                 Column(Modifier.fillMaxSize()) {
                     Row(
                         modifier = Modifier
@@ -202,6 +204,18 @@ fun ModuleWorkspaceScreen(
                         }
                     }
 
+                    Text(
+                        text = when (stationSection) {
+                            "Ambiente" -> "Temperatura y humedad · datos confirmados por sensores"
+                            "Iluminación" -> "RGB ambiental y luz · control y calibración"
+                            "OLED" -> "Expresiones y estados de la pantalla física"
+                            "Audio" -> "Reproducción y avisos · salida DFPlayer"
+                            else -> "Resumen de dispositivos y telemetría de la estación"
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     LazyColumn(
                         modifier = Modifier.fillMaxSize().testTag("compi_station_dashboard"),
                         contentPadding = PaddingValues(16.dp),
@@ -288,7 +302,7 @@ fun ModuleWorkspaceScreen(
                             item(key = "station_rgb_shortcut") {
                                 // Route to the audited BLE/Wi-Fi RGB module instead of
                                 // rendering local sliders that cannot drive hardware.
-                                OutlinedCard(
+                                Card(
                                     onClick = {
                                         previousOpenedId = openedId
                                         openedId = "led_rgb"
@@ -331,7 +345,7 @@ fun ModuleWorkspaceScreen(
 
                         if (stationSection == "Resumen" || stationSection == "Audio") {
                             item {
-                                OutlinedCard(
+                                Card(
                                     onClick = {
                                         previousOpenedId = openedId
                                         openedId = "compi_dfplayer"
@@ -357,7 +371,7 @@ fun ModuleWorkspaceScreen(
                     }
                 }
             } else if (id == "compi_dfplayer") {
-                var showWiring by rememberSaveable { mutableStateOf(false) }
+                var showWiring by rememberSaveable(id) { mutableStateOf(false) }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize().testTag("dfplayer_module_detail"),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 40.dp),
@@ -415,7 +429,7 @@ fun ModuleWorkspaceScreen(
                         }
                     }
                     item(key = "dfplayer_wiring") {
-                        OutlinedCard(
+                        Card(
                             onClick = { showWiring = !showWiring },
                             modifier = Modifier.fillMaxWidth().testTag("dfplayer_wiring_toggle"),
                             shape = RoundedCornerShape(20.dp)
@@ -513,7 +527,7 @@ fun ModuleWorkspaceScreen(
                             }
                         }
                         item(key = "environmental_audio_library") {
-                            OutlinedCard(
+                            Card(
                                 onClick = {
                                     previousOpenedId = openedId
                                     openedId = "compi_dfplayer"
@@ -646,7 +660,7 @@ fun ModuleWorkspaceScreen(
                 }
             }
             item {
-                OutlinedCard(onClick = onConnect,
+                Card(onClick = onConnect,
                     modifier = Modifier.fillMaxWidth().testTag("modules_connection")) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1152,8 +1166,8 @@ private fun ModuleReadings(
             }
         }
         "ldr_light" -> {
-            var darkReference by remember { mutableStateOf<Int?>(null) }
-            var brightReference by remember { mutableStateOf<Int?>(null) }
+            var darkReference by rememberSaveable { mutableStateOf<Int?>(null) }
+            var brightReference by rememberSaveable { mutableStateOf<Int?>(null) }
             var showCalibrationHelp by rememberSaveable { mutableStateOf(false) }
             val light = if (active && live) reading("ambient_light")?.value else null
             val raw = if (active && live) reading("ambient_light_raw")?.value?.toInt() else null
@@ -1181,11 +1195,13 @@ private fun ModuleReadings(
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(36.dp))
                         }
-                        LinearProgressIndicator(
-                            progress = { (light ?: 0f).coerceIn(0f, 100f) / 100f },
-                            modifier = Modifier.fillMaxWidth().height(9.dp)
-                                .testTag("ldr_calibrated_level")
-                        )
+                        if (light != null) {
+                            LinearProgressIndicator(
+                                progress = { light.coerceIn(0f, 100f) / 100f },
+                                modifier = Modifier.fillMaxWidth().height(9.dp)
+                                    .testTag("ldr_calibrated_level")
+                            )
+                        }
                         Text(
                             when {
                                 !live -> "Sin telemetría en vivo; no se presentan valores almacenados como actuales."

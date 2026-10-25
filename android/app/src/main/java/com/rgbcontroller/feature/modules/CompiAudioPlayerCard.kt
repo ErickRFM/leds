@@ -3,6 +3,7 @@ package com.rgbcontroller.feature.modules
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -21,17 +22,21 @@ fun CompiAudioPlayerCard(
     feedback: String?,
     onCommand: (String, String?) -> Unit
 ) {
-    var trackText by remember { mutableStateOf("1") }
-    var volume by remember(hardware?.modulePresent, hardware?.volume) { mutableFloatStateOf((hardware?.volume?.takeIf { it >= 0 } ?: 15).toFloat()) }
+    var trackText by rememberSaveable { mutableStateOf("1") }
+    // Preserve slider edits across automatic UART polling. Only initialize the
+    // local edit when module identity changes, never on each volume readback.
+    var volume by remember(hardware?.modulePresent) {
+        mutableFloatStateOf((hardware?.volume?.takeIf { it >= 0 } ?: 15).toFloat())
+    }
     val available = authorized && hardware?.modulePresent == true && hardware?.sdPresent == 1 && !busy
     val sdCount = hardware?.tracks ?: -1
     Card(Modifier.fillMaxWidth().testTag("dfplayer_physical_controls"), shape = RoundedCornerShape(22.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Reproductor Compi", style = MaterialTheme.typography.titleLarge)
-                Text(if (hardware?.modulePresent == true) "● Conectado" else "○ Sin respuesta",
+                Text(if (!authorized) "○ Sin autorización" else if (hardware?.modulePresent == true) "● UART confirmado" else "○ Sin respuesta",
                     style = MaterialTheme.typography.labelMedium,
-                    color = if (hardware?.modulePresent == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                    color = if (authorized && hardware?.modulePresent == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text("DFPlayer Mini · microSD", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(when {
@@ -45,7 +50,7 @@ fun CompiAudioPlayerCard(
                 else -> "MicroSD detectada · ${sdCount.takeIf { it >= 0 }?.toString() ?: "—"} archivos reportados"
             }, modifier = Modifier.testTag("dfplayer_status"))
             Text(when {
-                hardware == null || !hardware.modulePresent || hardware.playback == "UNKNOWN" -> "Reproducción sin confirmar"
+                !authorized || hardware == null || !hardware.modulePresent || hardware.playback == "UNKNOWN" -> "Reproducción sin confirmar"
                 hardware.playing -> "Módulo reporta reproducción · índice SD ${hardware.track.takeIf { it >= 0 } ?: "—"}"
                 hardware.playback == "PAUSED" -> "Módulo reporta pausa"
                 hardware.playback == "STOPPED" -> "Módulo reporta detenido"
@@ -86,6 +91,9 @@ fun CompiAudioPlayerCard(
                     enabled = authorized && hardware?.fresh == true && !busy,
                     modifier = Modifier.testTag("dfplayer_voice"))
             }
+            Text("Estado mostrado únicamente cuando el ESP32 está autorizado; una orden aceptada no certifica sonido.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("La microSD se administra desde el módulo; el teléfono no transfiere pistas por UART.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             feedback?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             OutlinedButton(onClick = { onCommand("GET", null) }, enabled = authorized && !busy, modifier = Modifier.fillMaxWidth()) {
