@@ -27,7 +27,10 @@ fun EffectsScreen(bleManager: BleManager, link: RgbControlLink? = null, embedded
         if (link != null) link.sendCommand(command) else bleManager.writeCommand(command)
     }
     var speed by remember { mutableFloatStateOf(120f) }
-    LaunchedEffect(state?.speed) { state?.let { speed = it.speed.toFloat() } }
+    var speedEditing by remember { mutableStateOf(false) }
+    LaunchedEffect(state?.speed, ready) {
+        if (!speedEditing && ready) state?.let { speed = it.speed.toFloat() }
+    }
     val effects = listOf(
         EffectItem("RAINBOW", "Arcoíris", "Transición continua entre colores"),
         EffectItem("BREATHE", "Respiración", "Luz que aumenta y disminuye suavemente"),
@@ -50,7 +53,7 @@ fun EffectsScreen(bleManager: BleManager, link: RgbControlLink? = null, embedded
                 Spacer(Modifier.height(12.dp))
                 Text("Intervalo · ${speed.toInt()} ms", style = MaterialTheme.typography.labelLarge)
                 Slider(
-                    value = speed, onValueChange = { speed = it },
+                    value = speed, onValueChange = { speed = it; speedEditing = true },
                     valueRange = 10f..500f, enabled = ready
                 )
             }
@@ -72,7 +75,10 @@ fun EffectsScreen(bleManager: BleManager, link: RgbControlLink? = null, embedded
                     }
                     Spacer(Modifier.width(12.dp))
                     Button(
-                        onClick = { send(RgbDeviceCommand.effect(effect.id, speed.toInt())) },
+                        onClick = {
+                            send(RgbDeviceCommand.effect(effect.id, speed.toInt()))
+                            speedEditing = false
+                        },
                         enabled = ready,
                         shape = RoundedCornerShape(14.dp)
                     ) { Text(if (active) "Activo" else "Usar") }
