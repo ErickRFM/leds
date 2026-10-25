@@ -75,7 +75,7 @@ fun OledInteractiveModule(
     modifier: Modifier = Modifier
 ) {
     val selectedExpression = confirmed?.scene ?: "unknown"
-    var contrastLevel by remember(confirmed?.contrast) { mutableFloatStateOf((confirmed?.contrast ?: 128).toFloat()) }
+    var contrastLevel by remember(confirmed?.ready) { mutableFloatStateOf((confirmed?.contrast ?: 128).toFloat()) }
     val isInverted = confirmed?.inverted == true
     val isAnimActive = confirmed?.paused == false
     val canControl = isAuthorized && confirmed?.ready == true
