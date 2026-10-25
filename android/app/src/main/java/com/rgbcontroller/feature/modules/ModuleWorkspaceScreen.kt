@@ -101,6 +101,7 @@ fun ModuleWorkspaceScreen(
     var showLibrary by rememberSaveable { mutableStateOf(false) }
     var openedId by rememberSaveable { mutableStateOf<String?>(null) }
     var previousOpenedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var stationSection by rememberSaveable { mutableStateOf("Resumen") }
     var editingId by remember { mutableStateOf<String?>(null) }
     var applyMessage by remember { mutableStateOf<String?>(null) }
     var ldrCalibrationMessage by remember { mutableStateOf<String?>(null) }
@@ -115,8 +116,10 @@ fun ModuleWorkspaceScreen(
     val labClient = remember(context) { LocalLabClient(context.applicationContext) }
     val mediaAuthorized = wifiAuthorized || bleAuthorized
     val media = rememberHardwareMediaControls(session, bleManager, labClient, mediaAuthorized,
-        audioVisible = openedId in setOf("compi_dfplayer", "dfplayer_mp3"),
-        oledVisible = openedId in setOf("compi_station", "ssd1306_oled"))
+        audioVisible = openedId in setOf("compi_dfplayer", "dfplayer_mp3") ||
+            (openedId == "compi_station" && stationSection in setOf("Resumen", "Audio")),
+        oledVisible = openedId == "ssd1306_oled" ||
+            (openedId == "compi_station" && stationSection in setOf("Resumen", "OLED")))
 
     LaunchedEffect(Unit) {
         vm.loadPersisted()
@@ -184,7 +187,6 @@ fun ModuleWorkspaceScreen(
                 }
             }
             if (id == "compi_station") {
-                var stationSection by rememberSaveable(id) { mutableStateOf("Resumen") }
                 Column(Modifier.fillMaxSize()) {
                     Row(
                         modifier = Modifier
