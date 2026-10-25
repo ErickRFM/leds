@@ -84,7 +84,7 @@ fun RgbLightingPanel(
 
     Card(
         shape = CompiTokens.Shapes.Large,
-        colors = CardDefaults.cardColors(containerColor = CompiTokens.Colors.SurfaceCard),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         modifier = modifier.fillMaxWidth()
     ) {
         Column(
@@ -110,12 +110,12 @@ fun RgbLightingPanel(
                             text = "Iluminación RGB",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = if (isEnvironmentalMode) "Modo Automático Ambiental" else "Modo Manual",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF94A3B8)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -129,7 +129,7 @@ fun RgbLightingPanel(
             // Mode Switch Card
             Surface(
                 shape = CompiTokens.Shapes.Medium,
-                color = CompiTokens.Colors.SurfaceElevated,
+                color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -142,12 +142,12 @@ fun RgbLightingPanel(
                             text = "Modo Ambiental Automático",
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color.White
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = "El ESP32 ajusta el color según temperatura y humedad",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF94A3B8)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     Switch(
@@ -226,7 +226,7 @@ fun RgbLightingPanel(
                             Text(
                                 text = "Brillo",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = "%.0f%%".format(currentBrightness * 100f),
@@ -248,7 +248,7 @@ fun RgbLightingPanel(
                     Text(
                         text = "Presets rápidos",
                         style = MaterialTheme.typography.labelMedium,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.align(Alignment.Start)
                     )
                     Spacer(Modifier.height(8.dp))
