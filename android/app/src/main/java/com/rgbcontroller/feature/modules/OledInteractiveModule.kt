@@ -265,7 +265,7 @@ fun OledInteractiveModule(
                 items(expressions, key = { it.id }) { expr ->
                     Surface(
                         shape = CompiTokens.Shapes.Medium,
-                        color = if (selectedExpression == expr.id) CompiTokens.Colors.PrimaryVioletContainer else CompiTokens.Colors.SurfaceElevated,
+                        color = if (selectedExpression == expr.id) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier
                             .testTag("oled_expression_${expr.id}")
                             .clickable(enabled = canControl) {
@@ -273,7 +273,7 @@ fun OledInteractiveModule(
                             }
                             .border(
                                 width = 2.dp,
-                                color = if (selectedExpression == expr.id) CompiTokens.Colors.PrimaryViolet else Color.Transparent,
+                                color = if (selectedExpression == expr.id) MaterialTheme.colorScheme.primary else Color.Transparent,
                                 shape = CompiTokens.Shapes.Medium
                             )
                     ) {
