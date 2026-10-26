@@ -17,6 +17,8 @@ class EnvironmentalSpeechEngine(
     private var temperatureBand: Int? = null
     private var lightBand: Int? = null
     private var previousLight: Float? = null
+    private var pendingLightBand: Int? = null
+    private var pendingLightAt: Long = 0L
     private var lastTemperatureAt: Long = Long.MIN_VALUE
     private var lastLightAt: Long = Long.MIN_VALUE
     private var lastSampleAt: Long = Long.MIN_VALUE
@@ -25,6 +27,8 @@ class EnvironmentalSpeechEngine(
         temperatureBand = null
         lightBand = null
         previousLight = null
+        pendingLightBand = null
+        pendingLightAt = 0L
         lastTemperatureAt = Long.MIN_VALUE
         lastLightAt = Long.MIN_VALUE
         lastSampleAt = Long.MIN_VALUE
@@ -70,12 +74,20 @@ class EnvironmentalSpeechEngine(
                 1 -> if (lightPercent <= 25f) 0 else 1
                 else -> if (lightPercent <= 25f) 0 else 1
             }
-            if (previous != null && lightBand != null && lightBand != next &&
-                abs(lightPercent - previous) >= 30f && due(lastLightAt, nowMs)) {
+            if (lightBand != null && lightBand != next && pendingLightBand == null &&
+                previous != null && abs(lightPercent - previous) >= 30f) {
+                pendingLightBand = next
+                pendingLightAt = nowMs
+            }
+            if (pendingLightBand != null && next != pendingLightBand) pendingLightBand = null
+            if (lightBand != null && pendingLightBand == next &&
+                nowMs - pendingLightAt >= 1_000L && due(lastLightAt, nowMs)) {
                 events += if (next == 0) Cue.LIGHT_OFF else Cue.LIGHT_ON
                 lastLightAt = nowMs
+                lightBand = next
+                pendingLightBand = null
             }
-            lightBand = next
+            if (lightBand == null) lightBand = next
             previousLight = lightPercent
         }
         return events
