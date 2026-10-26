@@ -35,6 +35,7 @@ fun LocalAudioControls() {
     var message by remember { mutableStateOf<String?>(null) }
     var volume by remember { mutableFloatStateOf(.6f) }
     var showLibrary by remember { mutableStateOf(false) }
+    var confirmClear by remember { mutableStateOf(false) }
     fun persist() {
         prefs.edit().putString("uris", JSONArray(queue.tracks()).toString()).apply()
         revision++
@@ -58,6 +59,24 @@ fun LocalAudioControls() {
         message = if (added > 0) "$added canciones añadidas" else if (uris.isNotEmpty()) "Las canciones ya estaban añadidas o no se pudieron leer." else null
     }
     val tracks = remember(revision) { queue.tracks() }
+    if (confirmClear) {
+        AlertDialog(
+            onDismissRequest = { confirmClear = false },
+            title = { Text("Vaciar biblioteca") },
+            text = { Text("Se quitarán las canciones de Compi, pero los archivos seguirán en tu teléfono.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    player.stop()
+                    queue.clear()
+                    persist()
+                    showLibrary = false
+                    confirmClear = false
+                    message = "Biblioteca vaciada"
+                }, modifier = Modifier.testTag("phone_audio_confirm_clear")) { Text("Vaciar") }
+            },
+            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancelar") } }
+        )
+    }
     Card(Modifier.fillMaxWidth().testTag("local_audio_controls")) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Mi biblioteca", style = MaterialTheme.typography.titleMedium)
@@ -65,6 +84,9 @@ fun LocalAudioControls() {
             Text(if (tracks.isEmpty()) "Añade canciones desde tu teléfono" else "${tracks.size} canciones · ${playback.description}", style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = { importer.launch(arrayOf("audio/*")) }) { Text("Añadir canciones") }
             if (tracks.isNotEmpty()) {
+                TextButton(onClick = { confirmClear = true }, modifier = Modifier.testTag("phone_audio_clear_library")) {
+                    Text("Vaciar biblioteca")
+                }
                 TextButton(onClick = { showLibrary = !showLibrary }, modifier = Modifier.testTag("phone_audio_library_toggle")) {
                     Text(if (showLibrary) "Ocultar biblioteca" else "Ver biblioteca (${tracks.size})")
                 }
