@@ -889,6 +889,14 @@ bool oledDisplayCommand(const char* mode, const char* value, void*) {
 // Collects the freshest measurement from every active component. Returns false
 // only when the codec cannot fit the payload; an empty (but valid) list is a
 // legitimate response while no component is active.
+#if COMPI_ENABLE_DFPLAYER
+// Event identity is independent from microSD and playback success. Consumers
+// may observe the latest cue without requiring the DFPlayer to be present.
+static uint32_t environmentalVoiceEventId = 0;
+static uint8_t environmentalVoiceEventCue = 0;
+static uint32_t environmentalVoiceEventAt = 0;
+#endif
+
 bool collectComponentTelemetry(char* output, size_t capacity, void*) {
   esp32core::Measurement entries[8];
   size_t count = 0;
@@ -916,7 +924,24 @@ bool collectComponentTelemetry(char* output, size_t capacity, void*) {
     entries[count++] = ldrModule.lightReading();
   }
 #endif
-  return esp32core::SensorTelemetryCodec::encode(entries, count, output, capacity);
+  if (!esp32core::SensorTelemetryCodec::encode(entries, count, output, capacity)) return false;
+#if COMPI_ENABLE_DFPLAYER
+  // Preserve the existing telemetry schema while appending a bounded event.
+  // The event id increments only when the policy detects a new cue, never on poll.
+  const size_t length = std::strlen(output);
+  if (environmentalVoiceEventId != 0 && length >= 1 && output[length - 1] == '}') {
+    const int written = std::snprintf(output + length - 1, capacity - length + 1,
+        ",\"voiceEvent\":{\"id\":%lu,\"cue\":%u,\"atMs\":%lu}}",
+        static_cast<unsigned long>(environmentalVoiceEventId),
+        static_cast<unsigned>(environmentalVoiceEventCue),
+        static_cast<unsigned long>(environmentalVoiceEventAt));
+    if (written < 0 || static_cast<size_t>(written) >= capacity - length + 1) {
+      output[length - 1] = '}';
+      output[length] = '\0';
+    }
+  }
+#endif
+  return true;
 }
 
 // Authoritative runtime component status. The firmware owns every pin; this
@@ -1709,9 +1734,7 @@ void loop() {
     dfplayerRuntime.consume(static_cast<uint8_t>(dfplayerSerial.read()),now);
   dfplayerRuntime.tick(now);
   const auto voicePlayerState=dfplayerRuntime.snapshot(now);
-  if (automaticVoiceEnabled && voicePlayerState.modulePresent &&
-      voicePlayerState.sdPresent==1 &&
-      std::strcmp(voicePlayerState.playback,"STOPPED")==0 &&
+  if (automaticVoiceEnabled &&
       static_cast<uint32_t>(now - lastVoiceSampleAt) >= 250u) {
     lastVoiceSampleAt = now;
     esp32core::VoiceSample voiceSample{};
@@ -1735,7 +1758,13 @@ void loop() {
 #endif
     const auto cue = voicePolicy.evaluate(voiceSample, now);
     if (cue != esp32core::VoiceCue::None) {
-      dfplayerTrack(static_cast<uint16_t>(cue));
+      ++environmentalVoiceEventId;
+      environmentalVoiceEventCue = static_cast<uint8_t>(cue);
+      environmentalVoiceEventAt = now;
+      if (voicePlayerState.modulePresent && voicePlayerState.sdPresent == 1 &&
+          std::strcmp(voicePlayerState.playback, "STOPPED") == 0) {
+        dfplayerTrack(static_cast<uint16_t>(cue));
+      }
     }
   }
 #endif
