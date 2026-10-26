@@ -26,10 +26,10 @@ class EnvironmentalVoicePolicy {
         std::isfinite(sample.lightPercent) && sample.lightPercent >= 0.0f &&
         sample.lightPercent <= 100.0f;
     if (validTemperature) {
-      if (sample.temperatureC >= 31.0f) hot_ = true;
-      else if (sample.temperatureC <= 29.0f) hot_ = false;
-      if (sample.temperatureC <= 16.0f) cold_ = true;
-      else if (sample.temperatureC >= 18.0f) cold_ = false;
+      if (sample.temperatureC >= 26.5f) hot_ = true;
+      else if (sample.temperatureC <= 25.5f) hot_ = false;
+      if (sample.temperatureC <= 19.5f) cold_ = true;
+      else if (sample.temperatureC >= 20.5f) cold_ = false;
     }
     if (validLight) {
       if (sample.lightPercent <= 20.0f) dark_ = true;
