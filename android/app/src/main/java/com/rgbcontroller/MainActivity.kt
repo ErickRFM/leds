@@ -24,6 +24,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.DisposableEffect
 import com.rgbcontroller.core.voice.CompiVoiceController
+import com.rgbcontroller.core.ble.BleConnectionState
+import com.rgbcontroller.core.ble.BleSecurityState
+import com.rgbcontroller.core.wifi.LabConnectionState
+import com.rgbcontroller.core.wifi.LabTransport
+import kotlinx.coroutines.delay
 import com.rgbcontroller.core.wifi.CompiLabSession
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
@@ -154,6 +159,26 @@ fun MainAppNavHost(
             value("temperature"), value("ambient_light"),
             liveTelemetry?.receivedAtMs ?: 0L, System.currentTimeMillis()
         )
+    }
+    val bleConnection by bleManager.connectionState.collectAsState()
+    val bleSecurity by bleManager.securityState.collectAsState()
+    val wifiConnection = session.connectionState
+    val transport = session.transport
+    LaunchedEffect(bleConnection, bleSecurity, wifiConnection, transport, session.revision) {
+        val authorized = when (transport) {
+            LabTransport.BLUETOOTH -> bleConnection == BleConnectionState.Ready &&
+                bleSecurity == BleSecurityState.Authorized
+            LabTransport.WIFI_LAB -> wifiConnection == LabConnectionState.AUTHORIZED &&
+                session.wifiReady
+            else -> false
+        }
+        dashboardVm.onConnectionChanged()
+        if (authorized) {
+            while (true) {
+                delay(3_000L)
+                dashboardVm.refresh()
+            }
+        }
     }
     val theme by preferencesRepository.themeMode.collectAsState(initial = "SYSTEM")
     val verifiedAddress by bleManager.connectedAddress.collectAsState()
