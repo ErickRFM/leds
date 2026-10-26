@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
 import com.rgbcontroller.core.ble.BleSecurityState
 import com.rgbcontroller.core.ble.BleManager
+import com.rgbcontroller.core.voice.CompiVoiceForegroundService
 import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.ui.CompiInlineMessage
 import com.rgbcontroller.core.ui.CompiModuleCard
@@ -29,6 +30,7 @@ fun SettingsScreen(
     bleManager: BleManager,
     preferencesRepository: PreferencesRepository,
     onVoiceTest: () -> Boolean = { false },
+    onBackgroundVoiceChange: (Boolean) -> Boolean = { false },
     onOpenHub: () -> Unit,
     onOpenPrograms: () -> Unit
 ) {
@@ -42,6 +44,7 @@ fun SettingsScreen(
     }
     var phoneVoiceEnabled by remember { mutableStateOf(voicePrefs.getBoolean("phone_enabled", false)) }
     var voiceTestMessage by remember { mutableStateOf<String?>(null) }
+    var backgroundVoice by remember { mutableStateOf(CompiVoiceForegroundService.running) }
     var phoneVolume by remember { mutableFloatStateOf(voicePrefs.getInt("phone_volume", 100).toFloat()) }
     var phoneRate by remember { mutableFloatStateOf(voicePrefs.getInt("phone_rate", 100).toFloat()) }
     val scope = rememberCoroutineScope()
@@ -133,6 +136,22 @@ fun SettingsScreen(
                     phoneRate = it
                     voicePrefs.edit().putInt("phone_rate", it.toInt()).apply()
                 }, valueRange = 70f..130f, modifier = Modifier.testTag("voice_phone_rate"))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Avisos en segundo plano", style = MaterialTheme.typography.titleSmall)
+                        Text("Mantiene una notificación visible y consulta el ESP32 conectado.",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(checked = backgroundVoice, onCheckedChange = { enabled ->
+                        val accepted = onBackgroundVoiceChange(enabled)
+                        if (accepted) {
+                            backgroundVoice = enabled
+                            voiceTestMessage = null
+                        } else {
+                            voiceTestMessage = "Android impidió iniciar el servicio. Revisa permisos y conexión."
+                        }
+                    }, modifier = Modifier.testTag("voice_background_enabled"))
+                }
                 OutlinedButton(onClick = {
                     voiceTestMessage = if (onVoiceTest()) "Reproduciendo prueba de voz."
                         else "La voz española todavía no está disponible en Android."
