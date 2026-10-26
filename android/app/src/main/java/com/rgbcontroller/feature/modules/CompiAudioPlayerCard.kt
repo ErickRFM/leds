@@ -49,6 +49,19 @@ fun CompiAudioPlayerCard(
                 modifier = Modifier.weight(1f).testTag("audio_output_dfplayer")
             )
         }
+        Text(
+            when {
+                !authorized -> "DFPlayer · conexión no autorizada"
+                hardware == null -> "DFPlayer · consultando el ESP32"
+                !hardware.modulePresent -> "DFPlayer · sin respuesta UART"
+                hardware.sdPresent == 0 -> "DFPlayer conectado · sin microSD"
+                hardware.sdPresent == 1 -> "DFPlayer conectado · microSD detectada"
+                else -> "DFPlayer conectado · microSD sin confirmar"
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.testTag("dfplayer_overview_status")
+        )
         if (output == "PHONE") {
             LocalAudioControls()
         } else {
