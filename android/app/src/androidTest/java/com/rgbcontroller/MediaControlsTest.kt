@@ -27,6 +27,7 @@ class MediaControlsTest {
                     false, null, { _, _ -> error("Cannot control unauthenticated hardware") })
             } }
         }
+        compose.onNodeWithTag("audio_output_dfplayer").performClick()
         compose.onNodeWithTag("dfplayer_status").assertTextContains("Conecta y autoriza", substring = true)
         compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
     }
@@ -39,6 +40,7 @@ class MediaControlsTest {
                     false, null, { _, _ -> error("No command may be sent without SD") })
             } }
         }
+        compose.onNodeWithTag("audio_output_dfplayer").performClick()
         compose.onNodeWithTag("dfplayer_status").assertTextEquals("MicroSD ausente.")
         compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
     }
@@ -51,6 +53,7 @@ class MediaControlsTest {
                     false, null, { _, _ -> error("No playback without UART response") })
             } }
         }
+        compose.onNodeWithTag("audio_output_dfplayer").performClick()
         compose.onNodeWithTag("dfplayer_status").assertTextContains("TX14", substring = true)
         compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
     }
@@ -63,6 +66,7 @@ class MediaControlsTest {
                     false, null, { _, _ -> error("No playback for empty SD") })
             } }
         }
+        compose.onNodeWithTag("audio_output_dfplayer").performClick()
         compose.onNodeWithTag("dfplayer_status").assertTextContains("0 archivos", substring = true)
         compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
     }
@@ -76,6 +80,7 @@ class MediaControlsTest {
                     false, null, { verb, value -> sent = verb to value })
             } }
         }
+        compose.onNodeWithTag("audio_output_dfplayer").performClick()
         compose.onNodeWithTag("dfplayer_play").performScrollTo().performClick()
         compose.runOnIdle { assertEquals("PLAY" to "1", sent) }
     }
