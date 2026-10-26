@@ -34,6 +34,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -77,7 +78,11 @@ fun OledInteractiveModule(
     modifier: Modifier = Modifier
 ) {
     val selectedExpression = confirmed?.scene ?: "unknown"
-    var contrastLevel by remember(confirmed?.ready) { mutableFloatStateOf((confirmed?.contrast ?: 128).toFloat()) }
+    var contrastLevel by remember { mutableFloatStateOf((confirmed?.contrast ?: 128).toFloat()) }
+    // Refresh the slider when the physical readback changes, not on every poll.
+    LaunchedEffect(confirmed?.contrast) {
+        confirmed?.contrast?.let { contrastLevel = it.toFloat().coerceIn(8f, 255f) }
+    }
     var showScreenTuning by rememberSaveable { mutableStateOf(false) }
     val isInverted = confirmed?.inverted == true
     val isAnimActive = confirmed?.paused == false

@@ -64,11 +64,14 @@ class DfPlayerRuntime final {
       return;
     }
     if(poll_==0 && age(now,lastCycle_)<1000 && cycleStarted_ && commandsSincePoll_<2) return;
-    if(poll_==0) {lastCycle_=now; cycleStarted_=true;}
     const uint8_t queries[]={0x3f,0x42,0x48,0x4c,0x43};
-    const uint8_t query=queries[poll_]; poll_=(poll_+1)%5;
-    commandsSincePoll_=0;
-    if(transmit(query,0,now)) waiting_=query;
+    const uint8_t query=queries[poll_];
+    if(transmit(query,0,now)) {
+      if(poll_==0) {lastCycle_=now; cycleStarted_=true;}
+      poll_=(poll_+1)%5;
+      commandsSincePoll_=0;
+      waiting_=query;
+    }
   }
   void consume(uint8_t byte,uint32_t now) {
     if(index_ && age(now,lastByte_)>100) index_=0;
@@ -114,7 +117,8 @@ class DfPlayerRuntime final {
   bool transmit(uint8_t command,uint16_t param,uint32_t now) {
     uint8_t frame[]={0x7e,0xff,6,command,0,static_cast<uint8_t>(param>>8),static_cast<uint8_t>(param),0,0,0xef};
     const uint16_t sum=static_cast<uint16_t>(0u-(0xffu+6u+command+frame[5]+frame[6]));frame[7]=sum>>8;frame[8]=sum;
-    lastSent_=now; return send_ && send_(frame,sizeof(frame),context_);
+    if(!send_ || !send_(frame,sizeof(frame),context_)) return false;
+    lastSent_=now; return true;
   }
   Send send_;void* context_;
   Pending queue_[4]{};size_t head_=0,count_=0;
