@@ -16,6 +16,7 @@ import com.rgbcontroller.core.components.telemetry.TelemetryHistory
 import com.rgbcontroller.core.components.telemetry.TelemetryHistoryLimits
 import com.rgbcontroller.core.components.telemetry.TelemetryProvenance
 import com.rgbcontroller.core.export.ProjectExportEnvelope
+import org.json.JSONObject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -265,8 +266,18 @@ class ComponentStatusRepository(
             return false
         }
         val now = clock()
+        val voiceEvent = try {
+            JSONObject(raw ?: "").optJSONObject("voiceEvent")?.let { event ->
+                val id = event.optLong("id", 0L)
+                val cue = event.optInt("cue", 0)
+                val timestamp = event.optLong("atMs", -1L)
+                if (id > 0L && cue in 1..5 && timestamp >= 0L)
+                    FirmwareVoiceEvent(id, cue, timestamp)
+                else null
+            }
+        } catch (_: org.json.JSONException) { null }
         val reported = FirmwareReportedTelemetry(current, measurements, now)
-        _state.value = _state.value.copy(firmwareTelemetry = reported, authorityError = null)
+        _state.value = _state.value.copy(firmwareTelemetry = reported, firmwareVoiceEvent = voiceEvent, authorityError = null)
         val lastKnown = LastKnownTelemetry(current, measurements, now)
         storage.saveTelemetry(lastKnown)
         val samples = TelemetryHistory.samplesFromMeasurements(
