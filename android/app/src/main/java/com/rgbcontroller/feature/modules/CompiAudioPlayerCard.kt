@@ -22,6 +22,7 @@ fun CompiAudioPlayerCard(
     feedback: String?,
     onCommand: (String, String?) -> Unit
 ) {
+    var output by rememberSaveable { mutableStateOf("PHONE") }
     var trackText by rememberSaveable { mutableStateOf("1") }
     var advancedHelp by rememberSaveable { mutableStateOf(false) }
     // Preserve slider edits across automatic UART polling. Only initialize the
@@ -31,6 +32,25 @@ fun CompiAudioPlayerCard(
     }
     val available = authorized && hardware?.modulePresent == true && hardware?.sdPresent == 1 && !busy
     val sdCount = hardware?.tracks ?: -1
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Música Compi", style = MaterialTheme.typography.titleLarge)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = output == "PHONE",
+                onClick = { output = "PHONE" },
+                label = { Text("Teléfono") },
+                modifier = Modifier.weight(1f).testTag("audio_output_phone")
+            )
+            FilterChip(
+                selected = output == "DFPLAYER",
+                onClick = { output = "DFPLAYER" },
+                label = { Text("DFPlayer") },
+                modifier = Modifier.weight(1f).testTag("audio_output_dfplayer")
+            )
+        }
+        if (output == "PHONE") {
+            LocalAudioControls()
+        } else {
     Card(Modifier.fillMaxWidth().testTag("dfplayer_physical_controls"), shape = RoundedCornerShape(22.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -107,5 +127,6 @@ fun CompiAudioPlayerCard(
             }
         }
     }
-    LocalAudioControls()
+        }
+    }
 }
