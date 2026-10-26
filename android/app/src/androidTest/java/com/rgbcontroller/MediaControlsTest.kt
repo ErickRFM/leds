@@ -11,6 +11,7 @@ import com.rgbcontroller.core.ble.AudioHardwareState
 import com.rgbcontroller.core.ble.OledHardwareState
 import com.rgbcontroller.feature.modules.CompiAudioPlayerCard
 import com.rgbcontroller.feature.modules.OledInteractiveModule
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -32,6 +33,29 @@ class MediaControlsTest {
         compose.onNodeWithTag("local_audio_controls").assertDoesNotExist()
         compose.onNodeWithTag("audio_output_phone").performClick()
         compose.onNodeWithTag("local_audio_controls").assertExists()
+    }
+
+    @Test fun phoneMusicLibraryCanSelectAndCancelClearing() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val prefs = context.getSharedPreferences("compi_local_audio_v1", 0)
+        prefs.edit().putString("uris",
+            """["content://compi.tests/song01.mp3","content://compi.tests/song02.mp3"]""")
+            .putInt("selected_index", 0).commit()
+        try {
+            compose.setContent {
+                MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) {
+                    CompiAudioPlayerCard(false, null, false, null, { _, _ -> })
+                } }
+            }
+            compose.onNodeWithTag("phone_audio_library_toggle").performScrollTo().performClick()
+            compose.onNodeWithTag("phone_audio_track_1").performClick()
+            compose.onNodeWithTag("phone_audio_clear_library").performScrollTo().performClick()
+            compose.onNodeWithText("Cancelar").performClick()
+            compose.onNodeWithTag("phone_audio_library_toggle").assertExists()
+            compose.runOnIdle { assertEquals(1, prefs.getInt("selected_index", -1)) }
+        } finally {
+            prefs.edit().clear().commit()
+        }
     }
 
     @Test fun unauthorizedAudioNeverClaimsActiveHardware() {
