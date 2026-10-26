@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     bleManager: BleManager,
     preferencesRepository: PreferencesRepository,
+    onVoiceTest: () -> Boolean = { false },
     onOpenHub: () -> Unit,
     onOpenPrograms: () -> Unit
 ) {
@@ -40,6 +41,7 @@ fun SettingsScreen(
         context.applicationContext.getSharedPreferences("compi_voice", android.content.Context.MODE_PRIVATE)
     }
     var phoneVoiceEnabled by remember { mutableStateOf(voicePrefs.getBoolean("phone_enabled", false)) }
+    var voiceTestMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     var showTechnical by rememberSaveable { mutableStateOf(false) }
 
@@ -119,6 +121,13 @@ fun SettingsScreen(
                         modifier = Modifier.testTag("voice_phone_enabled")
                     )
                 }
+                OutlinedButton(onClick = {
+                    voiceTestMessage = if (onVoiceTest()) "Reproduciendo prueba de voz."
+                        else "La voz española todavía no está disponible en Android."
+                }, modifier = Modifier.testTag("voice_test_button")) {
+                    Text("Probar voz del celular")
+                }
+                voiceTestMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 Text("Funciona mientras Compi recibe lecturas actuales y la app permanece activa. " +
                     "El audio físico del DFPlayer se controla por separado.",
                     style = MaterialTheme.typography.bodySmall,
