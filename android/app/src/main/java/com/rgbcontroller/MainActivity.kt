@@ -22,6 +22,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.DisposableEffect
+import com.rgbcontroller.core.voice.CompiVoiceController
 import com.rgbcontroller.core.wifi.CompiLabSession
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
@@ -135,6 +137,24 @@ fun MainAppNavHost(
             ComponentDashboardViewModel.factory(context.applicationContext, session, bleManager)
         }
     )
+    // One speech owner for all screens. Only live, confirmed telemetry is
+    // eligible for announcements; persisted history never triggers a voice.
+    val phoneVoice = remember(context) { CompiVoiceController(context.applicationContext) }
+    DisposableEffect(phoneVoice) { onDispose { phoneVoice.close() } }
+    val liveDashboard by dashboardVm.uiState.collectAsState()
+    val liveTelemetry = liveDashboard.firmwareTelemetry
+    LaunchedEffect(liveDashboard.deviceId, liveDashboard.connected, liveTelemetry?.receivedAtMs) {
+        val measurements = liveDashboard.authoritativeTelemetry.orEmpty()
+        fun value(type: String): Float? = measurements.firstOrNull {
+            it.type == type && it.valid && it.value.isFinite() &&
+                it.status.equals("fresh", ignoreCase = true)
+        }?.value
+        phoneVoice.accept(
+            liveDashboard.deviceId, liveDashboard.connected,
+            value("temperature"), value("light_percent"),
+            liveTelemetry?.receivedAtMs ?: 0L, System.currentTimeMillis()
+        )
+    }
     val theme by preferencesRepository.themeMode.collectAsState(initial = "SYSTEM")
     val verifiedAddress by bleManager.connectedAddress.collectAsState()
     // Persist the successful connection regardless of which Compi module is visible.
