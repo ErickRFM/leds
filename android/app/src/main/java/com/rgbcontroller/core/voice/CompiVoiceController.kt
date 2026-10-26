@@ -63,6 +63,7 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
         if (!connected || deviceId.isNullOrEmpty()) {
             tts?.stop()
             device = null
+            lastFirmwareEventId = 0L
             recentAnnouncements.clear()
             events.reset()
             return
@@ -70,6 +71,7 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
         if (device != deviceId) {
             tts?.stop()
             device = deviceId
+            lastFirmwareEventId = 0L
             recentAnnouncements.clear()
             events.reset()
         }
@@ -83,7 +85,22 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
         }
         if (!lastEnabled) events.reset()
         lastEnabled = true
-        val cues = events.evaluate(temperatureC, lightPercent, sampleAtMs, nowMs)
+        val inferred = events.evaluate(temperatureC, lightPercent, sampleAtMs, nowMs)
+        val cues = if (firmwareEventId != null && firmwareCue != null) {
+            if (lastFirmwareEventId == 0L) {
+                lastFirmwareEventId = firmwareEventId
+                emptyList()
+            } else if (firmwareEventId > lastFirmwareEventId) {
+                lastFirmwareEventId = firmwareEventId
+                when (firmwareCue) {
+                    2 -> listOf(EnvironmentalSpeechEngine.Cue.COLD)
+                    3 -> listOf(EnvironmentalSpeechEngine.Cue.HOT)
+                    4 -> listOf(EnvironmentalSpeechEngine.Cue.LIGHT_OFF)
+                    5 -> listOf(EnvironmentalSpeechEngine.Cue.LIGHT_ON)
+                    else -> emptyList()
+                }
+            } else emptyList()
+        } else inferred
         if (!initialized) return
         val engine = tts ?: return
         applyPreferences()
