@@ -348,7 +348,20 @@ fun ModuleWorkspaceScreen(
                             }
                         }
 
-                        if (stationSection == "Resumen" || stationSection == "Audio") {
+                        if (stationSection == "Audio") {
+                            item(key = "station_audio_player") {
+                                CompiAudioPlayerCard(
+                                    authorized = mediaAuthorized,
+                                    hardware = media.audio,
+                                    busy = media.busy,
+                                    feedback = media.audioMessage,
+                                    onCommand = { verb, value ->
+                                        scope.launch { media.command("AUD", verb, value) }
+                                    }
+                                )
+                            }
+                        }
+                        if (stationSection == "Resumen") {
                             item {
                                 Card(
                                     onClick = {
