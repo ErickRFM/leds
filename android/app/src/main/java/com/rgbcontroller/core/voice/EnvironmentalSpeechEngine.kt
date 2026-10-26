@@ -51,8 +51,16 @@ class EnvironmentalSpeechEngine(
         if (temperatureC != null && temperatureC.isFinite() && temperatureC in -40f..80f) {
             val previous = temperatureBand
             val next = when (previous) {
-                0 -> if (temperatureC >= 20.5f) 1 else 0
-                2 -> if (temperatureC < 25.5f) 1 else 2
+                0 -> when {
+                    temperatureC >= 26.5f -> 2
+                    temperatureC >= 20.5f -> 1
+                    else -> 0
+                }
+                2 -> when {
+                    temperatureC < 19.5f -> 0
+                    temperatureC < 25.5f -> 1
+                    else -> 2
+                }
                 else -> when {
                     temperatureC < 19.5f -> 0
                     temperatureC >= 26.5f -> 2
