@@ -129,5 +129,12 @@ int main() {
   assert(empty.snapshot(330).tracks==0);
   assert(!empty.command("play",1,340));
   assert(empty.command("volume",10,340));
+  // Diagnostics expose why a previously functional module appears absent.
+  assert(runtime.diagnostics().rxBytes > 0);
+  assert(runtime.diagnostics().validFrames > 0);
+  assert(runtime.diagnostics().checksumErrors >= 1);
+  assert(retry.diagnostics().txRejected >= 1);
+  assert(retry.diagnostics().txFrames >= 2);
+  assert(idle.diagnostics().expiredReplies >= 1);
   puts("DFPlayer checksum, hardware truth, queue, expiry: ALL OK");
 }

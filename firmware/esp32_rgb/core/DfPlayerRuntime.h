@@ -22,6 +22,12 @@ class DfPlayerRuntime final {
  public:
   using Send=bool (*)(const uint8_t*,size_t,void*);
   DfPlayerRuntime(Send send,void* context):send_(send),context_(context) {}
+  struct Diagnostics {
+    uint32_t txFrames=0, txRejected=0, rxBytes=0, validFrames=0;
+    uint32_t checksumErrors=0, expiredReplies=0, queryTimeouts=0;
+    uint8_t lastResponse=0;
+  };
+  Diagnostics diagnostics() const { return diagnostics_; }
   AudioSnapshot snapshot(uint32_t now) const {
     AudioSnapshot out{}; out.modulePresent=seen_ && age(now,lastReply_)<=5000;
     if(!out.modulePresent) return out;
@@ -51,6 +57,7 @@ class DfPlayerRuntime final {
   void tick(uint32_t now) {
     if(age(now,lastSent_)<100) return;
     if(waiting_ && age(now,lastSent_)<500) return;
+    if(waiting_) ++diagnostics_.queryTimeouts;
     waiting_=0;
     if(count_ && commandsSincePoll_<2) {
       const Pending pending=queue_[head_];
@@ -74,6 +81,7 @@ class DfPlayerRuntime final {
     }
   }
   void consume(uint8_t byte,uint32_t now) {
+    ++diagnostics_.rxBytes;
     if(index_ && age(now,lastByte_)>100) index_=0;
     lastByte_=now;
     if(!index_) {if(byte==0x7e) frame_[index_++]=byte; return;}
@@ -82,11 +90,12 @@ class DfPlayerRuntime final {
     if(index_!=10) return;
     index_=0;
     unsigned sum=0; for(size_t i=1;i<7;++i) sum+=frame_[i];
-    if(frame_[9]!=0xef || static_cast<uint16_t>(0u-sum)!=static_cast<uint16_t>((frame_[7]<<8)|frame_[8])) return;
+    if(frame_[9]!=0xef || static_cast<uint16_t>(0u-sum)!=static_cast<uint16_t>((frame_[7]<<8)|frame_[8])) { ++diagnostics_.checksumErrors; return; }
     const uint8_t command=frame_[3]; const uint16_t param=(frame_[5]<<8)|frame_[6];
     if(command!=0x3f && command!=0x3a && command!=0x3b && command!=0x3d && command!=0x40 && command!=0x41 && command!=0x42 && command!=0x43 && command!=0x48 && command!=0x4c) return;
     const bool query=command==0x3f || command==0x42 || command==0x43 || command==0x48 || command==0x4c;
-    if(query && (waiting_!=command || age(now,lastSent_)>=500)) return;
+    if(query && (waiting_!=command || age(now,lastSent_)>=500)) { ++diagnostics_.expiredReplies; return; }
+    ++diagnostics_.validFrames; diagnostics_.lastResponse=command;
     seen_=true; lastReply_=now; if(waiting_==command) waiting_=0;
     switch(command) {
       case 0x3f: sd_=(param&2)?1:0; mark(0,now); if(!sd_) clearSd(); break;
@@ -117,10 +126,12 @@ class DfPlayerRuntime final {
   bool transmit(uint8_t command,uint16_t param,uint32_t now) {
     uint8_t frame[]={0x7e,0xff,6,command,0,static_cast<uint8_t>(param>>8),static_cast<uint8_t>(param),0,0,0xef};
     const uint16_t sum=static_cast<uint16_t>(0u-(0xffu+6u+command+frame[5]+frame[6]));frame[7]=sum>>8;frame[8]=sum;
-    if(!send_ || !send_(frame,sizeof(frame),context_)) return false;
+    if(!send_ || !send_(frame,sizeof(frame),context_)) { ++diagnostics_.txRejected; return false; }
+    ++diagnostics_.txFrames;
     lastSent_=now; return true;
   }
   Send send_;void* context_;
+  Diagnostics diagnostics_{};
   Pending queue_[4]{};size_t head_=0,count_=0;
   uint8_t frame_[10]{};size_t index_=0;uint32_t lastByte_=0;
   uint8_t waiting_=0,poll_=0,commandsSincePoll_=0;uint32_t lastSent_=0,lastCycle_=0,lastReply_=0;

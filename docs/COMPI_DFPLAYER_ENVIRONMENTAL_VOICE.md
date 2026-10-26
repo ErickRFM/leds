@@ -6,8 +6,8 @@
 |---|---|
 | DFPlayer VCC | 5V regulados y estables, no GPIO |
 | DFPlayer GND | GND común con ESP32 |
-| DFPlayer RX | ESP32 GPIO17 (UART2 TX), resistor serie 1 kΩ recomendado |
-| DFPlayer TX | ESP32 GPIO18 (UART2 RX), comprobar niveles de salida ≤ 3.3 V; divisor/adaptador si fuera necesario |
+| DFPlayer RX | ESP32 GPIO14 (UART2 TX), resistor serie 1 kΩ recomendado |
+| DFPlayer TX | ESP32 GPIO13 (UART2 RX), comprobar niveles de salida ≤ 3.3 V; divisor/adaptador si fuera necesario |
 | OLED VCC/GND | 3V3 / GND |
 | OLED SDA/SCL | GPIO21 / GPIO22 |
 | DHT11 DATA | GPIO16 (EXCLUSIVO, no usar para DFPlayer) |
@@ -41,6 +41,20 @@ Activar **solo tras verificar el circuito** mediante `#define COMPI_ENABLE_DFPLA
 - Serial UART2 a 9600 baudios; volumen de arranque 1/30 **no garantiza potencia eléctrica segura**.
 - La aplicación Android continúa reproduciendo música en el teléfono. Este firmware produce solicitudes locales a DFPlayer cuando se habilita; la app aún no tiene controles específicos ni telemetría de estado DFPlayer.
 - No se confirman audio audible, microSD, BUSY/ACK de hardware ni pines físicamente libres sin pruebas en placa.
+
+## Diagnóstico UART del firmware integrado (vigente)
+
+El perfil integrado consulta el DFPlayer por UART2 a 9600 baudios usando TX14 y RX13.
+Cada 10 segundos el monitor serie USB a 115200 emite
+`DFPLAYER UART tx=... blocked=... rx=... valid=... checksum=... expired=... timeout=... last=... present=... sd=... tracks=...`.
+Interpretación: `tx` creciente y `rx=0` significa tramas transmitidas sin bytes de retorno;
+`rx>0` y `valid=0` apunta a trama incompleta, checksum, opcode o ventana de respuesta;
+`valid>0` con `present=0` indica que existió respuesta pero ya no es reciente.
+La respuesta de la tarjeta no garantiza reproducción audible. El registro no contiene secretos.
+
+Este documento conservaba un mapa TX17/RX18 de un prototipo antiguo: **no corresponde
+al firmware integrado actual**. Se corrigió para igualar los GPIO del sketch y
+de la prueba histórica UART validada.
 
 ## Pruebas obligatorias
 
