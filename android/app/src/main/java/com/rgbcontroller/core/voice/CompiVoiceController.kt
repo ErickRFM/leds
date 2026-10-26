@@ -67,7 +67,6 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
         if (device != deviceId) {
             tts?.stop()
             device = deviceId
-            lastConnectionAnnounced = false
             recentAnnouncements.clear()
             events.reset()
         }
