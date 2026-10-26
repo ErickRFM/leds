@@ -423,29 +423,6 @@ fun ModuleWorkspaceScreen(
                             onCommand = { verb, value -> scope.launch { media.command("AUD", verb, value) } }
                         )
                     }
-                    item(key = "dfplayer_hardware_status") {
-                        Card(shape = RoundedCornerShape(22.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                            Column(Modifier.fillMaxWidth().padding(18.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Text("DFPlayer Mini", style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold)
-                                Text("Reproducción por bocina externa",
-                                    style = MaterialTheme.typography.bodyMedium)
-                                Text(when {
-                                    !currentlyVerified -> "Sin estado en vivo del ESP32. No se puede confirmar la detección del módulo ni de la microSD."
-                                    runtime("dfplayer_mp3")?.active == true -> "El módulo respondió por UART. Consulta arriba la microSD y el estado actual."
-                                    else -> "El ESP32 no confirma el DFPlayer físico. Comprueba UART, alimentación y microSD."
-                                },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("El audio del teléfono no se transmite al DFPlayer por Bluetooth.",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
                     item(key = "dfplayer_wiring") {
                         Card(
                             onClick = { showWiring = !showWiring },
