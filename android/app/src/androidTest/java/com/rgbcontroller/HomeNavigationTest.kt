@@ -126,7 +126,7 @@ class HomeNavigationTest {
         composeRule.onNodeWithTag("nav_modules").performClick()
         composeRule.onNodeWithTag("module_workspace_list").assertExists()
         composeRule.onNodeWithTag("nav_code").performClick()
-        composeRule.onNodeWithText("Compi Studio").assertExists()
+        composeRule.waitUntil(10_000) { composeRule.onAllNodesWithTag("studio_source").fetchSemanticsNodes().isNotEmpty() }
         composeRule.onNodeWithTag("nav_hub").performClick()
         composeRule.onNodeWithText("Hardware Lab").assertExists()
         composeRule.onNodeWithTag("nav_home").performClick()
