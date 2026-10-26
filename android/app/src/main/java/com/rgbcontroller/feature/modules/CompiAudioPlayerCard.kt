@@ -30,7 +30,8 @@ fun CompiAudioPlayerCard(
     var volume by remember(hardware?.modulePresent) {
         mutableFloatStateOf((hardware?.volume?.takeIf { it >= 0 } ?: 15).toFloat())
     }
-    val available = authorized && hardware?.modulePresent == true && hardware?.sdPresent == 1 && !busy
+    val moduleReady = authorized && hardware?.modulePresent == true && !busy
+    val available = moduleReady && hardware?.sdPresent == 1
     val sdCount = hardware?.tracks ?: -1
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Música Compi", style = MaterialTheme.typography.titleLarge)
@@ -104,8 +105,8 @@ fun CompiAudioPlayerCard(
             }
             Text("Volumen DFPlayer: ${hardware?.volume?.takeIf { it >= 0 } ?: "—"}/30")
             Slider(value = volume, onValueChange = { volume = it }, valueRange = 0f..30f,
-                enabled = available, modifier = Modifier.testTag("dfplayer_volume"))
-            OutlinedButton(onClick = { onCommand("VOLUME", volume.toInt().toString()) }, enabled = available) {
+                enabled = moduleReady, modifier = Modifier.testTag("dfplayer_volume"))
+            OutlinedButton(onClick = { onCommand("VOLUME", volume.toInt().toString()) }, enabled = moduleReady) {
                 Text("Aplicar volumen ${volume.toInt()}")
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
