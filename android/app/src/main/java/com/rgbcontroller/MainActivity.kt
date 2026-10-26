@@ -151,7 +151,7 @@ fun MainAppNavHost(
         }?.value
         phoneVoice.accept(
             liveDashboard.deviceId, liveDashboard.connected,
-            value("temperature"), value("light_percent"),
+            value("temperature"), value("ambient_light"),
             liveTelemetry?.receivedAtMs ?: 0L, System.currentTimeMillis()
         )
     }
