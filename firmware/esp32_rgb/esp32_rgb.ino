@@ -1708,6 +1708,23 @@ void loop() {
   for(uint8_t n=0;n<64 && dfplayerSerial.available()>0;++n)
     dfplayerRuntime.consume(static_cast<uint8_t>(dfplayerSerial.read()),now);
   dfplayerRuntime.tick(now);
+  // Once every 10 seconds: UART transport evidence without leaking credentials.
+  // An SD failure and an absent UART reply are different failure modes.
+  static uint32_t lastDfplayerDiagnosticsAt = 0;
+  if (static_cast<uint32_t>(now-lastDfplayerDiagnosticsAt) >= 10000U) {
+    lastDfplayerDiagnosticsAt = now;
+    const auto uart = dfplayerRuntime.diagnostics();
+    const auto audio = dfplayerRuntime.snapshot(now);
+    Serial.printf("DFPLAYER UART tx=%lu blocked=%lu rx=%lu valid=%lu checksum=%lu expired=%lu timeout=%lu last=0x%02X present=%d sd=%d tracks=%d\\n",
+      static_cast<unsigned long>(uart.txFrames),
+      static_cast<unsigned long>(uart.txRejected),
+      static_cast<unsigned long>(uart.rxBytes),
+      static_cast<unsigned long>(uart.validFrames),
+      static_cast<unsigned long>(uart.checksumErrors),
+      static_cast<unsigned long>(uart.expiredReplies),
+      static_cast<unsigned long>(uart.queryTimeouts),
+      uart.lastResponse, audio.modulePresent, audio.sdPresent, audio.tracks);
+  }
   const auto voicePlayerState=dfplayerRuntime.snapshot(now);
   if (automaticVoiceEnabled && voicePlayerState.modulePresent &&
       voicePlayerState.sdPresent==1 &&
