@@ -17,6 +17,7 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
     private val events = EnvironmentalSpeechEngine()
     private var pendingInitialization = false
     private var lastEnabled = false
+    private var lastFirmwareEventId = 0L
     private val recentAnnouncements = mutableMapOf<String, Long>()
 
     init {
@@ -54,7 +55,9 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
         temperatureC: Float?,
         lightPercent: Float?,
         sampleAtMs: Long,
-        nowMs: Long
+        nowMs: Long,
+        firmwareEventId: Long? = null,
+        firmwareCue: Int? = null
     ) {
         if (closed) return
         if (!connected || deviceId.isNullOrEmpty()) {
