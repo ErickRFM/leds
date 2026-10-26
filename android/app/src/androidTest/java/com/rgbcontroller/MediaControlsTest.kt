@@ -79,6 +79,7 @@ class MediaControlsTest {
                     false, null, { _, _ -> error("No command may be sent without SD") })
             } }
         }
+        compose.onNodeWithTag("dfplayer_overview_status").assertTextContains("sin microSD", substring = true)
         compose.onNodeWithTag("audio_output_dfplayer").performClick()
         compose.onNodeWithTag("dfplayer_status").assertTextEquals("MicroSD ausente.")
         compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
