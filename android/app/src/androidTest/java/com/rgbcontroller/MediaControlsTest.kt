@@ -19,6 +19,21 @@ import org.junit.Test
 class MediaControlsTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun stationAudioDefaultsToPhoneAndOffersPhysicalOutput() {
+        compose.setContent {
+            MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) {
+                CompiAudioPlayerCard(false, null, false, null, { _, _ -> })
+            } }
+        }
+        compose.onNodeWithTag("local_audio_controls").assertExists()
+        compose.onNodeWithTag("dfplayer_physical_controls").assertDoesNotExist()
+        compose.onNodeWithTag("audio_output_dfplayer").performClick()
+        compose.onNodeWithTag("dfplayer_physical_controls").assertExists()
+        compose.onNodeWithTag("local_audio_controls").assertDoesNotExist()
+        compose.onNodeWithTag("audio_output_phone").performClick()
+        compose.onNodeWithTag("local_audio_controls").assertExists()
+    }
+
     @Test fun unauthorizedAudioNeverClaimsActiveHardware() {
         compose.setContent {
             MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) {
