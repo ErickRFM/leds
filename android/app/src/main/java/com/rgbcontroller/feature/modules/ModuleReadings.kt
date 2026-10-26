@@ -231,18 +231,6 @@ internal fun ModuleReadings(
                             }
                         }
                     }
-                    Text("Temperatura: " + (temp?.let { "%.1f °C".format(java.util.Locale.ROOT, it) } ?: "—"))
-                    Text("Humedad: " + (humidity?.let { "%.0f %%".format(java.util.Locale.ROOT, it) } ?: "—"))
-                    Text(
-                        "Luz: " + when {
-                            light != null -> "%.0f %% (calibrada)".format(java.util.Locale.ROOT, light)
-                            raw != null -> "%.0f ADC (sin calibrar)".format(java.util.Locale.ROOT, raw)
-                            else -> "—"
-                        }
-                    )
-                    Text("Vista ilustrativa · la OLED física puede mostrar otra expresión",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.labelSmall)
                     Text("Expresiones físicas", style = MaterialTheme.typography.titleMedium)
                     if (oledActionMessage != null) {
                         Text(oledActionMessage, style = MaterialTheme.typography.bodySmall,
