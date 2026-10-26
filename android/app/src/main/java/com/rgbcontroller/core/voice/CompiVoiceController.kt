@@ -117,6 +117,15 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
         ) != TextToSpeech.ERROR
     }
 
+    /** Never keep a queued announcement after the visible app is backgrounded. */
+    fun pause() {
+        if (closed) return
+        tts?.stop()
+        events.reset()
+        recentAnnouncements.clear()
+        lastEnabled = false
+    }
+
     fun close() {
         if (closed) return
         closed = true
