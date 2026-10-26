@@ -205,18 +205,6 @@ fun ModuleWorkspaceScreen(
                         }
                     }
 
-                    Text(
-                        text = when (stationSection) {
-                            "Ambiente" -> "Temperatura y humedad · datos confirmados por sensores"
-                            "Iluminación" -> "RGB ambiental y luz · control y calibración"
-                            "OLED" -> "Expresiones y estados de la pantalla física"
-                            "Audio" -> "Música y avisos"
-                            else -> "Resumen de dispositivos y telemetría de la estación"
-                        },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                     LazyColumn(
                         modifier = Modifier.fillMaxSize().testTag("compi_station_dashboard"),
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
