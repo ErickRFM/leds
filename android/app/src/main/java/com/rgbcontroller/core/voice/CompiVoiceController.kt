@@ -10,11 +10,13 @@ import java.util.Locale
  */
 class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
     private val preferences = context.applicationContext.getSharedPreferences("compi_voice", Context.MODE_PRIVATE)
-    private val tts = TextToSpeech(context.applicationContext, this)
+    private val tts: TextToSpeech
     private var ready = false
     private var closed = false
     private var device: String? = null
     private val events = EnvironmentalSpeechEngine()
+
+    init { tts = TextToSpeech(context.applicationContext, this) }
 
     override fun onInit(status: Int) {
         if (closed || status != TextToSpeech.SUCCESS) return
@@ -32,6 +34,7 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
         nowMs: Long
     ) {
         if (!connected || deviceId == null) {
+            if (!closed) tts.stop()
             device = null
             events.reset()
             return
@@ -45,7 +48,7 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
         for (cue in cues) {
             // Audio from other phone apps takes precedence; no backlog of old
             // environmental events should be spoken on reconnection.
-            tts.speak(cue.message, TextToSpeech.QUEUE_ADD, null,
+            tts.speak(cue.message, TextToSpeech.QUEUE_FLUSH, null,
                 "compi-${cue.name}-${sampleAtMs}")
         }
     }
