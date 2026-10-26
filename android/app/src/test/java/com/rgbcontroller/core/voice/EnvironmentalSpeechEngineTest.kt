@@ -26,12 +26,14 @@ class EnvironmentalSpeechEngineTest {
     @Test fun lightTransitionsAreSuppressedByCooldownAndStaleness() {
         val engine = EnvironmentalSpeechEngine()
         engine.evaluate(null, 90f, 1000, 1000)
+        assertTrue(engine.evaluate(null, 10f, 2000, 2000).isEmpty())
         assertEquals(listOf(EnvironmentalSpeechEngine.Cue.LIGHT_OFF),
-            engine.evaluate(null, 10f, 2000, 2000))
-        assertTrue(engine.evaluate(null, 90f, 3000, 3000).isEmpty())
-        assertTrue(engine.evaluate(null, 10f, 4000, 4000).isEmpty())
+            engine.evaluate(null, 10f, 3500, 3500))
+        assertTrue(engine.evaluate(null, 90f, 4000, 4000).isEmpty())
+        assertTrue(engine.evaluate(null, 10f, 4500, 4500).isEmpty())
+        assertTrue(engine.evaluate(null, 90f, 65000, 65000).isEmpty())
         assertEquals(listOf(EnvironmentalSpeechEngine.Cue.LIGHT_ON),
-            engine.evaluate(null, 90f, 65000, 65000))
+            engine.evaluate(null, 90f, 66500, 66500))
         assertTrue(engine.evaluate(null, 5f, 66000, 90000).isEmpty())
     }
 
