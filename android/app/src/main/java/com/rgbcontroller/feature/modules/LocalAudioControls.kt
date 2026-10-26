@@ -51,8 +51,8 @@ fun LocalAudioControls() {
                 if (queue.enqueue(uri.toString())) added++
             } catch (_: SecurityException) { message = "No se pudo conservar permiso de lectura del archivo." }
         }
-        persist()
-        if (added > 0) message = "$added archivos añadidos al teléfono."
+        if (added > 0) persist()
+        message = if (added > 0) "$added canciones añadidas" else if (uris.isNotEmpty()) "Las canciones ya estaban añadidas o no se pudieron leer." else null
     }
     val tracks = remember(revision) { queue.tracks() }
     Card(Modifier.fillMaxWidth().testTag("local_audio_controls")) {
@@ -75,10 +75,11 @@ fun LocalAudioControls() {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedButton(onClick = { queue.next()?.let(::playUri) }, enabled = tracks.isNotEmpty()) { Text("Siguiente") }
-                OutlinedButton(onClick = { player.stop() }) { Text("Parar") }
+                OutlinedButton(onClick = { player.stop() }, enabled = playback.phase == AndroidLocalAudioPlayer.Phase.PLAYING || playback.phase == AndroidLocalAudioPlayer.Phase.PAUSED) { Text("Parar") }
                 TextButton(onClick = { player.stop(); queue.remove(queue.currentIndex); persist() }, enabled = tracks.isNotEmpty()) { Text("Quitar") }
             }
-            Slider(value = volume, onValueChange = { volume = it; player.setVolume(it) })
+            Text("Volumen", style = MaterialTheme.typography.labelMedium)
+            Slider(value = volume, onValueChange = { volume = it; player.setVolume(it) }, modifier = Modifier.testTag("phone_audio_volume"))
             message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         }
     }
