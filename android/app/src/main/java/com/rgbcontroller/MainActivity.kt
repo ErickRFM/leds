@@ -168,7 +168,9 @@ fun MainAppNavHost(
         phoneVoice.accept(
             liveDashboard.deviceId, liveDashboard.connected,
             value("temperature"), value("ambient_light"),
-            liveTelemetry?.receivedAtMs ?: 0L, System.currentTimeMillis()
+            liveTelemetry?.receivedAtMs ?: 0L, System.currentTimeMillis(),
+            liveDashboard.firmwareVoiceEvent?.id,
+            liveDashboard.firmwareVoiceEvent?.cue
         )
     }
     val bleConnection by bleManager.connectionState.collectAsState()
