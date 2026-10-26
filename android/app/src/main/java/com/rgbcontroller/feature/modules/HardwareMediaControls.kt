@@ -70,9 +70,16 @@ class HardwareMediaControls(
                     }
                 }
             }
-            if (manual) {
-                if (module == "AUD") audioMessage = "Orden $verb recibida por ESP32; reproducción pendiente de confirmación del DFPlayer."
-                else oledMessage = "ESP32 confirmó el estado OLED."
+            if (module == "AUD") {
+                audioMessage = if (!manual) null else when (verb) {
+                    "PLAY", "RESUME", "PAUSE", "STOP" ->
+                        "Orden enviada al ESP32. Esperando estado real del DFPlayer."
+                    "VOLUME" -> "Volumen enviado; consulta la lectura del módulo."
+                    "VOICE" -> "Avisos actualizados; estado sujeto a confirmación del módulo."
+                    else -> "Orden enviada; esperando confirmación."
+                }
+            } else if (manual) {
+                oledMessage = "ESP32 confirmó el estado OLED."
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
