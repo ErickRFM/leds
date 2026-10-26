@@ -4,25 +4,34 @@ import android.content.Context
 import android.speech.tts.TextToSpeech
 import java.util.Locale
 
-/**
- * Phone-only speech output. It never sends a command to the DFPlayer and its
- * failure cannot prevent physical audio or sensor sampling.
- */
+/** Independent local speech output; never blocks the ESP32 DFPlayer. */
 class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
-    private val preferences = context.applicationContext.getSharedPreferences("compi_voice", Context.MODE_PRIVATE)
-    private val tts: TextToSpeech
-    private var ready = false
+    private val preferences = context.applicationContext.getSharedPreferences(
+        "compi_voice", Context.MODE_PRIVATE
+    )
+    private var tts: TextToSpeech? = null
+    private var initialized = false
     private var closed = false
     private var device: String? = null
     private val events = EnvironmentalSpeechEngine()
+    private var pendingInitialization = false
 
-    init { tts = TextToSpeech(context.applicationContext, this) }
+    init {
+        tts = TextToSpeech(context.applicationContext, this)
+        if (pendingInitialization) configureVoice()
+    }
 
     override fun onInit(status: Int) {
         if (closed || status != TextToSpeech.SUCCESS) return
-        val result = tts.setLanguage(Locale("es", "MX"))
-        ready = result != TextToSpeech.LANG_MISSING_DATA &&
+        if (tts == null) pendingInitialization = true else configureVoice()
+    }
+
+    private fun configureVoice() {
+        val engine = tts ?: return
+        val result = engine.setLanguage(Locale("es", "MX"))
+        initialized = result != TextToSpeech.LANG_MISSING_DATA &&
             result != TextToSpeech.LANG_NOT_SUPPORTED
+        pendingInitialization = false
     }
 
     fun accept(
@@ -33,29 +42,36 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
         sampleAtMs: Long,
         nowMs: Long
     ) {
-        if (!connected || deviceId == null) {
-            if (!closed) tts.stop()
+        if (closed) return
+        if (!connected || deviceId.isNullOrEmpty()) {
+            tts?.stop()
             device = null
             events.reset()
             return
         }
         if (device != deviceId) {
+            tts?.stop()
             device = deviceId
             events.reset()
         }
         val cues = events.evaluate(temperatureC, lightPercent, sampleAtMs, nowMs)
-        if (!ready || closed || !preferences.getBoolean("phone_enabled", false)) return
-        for (cue in cues) {
-            // Audio from other phone apps takes precedence; no backlog of old
-            // environmental events should be spoken on reconnection.
-            tts.speak(cue.message, TextToSpeech.QUEUE_FLUSH, null,
-                "compi-${cue.name}-${sampleAtMs}")
+        if (!preferences.getBoolean("phone_enabled", false) || !initialized) return
+        val engine = tts ?: return
+        cues.forEachIndexed { index, cue ->
+            engine.speak(
+                cue.message,
+                if (index == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD,
+                null,
+                "compi-${cue.name}-${sampleAtMs}"
+            )
         }
     }
 
     fun close() {
+        if (closed) return
         closed = true
-        tts.stop()
-        tts.shutdown()
+        tts?.stop()
+        tts?.shutdown()
+        tts = null
     }
 }
