@@ -210,7 +210,7 @@ fun ModuleWorkspaceScreen(
                             "Ambiente" -> "Temperatura y humedad · datos confirmados por sensores"
                             "Iluminación" -> "RGB ambiental y luz · control y calibración"
                             "OLED" -> "Expresiones y estados de la pantalla física"
-                            "Audio" -> "Reproducción y avisos · salida DFPlayer"
+                            "Audio" -> "Música y avisos"
                             else -> "Resumen de dispositivos y telemetría de la estación"
                         },
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
@@ -220,7 +220,7 @@ fun ModuleWorkspaceScreen(
                     LazyColumn(
                         modifier = Modifier.fillMaxSize().testTag("compi_station_dashboard"),
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         if (stationSection == "Resumen") {
                             item {
@@ -228,7 +228,7 @@ fun ModuleWorkspaceScreen(
                                     Column(Modifier.weight(1f)) {
                                         Text("Ambiente actual", style = MaterialTheme.typography.titleLarge,
                                             fontWeight = FontWeight.Bold)
-                                        Text("DHT11 y luz · lecturas del ESP32",
+                                        Text("Temperatura · humedad · luz",
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             style = MaterialTheme.typography.bodySmall)
                                     }
@@ -268,7 +268,7 @@ fun ModuleWorkspaceScreen(
                                 } ?: raw?.let { "ADC %.0f".format(java.util.Locale.ROOT, it) } ?: "—",
                                     Icons.Default.Lightbulb, Modifier.fillMaxWidth())
                                 if (light == null && raw != null) {
-                                    Text("LDR sin calibrar · lectura ADC cruda (0–4095)",
+                                    Text("LDR pendiente de calibración",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
@@ -321,7 +321,7 @@ fun ModuleWorkspaceScreen(
                                             tint = MaterialTheme.colorScheme.primary)
                                         Column(Modifier.weight(1f)) {
                                             Text("Control RGB", style = MaterialTheme.typography.titleMedium)
-                                            Text("Color, brillo y efectos por BLE o Wi-Fi",
+                                            Text("Colores y efectos",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
@@ -364,7 +364,7 @@ fun ModuleWorkspaceScreen(
                                             tint = MaterialTheme.colorScheme.primary)
                                         Column(Modifier.weight(1f)) {
                                             Text("Música y avisos", style = MaterialTheme.typography.titleMedium)
-                                            Text("Reproductor y módulo MP3 DFPlayer Mini",
+                                            Text("Tus canciones y avisos",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
@@ -384,17 +384,17 @@ fun ModuleWorkspaceScreen(
                 ) {
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Tu música, en un solo lugar",
+                            Text("Música Compi",
                                 style = MaterialTheme.typography.headlineSmall,
                                 fontWeight = FontWeight.Bold)
-                            Text("Reproduce audios del teléfono y consulta tu módulo físico por separado.",
+                            Text("Añade canciones y elige dónde reproducir.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Surface(
                                 color = MaterialTheme.colorScheme.secondaryContainer,
                                 shape = RoundedCornerShape(12.dp)
                             ) {
-                                Text("Salidas · DFPlayer y teléfono",
+                                Text("Teléfono · DFPlayer",
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer)
