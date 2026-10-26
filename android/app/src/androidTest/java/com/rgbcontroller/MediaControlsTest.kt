@@ -96,7 +96,7 @@ class MediaControlsTest {
             } }
         }
         compose.onNodeWithTag("audio_output_dfplayer").performClick()
-        compose.onNodeWithTag("dfplayer_status").assertTextContains("0 archivos", substring = true)
+        compose.onNodeWithTag("dfplayer_status").assertTextContains("0 canciones", substring = true)
         compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
     }
 
