@@ -14,13 +14,16 @@ class EnvironmentalSpeechEngineTest {
     @Test fun temperatureTransitionsRequireHysteresis() {
         val engine = EnvironmentalSpeechEngine()
         engine.evaluate(23f, null, 1000, 1000)
+        assertTrue(engine.evaluate(27f, null, 2000, 2000).isEmpty())
         assertEquals(listOf(EnvironmentalSpeechEngine.Cue.HOT),
-            engine.evaluate(27f, null, 2000, 2000))
-        assertTrue(engine.evaluate(25.9f, null, 3000, 3000).isEmpty())
+            engine.evaluate(27f, null, 5000, 5000))
+        assertTrue(engine.evaluate(25.9f, null, 6000, 6000).isEmpty())
+        assertTrue(engine.evaluate(24f, null, 65000, 65000).isEmpty())
         assertEquals(listOf(EnvironmentalSpeechEngine.Cue.COOLER),
-            engine.evaluate(24f, null, 65000, 65000))
+            engine.evaluate(24f, null, 68000, 68000))
+        assertTrue(engine.evaluate(19f, null, 129000, 129000).isEmpty())
         assertEquals(listOf(EnvironmentalSpeechEngine.Cue.COLD),
-            engine.evaluate(19f, null, 126000, 126000))
+            engine.evaluate(19f, null, 132000, 132000))
     }
 
     @Test fun lightTransitionsAreSuppressedByCooldownAndStaleness() {
