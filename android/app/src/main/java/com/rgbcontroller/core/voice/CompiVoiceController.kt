@@ -16,6 +16,7 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
     private val events = EnvironmentalSpeechEngine()
     private var pendingInitialization = false
     private var lastEnabled = false
+    private var lastConnectionAnnounced = false
     private val recentAnnouncements = mutableMapOf<String, Long>()
 
     init {
@@ -48,6 +49,7 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
         if (!connected || deviceId.isNullOrEmpty()) {
             tts?.stop()
             device = null
+            lastConnectionAnnounced = false
             recentAnnouncements.clear()
             events.reset()
             return
@@ -55,6 +57,7 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
         if (device != deviceId) {
             tts?.stop()
             device = deviceId
+            lastConnectionAnnounced = false
             recentAnnouncements.clear()
             events.reset()
         }
