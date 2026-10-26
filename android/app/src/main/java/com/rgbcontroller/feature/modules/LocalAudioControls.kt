@@ -32,6 +32,7 @@ fun LocalAudioControls() {
     var revision by remember { mutableIntStateOf(0) }
     var message by remember { mutableStateOf<String?>(null) }
     var volume by remember { mutableFloatStateOf(.6f) }
+    var showLibrary by remember { mutableStateOf(false) }
     fun persist() {
         prefs.edit().putString("uris", JSONArray(queue.tracks()).toString()).apply()
         revision++
@@ -61,6 +62,28 @@ fun LocalAudioControls() {
             Text(queue.current()?.let { Uri.parse(it).lastPathSegment } ?: "Aún no hay canciones", style = MaterialTheme.typography.titleMedium, maxLines = 2)
             Text(if (tracks.isEmpty()) "Añade canciones desde tu teléfono" else "${tracks.size} canciones · ${playback.description}", style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = { importer.launch(arrayOf("audio/*")) }) { Text("Añadir canciones") }
+            if (tracks.isNotEmpty()) {
+                TextButton(onClick = { showLibrary = !showLibrary }, modifier = Modifier.testTag("phone_audio_library_toggle")) {
+                    Text(if (showLibrary) "Ocultar biblioteca" else "Ver biblioteca (${tracks.size})")
+                }
+                if (showLibrary) {
+                    tracks.forEachIndexed { index, uri ->
+                        val fileName = Uri.parse(uri).lastPathSegment ?: "Canción ${index + 1}"
+                        OutlinedButton(
+                            onClick = {
+                                if (queue.currentIndex != index) {
+                                    player.stop()
+                                    queue.select(index)
+                                    revision++
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().testTag("phone_audio_track_${index}")
+                        ) {
+                            Text("${index + 1}. $fileName", maxLines = 1)
+                        }
+                    }
+                }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedButton(onClick = { queue.previous()?.let(::playUri) }, enabled = tracks.isNotEmpty()) { Text("Anterior") }
                 Button(onClick = {
