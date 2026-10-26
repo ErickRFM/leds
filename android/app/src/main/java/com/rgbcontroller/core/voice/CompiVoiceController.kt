@@ -94,6 +94,18 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
         }
     }
 
+    /** User-initiated speaker check, independent of telemetry and microSD. */
+    fun speakTest(): Boolean {
+        if (closed || !initialized) return false
+        val engine = tts ?: return false
+        return engine.speak(
+            "Hola, soy Compi. La voz de tu celular está funcionando.",
+            TextToSpeech.QUEUE_FLUSH,
+            null,
+            "compi-voice-test"
+        ) != TextToSpeech.ERROR
+    }
+
     fun close() {
         if (closed) return
         closed = true
