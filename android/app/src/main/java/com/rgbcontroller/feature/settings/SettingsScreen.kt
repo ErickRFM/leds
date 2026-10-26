@@ -42,6 +42,8 @@ fun SettingsScreen(
     }
     var phoneVoiceEnabled by remember { mutableStateOf(voicePrefs.getBoolean("phone_enabled", false)) }
     var voiceTestMessage by remember { mutableStateOf<String?>(null) }
+    var phoneVolume by remember { mutableFloatStateOf(voicePrefs.getInt("phone_volume", 100).toFloat()) }
+    var phoneRate by remember { mutableFloatStateOf(voicePrefs.getInt("phone_rate", 100).toFloat()) }
     val scope = rememberCoroutineScope()
     var showTechnical by rememberSaveable { mutableStateOf(false) }
 
@@ -121,6 +123,16 @@ fun SettingsScreen(
                         modifier = Modifier.testTag("voice_phone_enabled")
                     )
                 }
+                Text("Volumen del celular: ${phoneVolume.toInt()} %")
+                Slider(value = phoneVolume, onValueChange = {
+                    phoneVolume = it
+                    voicePrefs.edit().putInt("phone_volume", it.toInt()).apply()
+                }, valueRange = 0f..100f, modifier = Modifier.testTag("voice_phone_volume"))
+                Text("Velocidad de voz: ${phoneRate.toInt()} %")
+                Slider(value = phoneRate, onValueChange = {
+                    phoneRate = it
+                    voicePrefs.edit().putInt("phone_rate", it.toInt()).apply()
+                }, valueRange = 70f..130f, modifier = Modifier.testTag("voice_phone_rate"))
                 OutlinedButton(onClick = {
                     voiceTestMessage = if (onVoiceTest()) "Reproduciendo prueba de voz."
                         else "La voz española todavía no está disponible en Android."
