@@ -22,6 +22,8 @@ class EnvironmentalSpeechEngine(
     private var lastTemperatureAt: Long = Long.MIN_VALUE
     private var lastLightAt: Long = Long.MIN_VALUE
     private var lastSampleAt: Long = Long.MIN_VALUE
+    private var pendingTemperatureBand: Int? = null
+    private var pendingTemperatureAt: Long = 0L
 
     fun reset() {
         temperatureBand = null
@@ -32,6 +34,8 @@ class EnvironmentalSpeechEngine(
         lastTemperatureAt = Long.MIN_VALUE
         lastLightAt = Long.MIN_VALUE
         lastSampleAt = Long.MIN_VALUE
+        pendingTemperatureBand = null
+        pendingTemperatureAt = 0L
     }
 
     fun evaluate(
@@ -55,15 +59,24 @@ class EnvironmentalSpeechEngine(
                     else -> 1
                 }
             }
-            temperatureBand = next
-            if (previous != null && next != previous && due(lastTemperatureAt, nowMs)) {
+            if (previous != null && next != previous && pendingTemperatureBand != next) {
+                pendingTemperatureBand = next
+                pendingTemperatureAt = nowMs
+            }
+            if (next == previous) pendingTemperatureBand = null
+            if (previous != null && next != previous &&
+                pendingTemperatureBand == next && nowMs - pendingTemperatureAt >= 2_000L &&
+                due(lastTemperatureAt, nowMs)) {
                 events += when (next) {
                     0 -> Cue.COLD
                     2 -> Cue.HOT
                     else -> Cue.COOLER
                 }
                 lastTemperatureAt = nowMs
+                temperatureBand = next
+                pendingTemperatureBand = null
             }
+            if (previous == null) temperatureBand = next
         }
         if (lightPercent != null && lightPercent.isFinite() && lightPercent in 0f..100f) {
             val previous = previousLight
