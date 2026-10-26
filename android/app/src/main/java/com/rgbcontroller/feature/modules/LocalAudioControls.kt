@@ -57,11 +57,10 @@ fun LocalAudioControls() {
     val tracks = remember(revision) { queue.tracks() }
     Card(Modifier.fillMaxWidth().testTag("local_audio_controls")) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Audio del teléfono", style = MaterialTheme.typography.titleMedium)
-            Text(playback.description)
-            Text("${tracks.size} archivos · selección ${if (tracks.isEmpty()) "—" else (queue.currentIndex + 1).toString()}")
-            Text(queue.current()?.let { Uri.parse(it).lastPathSegment } ?: "Importa tus archivos de audio.", maxLines = 2)
-            OutlinedButton(onClick = { importer.launch(arrayOf("audio/*")) }) { Text("Añadir audios") }
+            Text("Mi biblioteca", style = MaterialTheme.typography.titleMedium)
+            Text(queue.current()?.let { Uri.parse(it).lastPathSegment } ?: "Aún no hay canciones", style = MaterialTheme.typography.titleMedium, maxLines = 2)
+            Text(if (tracks.isEmpty()) "Añade canciones desde tu teléfono" else "${tracks.size} canciones · ${playback.description}", style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = { importer.launch(arrayOf("audio/*")) }) { Text("Añadir canciones") }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedButton(onClick = { queue.previous()?.let(::playUri) }, enabled = tracks.isNotEmpty()) { Text("Anterior") }
                 Button(onClick = {
@@ -81,7 +80,6 @@ fun LocalAudioControls() {
             }
             Slider(value = volume, onValueChange = { volume = it; player.setVolume(it) })
             message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-            Text("Salida: teléfono o su dispositivo de audio conectado.", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
