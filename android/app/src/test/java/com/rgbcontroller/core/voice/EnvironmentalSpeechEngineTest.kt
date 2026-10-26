@@ -40,6 +40,30 @@ class EnvironmentalSpeechEngineTest {
         assertTrue(engine.evaluate(null, 5f, 66000, 90000).isEmpty())
     }
 
+    @Test fun temperatureSpikeDoesNotAnnounce() {
+        val engine = EnvironmentalSpeechEngine()
+        engine.evaluate(23f, null, 1000, 1000)
+        assertTrue(engine.evaluate(29f, null, 2000, 2000).isEmpty())
+        assertTrue(engine.evaluate(23f, null, 3000, 3000).isEmpty())
+        assertTrue(engine.evaluate(23f, null, 6000, 6000).isEmpty())
+    }
+
+    @Test fun lightBounceDoesNotAnnounce() {
+        val engine = EnvironmentalSpeechEngine()
+        engine.evaluate(null, 90f, 1000, 1000)
+        assertTrue(engine.evaluate(null, 10f, 2000, 2000).isEmpty())
+        assertTrue(engine.evaluate(null, 90f, 2500, 2500).isEmpty())
+        assertTrue(engine.evaluate(null, 90f, 5000, 5000).isEmpty())
+    }
+
+    @Test fun rejectsInvalidAndOldTelemetry() {
+        val engine = EnvironmentalSpeechEngine()
+        engine.evaluate(23f, 90f, 1000, 1000)
+        assertTrue(engine.evaluate(Float.NaN, -1f, 2000, 2000).isEmpty())
+        assertTrue(engine.evaluate(40f, 5f, 2500, 15000).isEmpty())
+        assertTrue(engine.evaluate(40f, 5f, 15000, 2500).isEmpty())
+    }
+
     @Test fun disconnectResetDoesNotInventATransition() {
         val engine = EnvironmentalSpeechEngine()
         engine.evaluate(23f, 90f, 1000, 1000)
