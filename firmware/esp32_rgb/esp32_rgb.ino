@@ -1774,34 +1774,35 @@ void loop() {
     oledDriver.setTextSize(1);
     oledDriver.setCursor(2, 0);
     oledDriver.print("COMPI");
-    // Eye blink is deterministic and independent of sensor sampling.
+    // Larger friendly face uses nearly the full 64px canvas while
+    // keeping a separate column for fresh sensor measurements.
     const bool blink = (now % 5000U) < 400U;
     if (blink) {
-      oledDriver.drawLine(13, 24, 26, 24, SSD1306_WHITE);
-      oledDriver.drawLine(42, 24, 55, 24, SSD1306_WHITE);
+      oledDriver.drawLine(11, 29, 26, 29, SSD1306_WHITE);
+      oledDriver.drawLine(42, 29, 57, 29, SSD1306_WHITE);
     } else {
-      oledDriver.fillRoundRect(13, 19, 13, 12, 5, SSD1306_WHITE);
-      oledDriver.fillRoundRect(42, 19, 13, 12, 5, SSD1306_WHITE);
+      oledDriver.fillRoundRect(11, 21, 15, 15, 6, SSD1306_WHITE);
+      oledDriver.fillRoundRect(42, 21, 15, 15, 6, SSD1306_WHITE);
     }
-    oledDriver.drawLine(24, 39, 30, 43, SSD1306_WHITE);
-    oledDriver.drawLine(30, 43, 37, 43, SSD1306_WHITE);
-    oledDriver.drawLine(37, 43, 44, 39, SSD1306_WHITE);
-    oledDriver.drawLine(69, 0, 69, 52, SSD1306_WHITE);
-    oledDriver.setCursor(75, 2);
+    oledDriver.drawLine(18, 47, 27, 55, SSD1306_WHITE);
+    oledDriver.drawLine(27, 55, 40, 55, SSD1306_WHITE);
+    oledDriver.drawLine(40, 55, 49, 47, SSD1306_WHITE);
+    oledDriver.drawLine(69, 0, 69, 63, SSD1306_WHITE);
+    oledDriver.setCursor(75, 5);
     if (temperature.valid && temperature.status == esp32core::MeasurementStatus::Fresh &&
         static_cast<uint32_t>(now - temperature.timestampMs) <= 10000u) {
       oledDriver.printf("T %.1fC", static_cast<double>(temperature.value));
     } else {
       oledDriver.print("T --");
     }
-    oledDriver.setCursor(75, 17);
+    oledDriver.setCursor(75, 23);
     if (humidity.valid && humidity.status == esp32core::MeasurementStatus::Fresh &&
         static_cast<uint32_t>(now - humidity.timestampMs) <= 10000u) {
       oledDriver.printf("H %.0f%%", static_cast<double>(humidity.value));
     } else {
       oledDriver.print("H --");
     }
-    oledDriver.setCursor(75, 32);
+    oledDriver.setCursor(75, 42);
 #if COMPI_BUILD_LDR
     if (ldrModule.ready() && ldrModule.lightReading().valid &&
         ldrModule.lightReading().status == esp32core::MeasurementStatus::Fresh &&

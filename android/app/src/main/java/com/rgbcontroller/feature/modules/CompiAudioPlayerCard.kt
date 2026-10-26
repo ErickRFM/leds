@@ -22,6 +22,7 @@ fun CompiAudioPlayerCard(
     feedback: String?,
     onCommand: (String, String?) -> Unit
 ) {
+    var output by rememberSaveable { mutableStateOf("PHONE") }
     var trackText by rememberSaveable { mutableStateOf("1") }
     var advancedHelp by rememberSaveable { mutableStateOf(false) }
     // Preserve slider edits across automatic UART polling. Only initialize the
@@ -29,44 +30,64 @@ fun CompiAudioPlayerCard(
     var volume by remember(hardware?.modulePresent) {
         mutableFloatStateOf((hardware?.volume?.takeIf { it >= 0 } ?: 15).toFloat())
     }
-    val available = authorized && hardware?.modulePresent == true && hardware?.sdPresent == 1 && !busy
+    val moduleReady = authorized && hardware?.modulePresent == true && !busy
+    val available = moduleReady && hardware?.sdPresent == 1
     val sdCount = hardware?.tracks ?: -1
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Música Compi", style = MaterialTheme.typography.titleLarge)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = output == "PHONE",
+                onClick = { output = "PHONE" },
+                label = { Text("Teléfono") },
+                modifier = Modifier.weight(1f).testTag("audio_output_phone")
+            )
+            FilterChip(
+                selected = output == "DFPLAYER",
+                onClick = { output = "DFPLAYER" },
+                label = { Text("DFPlayer") },
+                modifier = Modifier.weight(1f).testTag("audio_output_dfplayer")
+            )
+        }
+        if (output == "PHONE") {
+            LocalAudioControls()
+        } else {
     Card(Modifier.fillMaxWidth().testTag("dfplayer_physical_controls"), shape = RoundedCornerShape(22.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Reproductor Compi", style = MaterialTheme.typography.titleLarge)
+                Text("Módulo físico", style = MaterialTheme.typography.titleMedium)
                 Text(if (!authorized) "○ Sin autorización" else if (hardware?.modulePresent == true) "● UART confirmado" else "○ Sin respuesta",
                     style = MaterialTheme.typography.labelMedium,
                     color = if (authorized && hardware?.modulePresent == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text("DFPlayer Mini · microSD", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
             Text(when {
                 !authorized -> "Conecta y autoriza Bluetooth o Wi-Fi."
                 hardware == null -> "Esperando estado del firmware…"
-                !hardware.modulePresent -> "Sin respuesta UART del DFPlayer. Revisa 5 V, GND, ESP32 TX14 → RX y RX13 ← TX."
+                !hardware.modulePresent -> "DFPlayer sin respuesta"
                 hardware.sdPresent == 0 -> "MicroSD ausente."
-                hardware.sdPresent != 1 -> "UART respondió, pero microSD sin confirmar. Comprueba FAT32 y reinicia el módulo."
-                sdCount == 0 -> "MicroSD reconocida · 0 archivos reportados. Revisa FAT32 y /MP3/0001.mp3."
-                !hardware.fresh -> "Módulo y microSD detectados · lectura parcial."
-                else -> "MicroSD detectada · ${sdCount.takeIf { it >= 0 }?.toString() ?: "—"} archivos reportados"
+                hardware.sdPresent != 1 -> "DFPlayer conectado · tarjeta sin confirmar"
+                sdCount == 0 -> "MicroSD vacía · 0 canciones"
+                !hardware.fresh -> "Módulo conectado · actualizando datos"
+                else -> "MicroSD lista · ${sdCount.takeIf { it >= 0 }?.toString() ?: "—"} pistas"
             }, modifier = Modifier.testTag("dfplayer_status"))
             Text(when {
                 !authorized || hardware == null || !hardware.modulePresent || hardware.playback == "UNKNOWN" -> "Reproducción sin confirmar"
-                hardware.playing -> "Módulo reporta reproducción · índice SD ${hardware.track.takeIf { it >= 0 } ?: "—"}"
-                hardware.playback == "PAUSED" -> "Módulo reporta pausa"
-                hardware.playback == "STOPPED" -> "Módulo reporta detenido"
+                hardware.playing -> "Reproduciendo · pista ${hardware.track.takeIf { it >= 0 } ?: "—"}"
+                hardware.playback == "PAUSED" -> "En pausa"
+                hardware.playback == "STOPPED" -> "Detenido"
                 else -> "Reproducción sin confirmar"
             })
             OutlinedTextField(value = trackText,
                 onValueChange = { if (it.length <= 4 && it.all { c -> c in '0'..'9' }) trackText = it },
                 label = { Text("Número de archivo MP3 (1–2999)") }, singleLine = true,
                 modifier = Modifier.fillMaxWidth().testTag("dfplayer_track"))
-            Text("Archivo: /MP3/${trackText.padStart(4, '0')}.mp3", style = MaterialTheme.typography.bodyMedium)
+            if (advancedHelp) Text("Archivo: /MP3/${trackText.padStart(4, '0')}.mp3", style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = { advancedHelp = !advancedHelp }) {
                 Text(if (advancedHelp) "Ocultar detalles del módulo" else "Ver detalles del módulo")
             }
-            if (advancedHelp) Text("La app no detecta eléctricamente una bocina ni puede listar nombres de pistas. Solo muestra respuestas del DFPlayer por UART.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (sdCount == 0) Text("El módulo informa 0 archivos. Revisa la tarjeta antes de intentar reproducir.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            if (advancedHelp) Text("La app solo muestra respuestas UART; verifica 5 V, GND, ESP32 TX14 → RX y RX13 ← TX si el módulo no responde. No se detecta eléctricamente la bocina.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (sdCount == 0 && advancedHelp) Text("Comprueba FAT32 y la ruta /MP3/0001.mp3.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             Button(onClick = { onCommand("PLAY", trackText) },
                 enabled = available && sdCount != 0 && trackText.toIntOrNull() in 1..2999,
                 modifier = Modifier.fillMaxWidth().testTag("dfplayer_play")) {
@@ -82,10 +103,10 @@ fun CompiAudioPlayerCard(
                 OutlinedButton(onClick = { onCommand("STOP", null) }, enabled = authorized && hardware?.modulePresent == true && !busy,
                     modifier = Modifier.weight(1f)) { Text("Parar") }
             }
-            Text("Volumen DFPlayer: ${hardware?.volume?.takeIf { it >= 0 } ?: "—"}/30")
+            Text("Volumen · ${hardware?.volume?.takeIf { it >= 0 } ?: "—"}/30")
             Slider(value = volume, onValueChange = { volume = it }, valueRange = 0f..30f,
-                enabled = available, modifier = Modifier.testTag("dfplayer_volume"))
-            OutlinedButton(onClick = { onCommand("VOLUME", volume.toInt().toString()) }, enabled = available) {
+                enabled = moduleReady, modifier = Modifier.testTag("dfplayer_volume"))
+            OutlinedButton(onClick = { onCommand("VOLUME", volume.toInt().toString()) }, enabled = moduleReady) {
                 Text("Aplicar volumen ${volume.toInt()}")
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -107,5 +128,6 @@ fun CompiAudioPlayerCard(
             }
         }
     }
-    LocalAudioControls()
+        }
+    }
 }

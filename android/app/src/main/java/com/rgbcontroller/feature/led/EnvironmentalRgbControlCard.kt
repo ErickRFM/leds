@@ -181,25 +181,26 @@ fun EnvironmentalRgbControlCard(
                 }
             }
             Text(
-                "Si el foco no coincide con el color mostrado, revisa el orden de canales: rojo GPIO27, verde GPIO25, azul GPIO26; " +
-                    "y confirma si tu módulo es ánodo común (firmware actual) o cátodo común. La app no mide físicamente el PWM.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                "Temperatura: azul (<20°C), verde (20-26°C), amarillo (26-30°C), naranja (30-35°C) o rojo (≥35°C). " +
-                    "Sin temperatura válida, el ESP32 no realiza cambios.",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                when {
-                    !authorized -> if (wifiMode) message
-                        else "Necesitas autorización BLE de propietario (cifrado solo no basta)."
-                    !wifiMode -> bleReply
-                    else -> message
+                when (currentBand.lowercase()) {
+                    "cold", "frio", "frío" -> "Frío · menos de 20 °C"
+                    "comfort", "confort" -> "Confort · 20–25 °C"
+                    "warm", "calido", "cálido" -> "Cálido · 26–29 °C"
+                    "hot", "calor" -> "Calor · 30–34 °C"
+                    "extreme", "extremo" -> "Extremo · 35 °C o más"
+                    else -> currentBand
                 },
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodyMedium
             )
+            if (currentState != "RUNNING") {
+                Text(
+                    if (!authorized) "Dispositivo desconectado"
+                    else if (currentState == "SUSPENDED") "Esperando temperatura válida"
+                    else if (currentState == "DISABLED") "Modo ambiental apagado"
+                    else "Estado: $currentState",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             Button(
                 enabled = authorized && !busy,
                 modifier = Modifier.fillMaxWidth().testTag("environmental_rgb_toggle"),

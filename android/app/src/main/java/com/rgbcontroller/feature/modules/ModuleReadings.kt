@@ -78,7 +78,7 @@ internal fun ModuleReadings(
                     Column(Modifier.padding(16.dp).animateContentSize(animationSpec = tween(250)),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Sensor de luminosidad", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text("LDR · luz relativa medida por el ESP32", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(if (light != null) "Calibrado" else "Sin calibrar", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(
@@ -114,7 +114,7 @@ internal fun ModuleReadings(
                             },
                             style = MaterialTheme.typography.bodySmall
                         )
-                        Text("Lectura física ADC1: ${raw?.toString() ?: "—"} / 4095",
+                        Text("ADC: ${raw?.toString() ?: "—"} / 4095",
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.testTag("ldr_light_raw"))
                         OutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) {
@@ -138,9 +138,7 @@ internal fun ModuleReadings(
                                 progress = { raw.coerceIn(0, 4095) / 4095f },
                                 modifier = Modifier.fillMaxWidth().testTag("ldr_adc_level")
                             )
-                            Text("Señal ADC: $raw / 4095 · señal cruda, no porcentaje de luz",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(
@@ -213,29 +211,24 @@ internal fun ModuleReadings(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF07111A))) {
-                        Column(
-                            Modifier.fillMaxWidth().padding(20.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        Row(
+                            Modifier.fillMaxWidth().padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            Text("◕ ᴗ ◕", style = MaterialTheme.typography.displayMedium,
-                                color = Color(0xFF9EE6FF))
-                            Text("COMPI · vista ilustrativa", color = Color(0xFF9EE6FF),
-                                style = MaterialTheme.typography.labelSmall)
+                            Text("•ᴗ•", style = MaterialTheme.typography.displayLarge,
+                                color = Color(0xFF9EE6FF), modifier = Modifier.weight(1f))
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(temp?.let { "%.1f °C".format(java.util.Locale.ROOT, it) } ?: "— °C",
+                                    style = MaterialTheme.typography.titleLarge, color = Color(0xFF9EE6FF))
+                                Text(humidity?.let { "%.0f %%".format(java.util.Locale.ROOT, it) } ?: "— %",
+                                    style = MaterialTheme.typography.titleMedium, color = Color(0xFF9EE6FF))
+                                Text(light?.let { "%.0f %% luz".format(java.util.Locale.ROOT, it) }
+                                    ?: raw?.let { "%.0f ADC".format(java.util.Locale.ROOT, it) } ?: "— luz",
+                                    style = MaterialTheme.typography.labelMedium, color = Color(0xFF9EE6FF))
+                            }
                         }
                     }
-                    Text("Temperatura: " + (temp?.let { "%.1f °C".format(java.util.Locale.ROOT, it) } ?: "—"))
-                    Text("Humedad: " + (humidity?.let { "%.0f %%".format(java.util.Locale.ROOT, it) } ?: "—"))
-                    Text(
-                        "Luz: " + when {
-                            light != null -> "%.0f %% (calibrada)".format(java.util.Locale.ROOT, light)
-                            raw != null -> "%.0f ADC (sin calibrar)".format(java.util.Locale.ROOT, raw)
-                            else -> "—"
-                        }
-                    )
-                    Text("Vista ilustrativa · la OLED física puede mostrar otra expresión",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.labelSmall)
                     Text("Expresiones físicas", style = MaterialTheme.typography.titleMedium)
                     if (oledActionMessage != null) {
                         Text(oledActionMessage, style = MaterialTheme.typography.bodySmall,

@@ -19,6 +19,21 @@ import org.junit.Test
 class MediaControlsTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun stationAudioDefaultsToPhoneAndOffersPhysicalOutput() {
+        compose.setContent {
+            MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) {
+                CompiAudioPlayerCard(false, null, false, null, { _, _ -> })
+            } }
+        }
+        compose.onNodeWithTag("local_audio_controls").assertExists()
+        compose.onNodeWithTag("dfplayer_physical_controls").assertDoesNotExist()
+        compose.onNodeWithTag("audio_output_dfplayer").performClick()
+        compose.onNodeWithTag("dfplayer_physical_controls").assertExists()
+        compose.onNodeWithTag("local_audio_controls").assertDoesNotExist()
+        compose.onNodeWithTag("audio_output_phone").performClick()
+        compose.onNodeWithTag("local_audio_controls").assertExists()
+    }
+
     @Test fun unauthorizedAudioNeverClaimsActiveHardware() {
         compose.setContent {
             MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) {
@@ -27,6 +42,7 @@ class MediaControlsTest {
                     false, null, { _, _ -> error("Cannot control unauthenticated hardware") })
             } }
         }
+        compose.onNodeWithTag("audio_output_dfplayer").performClick()
         compose.onNodeWithTag("dfplayer_status").assertTextContains("Conecta y autoriza", substring = true)
         compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
     }
@@ -39,8 +55,23 @@ class MediaControlsTest {
                     false, null, { _, _ -> error("No command may be sent without SD") })
             } }
         }
+        compose.onNodeWithTag("audio_output_dfplayer").performClick()
         compose.onNodeWithTag("dfplayer_status").assertTextEquals("MicroSD ausente.")
         compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
+    }
+
+    @Test fun dfplayerVolumeAvailableEvenWithoutSd() {
+        var command: Pair<String, String?>? = null
+        compose.setContent {
+            MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) {
+                CompiAudioPlayerCard(true,
+                    AudioHardwareState(true, 0, -1, "UNKNOWN", -1, 10, false, true),
+                    false, null, { verb, value -> command = verb to value })
+            } }
+        }
+        compose.onNodeWithTag("audio_output_dfplayer").performClick()
+        compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
+        compose.onNodeWithTag("dfplayer_volume").assertIsEnabled()
     }
 
     @Test fun missingUartExplainsPhysicalWiringAndBlocksPlayback() {
@@ -51,7 +82,8 @@ class MediaControlsTest {
                     false, null, { _, _ -> error("No playback without UART response") })
             } }
         }
-        compose.onNodeWithTag("dfplayer_status").assertTextContains("TX14", substring = true)
+        compose.onNodeWithTag("audio_output_dfplayer").performClick()
+        compose.onNodeWithTag("dfplayer_status").assertTextContains("sin respuesta", substring = true)
         compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
     }
 
@@ -63,7 +95,8 @@ class MediaControlsTest {
                     false, null, { _, _ -> error("No playback for empty SD") })
             } }
         }
-        compose.onNodeWithTag("dfplayer_status").assertTextContains("0 archivos", substring = true)
+        compose.onNodeWithTag("audio_output_dfplayer").performClick()
+        compose.onNodeWithTag("dfplayer_status").assertTextContains("0 canciones", substring = true)
         compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
     }
 
@@ -76,6 +109,7 @@ class MediaControlsTest {
                     false, null, { verb, value -> sent = verb to value })
             } }
         }
+        compose.onNodeWithTag("audio_output_dfplayer").performClick()
         compose.onNodeWithTag("dfplayer_play").performScrollTo().performClick()
         compose.runOnIdle { assertEquals("PLAY" to "1", sent) }
     }
