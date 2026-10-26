@@ -26,6 +26,7 @@ fun LocalAudioControls() {
         AudioPlaylistQueue().apply {
             val saved = runCatching { JSONArray(prefs.getString("uris", "[]")) }.getOrDefault(JSONArray())
             for (i in 0 until minOf(saved.length(), 50)) enqueue(saved.optString(i))
+            if (tracks().isNotEmpty()) select(prefs.getInt("selected_index", 0).coerceIn(0, tracks().lastIndex))
         }
     }
     val player = remember(context) { AndroidLocalAudioPlayer(context.applicationContext) }
@@ -37,10 +38,12 @@ fun LocalAudioControls() {
     var showLibrary by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
     fun persist() {
-        prefs.edit().putString("uris", JSONArray(queue.tracks()).toString()).apply()
+        prefs.edit().putString("uris", JSONArray(queue.tracks()).toString())
+            .putInt("selected_index", queue.currentIndex).apply()
         revision++
     }
     fun playUri(uri: String) {
+        persist()
         player.play(Uri.parse(uri)) {
             queue.advanceOrNull()?.let { playUri(it) }
             revision++
@@ -99,7 +102,7 @@ fun LocalAudioControls() {
                                 if (queue.currentIndex != index) {
                                     player.stop()
                                     queue.select(index)
-                                    revision++
+                                    persist()
                                 }
                             },
                             modifier = Modifier.fillMaxWidth().testTag("phone_audio_track_${index}")
