@@ -305,6 +305,20 @@ fun MainAppNavHost(
                 composable(Screen.Settings.route) {
                     SettingsScreen(bleManager, preferencesRepository,
                         onVoiceTest = { phoneVoice.speakTest() },
+                        onBackgroundVoiceChange = { enable ->
+                            val serviceIntent = Intent(context, CompiVoiceForegroundService::class.java)
+                            if (enable) {
+                                CompiVoiceForegroundService.dashboard = dashboardVm
+                                CompiVoiceForegroundService.controller = phoneVoice
+                                try {
+                                    ContextCompat.startForegroundService(context, serviceIntent)
+                                    true
+                                } catch (_: Exception) { false }
+                            } else {
+                                context.stopService(serviceIntent)
+                                true
+                            }
+                        },
                         onOpenHub = { navController.navigateTopLevel(Screen.Hub) },
                         onOpenPrograms = { navController.navigateTopLevel(Screen.Code) })
                 }
