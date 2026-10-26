@@ -68,6 +68,8 @@ data class LastKnownStatus(
 
 enum class ComponentStatusFreshness { LIVE, LAST_KNOWN, NONE }
 
+data class FirmwareVoiceEvent(val id: Long, val cue: Int, val atMs: Long)
+
 /** The single reactive state rendered by the persistent component dashboard. */
 data class ComponentDashboardState(
     val deviceId: String? = null,
@@ -75,6 +77,7 @@ data class ComponentDashboardState(
     val firmwareStatus: FirmwareReportedStatus? = null,
     val lastKnownStatus: LastKnownStatus? = null,
     val firmwareTelemetry: FirmwareReportedTelemetry? = null,
+    val firmwareVoiceEvent: FirmwareVoiceEvent? = null,
     val lastKnownTelemetry: LastKnownTelemetry? = null,
     val history: List<TelemetrySample> = emptyList(),
     val alertRules: List<AlertRule> = DefaultAlertRules.defaults(),
