@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -34,6 +35,11 @@ fun SettingsScreen(
     val security by bleManager.securityState.collectAsState()
     val frame by bleManager.deviceState.collectAsState()
     val theme by preferencesRepository.themeMode.collectAsState(initial = "SYSTEM")
+    val context = LocalContext.current
+    val voicePrefs = remember(context) {
+        context.applicationContext.getSharedPreferences("compi_voice", android.content.Context.MODE_PRIVATE)
+    }
+    var phoneVoiceEnabled by remember { mutableStateOf(voicePrefs.getBoolean("phone_enabled", false)) }
     val scope = rememberCoroutineScope()
     var showTechnical by rememberSaveable { mutableStateOf(false) }
 
@@ -92,6 +98,31 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+            }
+        }
+
+        Text("Compi Voice", style = MaterialTheme.typography.titleMedium)
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Voz automática del celular", style = MaterialTheme.typography.titleSmall)
+                        Text("El celular anuncia cambios de luz y temperatura sin microSD.",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(
+                        checked = phoneVoiceEnabled,
+                        onCheckedChange = {
+                            phoneVoiceEnabled = it
+                            voicePrefs.edit().putBoolean("phone_enabled", it).apply()
+                        },
+                        modifier = Modifier.testTag("voice_phone_enabled")
+                    )
+                }
+                Text("Funciona mientras Compi recibe lecturas actuales y la app permanece activa. " +
+                    "El audio físico del DFPlayer se controla por separado.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
