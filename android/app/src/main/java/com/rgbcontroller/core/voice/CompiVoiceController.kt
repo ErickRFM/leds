@@ -55,11 +55,13 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
         if (device != deviceId) {
             tts?.stop()
             device = deviceId
+            recentAnnouncements.clear()
             events.reset()
         }
         val enabled = preferences.getBoolean("phone_enabled", false)
         if (!enabled) {
             if (lastEnabled) tts?.stop()
+            recentAnnouncements.clear()
             events.reset()
             lastEnabled = false
             return
