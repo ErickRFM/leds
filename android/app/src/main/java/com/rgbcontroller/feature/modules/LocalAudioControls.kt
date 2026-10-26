@@ -17,6 +17,8 @@ import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.audio.AndroidLocalAudioPlayer
 import com.rgbcontroller.core.audio.AudioPlaylistQueue
 import org.json.JSONArray
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Local documents stay on the phone; they are never sent to the DFPlayer. */
 @Composable
@@ -63,8 +65,9 @@ fun LocalAudioControls() {
         message = if (added > 0) "$added canciones añadidas" else if (uris.isNotEmpty()) "Las canciones ya estaban añadidas o no se pudieron leer." else null
     }
     val tracks = remember(revision) { queue.tracks() }
-    val displayNames = remember(tracks) {
-        tracks.associateWith { item ->
+    val displayNames by produceState<Map<String, String>>(emptyMap(), tracks, context) {
+        value = withContext(Dispatchers.IO) {
+            tracks.associateWith { item ->
             val uri = Uri.parse(item)
             runCatching {
                 context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME),
@@ -76,6 +79,7 @@ fun LocalAudioControls() {
                 }
             }.getOrNull()?.takeIf { it.isNotBlank() }
                 ?: uri.lastPathSegment ?: "Audio"
+            }
         }
     }
     if (confirmClear) {
