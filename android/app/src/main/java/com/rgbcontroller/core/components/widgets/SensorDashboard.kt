@@ -31,7 +31,9 @@ fun SensorDashboard(
     var minutes by rememberSaveable(id) { mutableIntStateOf(30) }
     var showDiagnostics by rememberSaveable(id) { mutableStateOf(false) }
     val readings = if (live) state.authoritativeTelemetry else state.persistedTelemetry
-    val current = active && live && state.connected && state.authorityError == null
+    val physicalReading = active && live && state.connected &&
+        state.authorityError == null && ModuleEvidence.dhtResponding(state, id)
+    val current = physicalReading
     val now = System.currentTimeMillis()
     // The latest firmware sample may be temporarily stale during a DHT retry.
     // Display recent, verified history as last-known, never as live telemetry.
@@ -49,7 +51,6 @@ fun SensorDashboard(
     }
     val temperature = metric("temperature")
     val humidity = metric("humidity")
-    val physicalReading = active && live && ModuleEvidence.dhtResponding(state, id)
     val firmwareStatus = ComponentTelemetryCodec.find(readings.orEmpty(), "temperature")?.status
     val diagnostic = (if (live) state.authoritative else state.persisted)
         .orEmpty().firstOrNull { it.id == "sensor.$id" }
