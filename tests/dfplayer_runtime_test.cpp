@@ -106,6 +106,20 @@ int main() {
   // The command must have been consumed exactly once, then polling resumes.
   retry.tick(300);
   assert(retryWire.bytes[3]==0x3f);
+  // A failed STATUS poll must retry the SAME opcode rather than silently
+  // advancing to the next register and leaving SD presence unknown.
+  Wire pollWire; DfPlayerRuntime pollRetry(send,&pollWire);
+  pollWire.accept=false;
+  pollRetry.tick(100);
+  assert(pollWire.bytes[3]==0x3f);
+  pollWire.accept=true;
+  pollRetry.tick(200);
+  assert(pollWire.bytes[3]==0x3f);
+  receive(pollRetry,0x3f,2,210);
+  assert(pollRetry.snapshot(210).modulePresent);
+  assert(pollRetry.snapshot(210).sdPresent==1);
+  pollRetry.tick(310);
+  assert(pollWire.bytes[3]==0x42);
   // SD initialization alone is insufficient: a verified zero file count blocks PLAY.
   Wire emptyWire; DfPlayerRuntime empty(send,&emptyWire);
   empty.tick(100); receive(empty,0x3f,2,110);
