@@ -83,7 +83,7 @@ class MediaControlsTest {
             } }
         }
         compose.onNodeWithTag("audio_output_dfplayer").performClick()
-        compose.onNodeWithTag("dfplayer_status").assertTextContains("TX14", substring = true)
+        compose.onNodeWithTag("dfplayer_status").assertTextContains("sin respuesta", substring = true)
         compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
     }
 
