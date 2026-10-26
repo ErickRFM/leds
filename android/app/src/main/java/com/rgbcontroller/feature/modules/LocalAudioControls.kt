@@ -2,9 +2,12 @@ package com.rgbcontroller.feature.modules
 
 import android.content.Intent
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -14,6 +17,8 @@ import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.audio.AndroidLocalAudioPlayer
 import com.rgbcontroller.core.audio.AudioPlaylistQueue
 import org.json.JSONArray
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Local documents stay on the phone; they are never sent to the DFPlayer. */
 @Composable
@@ -24,6 +29,7 @@ fun LocalAudioControls() {
         AudioPlaylistQueue().apply {
             val saved = runCatching { JSONArray(prefs.getString("uris", "[]")) }.getOrDefault(JSONArray())
             for (i in 0 until minOf(saved.length(), 50)) enqueue(saved.optString(i))
+            if (tracks().isNotEmpty()) select(prefs.getInt("selected_index", 0).coerceIn(0, tracks().lastIndex))
         }
     }
     val player = remember(context) { AndroidLocalAudioPlayer(context.applicationContext) }
@@ -32,11 +38,15 @@ fun LocalAudioControls() {
     var revision by remember { mutableIntStateOf(0) }
     var message by remember { mutableStateOf<String?>(null) }
     var volume by remember { mutableFloatStateOf(.6f) }
+    var showLibrary by remember { mutableStateOf(false) }
+    var confirmClear by remember { mutableStateOf(false) }
     fun persist() {
-        prefs.edit().putString("uris", JSONArray(queue.tracks()).toString()).apply()
+        prefs.edit().putString("uris", JSONArray(queue.tracks()).toString())
+            .putInt("selected_index", queue.currentIndex).apply()
         revision++
     }
     fun playUri(uri: String) {
+        persist()
         player.play(Uri.parse(uri)) {
             queue.advanceOrNull()?.let { playUri(it) }
             revision++
@@ -55,12 +65,74 @@ fun LocalAudioControls() {
         message = if (added > 0) "$added canciones añadidas" else if (uris.isNotEmpty()) "Las canciones ya estaban añadidas o no se pudieron leer." else null
     }
     val tracks = remember(revision) { queue.tracks() }
+    val displayNames by produceState<Map<String, String>>(emptyMap(), tracks, context) {
+        value = withContext(Dispatchers.IO) {
+            tracks.associateWith { item ->
+            val uri = Uri.parse(item)
+            runCatching {
+                context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME),
+                    null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                            .takeIf { it >= 0 }?.let(cursor::getString)
+                    } else null
+                }
+            }.getOrNull()?.takeIf { it.isNotBlank() }
+                ?: uri.lastPathSegment ?: "Audio"
+            }
+        }
+    }
+    if (confirmClear) {
+        AlertDialog(
+            onDismissRequest = { confirmClear = false },
+            title = { Text("Vaciar biblioteca") },
+            text = { Text("Se quitarán las canciones de Compi, pero los archivos seguirán en tu teléfono.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    player.stop()
+                    queue.clear()
+                    persist()
+                    showLibrary = false
+                    confirmClear = false
+                    message = "Biblioteca vaciada"
+                }, modifier = Modifier.testTag("phone_audio_confirm_clear")) { Text("Vaciar") }
+            },
+            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancelar") } }
+        )
+    }
     Card(Modifier.fillMaxWidth().testTag("local_audio_controls")) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Mi biblioteca", style = MaterialTheme.typography.titleMedium)
-            Text(queue.current()?.let { Uri.parse(it).lastPathSegment } ?: "Aún no hay canciones", style = MaterialTheme.typography.titleMedium, maxLines = 2)
+            Text(queue.current()?.let(displayNames::get) ?: "Aún no hay canciones", style = MaterialTheme.typography.titleMedium, maxLines = 2)
             Text(if (tracks.isEmpty()) "Añade canciones desde tu teléfono" else "${tracks.size} canciones · ${playback.description}", style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = { importer.launch(arrayOf("audio/*")) }) { Text("Añadir canciones") }
+            if (tracks.isNotEmpty()) {
+                TextButton(onClick = { confirmClear = true }, modifier = Modifier.testTag("phone_audio_clear_library")) {
+                    Text("Vaciar biblioteca")
+                }
+                TextButton(onClick = { showLibrary = !showLibrary }, modifier = Modifier.testTag("phone_audio_library_toggle")) {
+                    Text(if (showLibrary) "Ocultar biblioteca" else "Ver biblioteca (${tracks.size})")
+                }
+                if (showLibrary) {
+                    LazyColumn(Modifier.fillMaxWidth().heightIn(max = 240.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    itemsIndexed(tracks) { index, uri ->
+                        val fileName = displayNames[uri] ?: "Canción ${index + 1}"
+                        OutlinedButton(
+                            onClick = {
+                                if (queue.currentIndex != index) {
+                                    player.stop()
+                                    queue.select(index)
+                                    persist()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().testTag("phone_audio_track_${index}")
+                        ) {
+                            Text("${index + 1}. $fileName", maxLines = 1)
+                        }
+                    }
+                    }
+                }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedButton(onClick = { queue.previous()?.let(::playUri) }, enabled = tracks.isNotEmpty()) { Text("Anterior") }
                 Button(onClick = {
