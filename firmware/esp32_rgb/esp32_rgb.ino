@@ -1715,7 +1715,7 @@ void loop() {
     lastDfplayerDiagnosticsAt = now;
     const auto uart = dfplayerRuntime.diagnostics();
     const auto audio = dfplayerRuntime.snapshot(now);
-    Serial.printf("DFPLAYER UART tx=%lu blocked=%lu rx=%lu valid=%lu checksum=%lu expired=%lu timeout=%lu last=0x%02X present=%d sd=%d tracks=%d\\n",
+    Serial.printf("DFPLAYER UART tx=%lu blocked=%lu rx=%lu valid=%lu checksum=%lu expired=%lu timeout=%lu last=0x%02X present=%d sd=%d tracks=%d\n",
       static_cast<unsigned long>(uart.txFrames),
       static_cast<unsigned long>(uart.txRejected),
       static_cast<unsigned long>(uart.rxBytes),
