@@ -53,6 +53,9 @@ import com.rgbcontroller.feature.modules.ModuleWorkspaceScreen
 import com.rgbcontroller.feature.settings.SettingsScreen
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rgbcontroller.feature.hardwarelab.ComponentDashboardViewModel
 
@@ -146,6 +149,14 @@ fun MainAppNavHost(
     // eligible for announcements; persisted history never triggers a voice.
     val phoneVoice = remember(context) { CompiVoiceController(context.applicationContext) }
     DisposableEffect(phoneVoice) { onDispose { phoneVoice.close() } }
+    val voiceLifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(phoneVoice, voiceLifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) phoneVoice.pause()
+        }
+        voiceLifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { voiceLifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val liveDashboard by dashboardVm.uiState.collectAsState()
     val liveTelemetry = liveDashboard.firmwareTelemetry
     LaunchedEffect(liveDashboard.deviceId, liveDashboard.connected, liveTelemetry?.receivedAtMs) {
