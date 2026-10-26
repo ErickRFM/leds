@@ -78,7 +78,7 @@ internal fun ModuleReadings(
                     Column(Modifier.padding(16.dp).animateContentSize(animationSpec = tween(250)),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Sensor de luminosidad", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text("LDR · luz relativa medida por el ESP32", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(if (light != null) "Calibrado" else "Sin calibrar", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(
@@ -114,7 +114,7 @@ internal fun ModuleReadings(
                             },
                             style = MaterialTheme.typography.bodySmall
                         )
-                        Text("Lectura física ADC1: ${raw?.toString() ?: "—"} / 4095",
+                        Text("ADC: ${raw?.toString() ?: "—"} / 4095",
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.testTag("ldr_light_raw"))
                         OutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) {
@@ -138,9 +138,7 @@ internal fun ModuleReadings(
                                 progress = { raw.coerceIn(0, 4095) / 4095f },
                                 modifier = Modifier.fillMaxWidth().testTag("ldr_adc_level")
                             )
-                            Text("Señal ADC: $raw / 4095 · señal cruda, no porcentaje de luz",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(
