@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -24,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.DisposableEffect
 import com.rgbcontroller.core.voice.CompiVoiceController
+import com.rgbcontroller.core.voice.CompiVoiceForegroundService
 import com.rgbcontroller.core.ble.BleConnectionState
 import com.rgbcontroller.core.ble.BleSecurityState
 import com.rgbcontroller.core.wifi.LabConnectionState
@@ -148,11 +150,11 @@ fun MainAppNavHost(
     // One speech owner for all screens. Only live, confirmed telemetry is
     // eligible for announcements; persisted history never triggers a voice.
     val phoneVoice = remember(context) { CompiVoiceController(context.applicationContext) }
-    DisposableEffect(phoneVoice) { onDispose { phoneVoice.close() } }
+    DisposableEffect(phoneVoice) { onDispose { if (!CompiVoiceForegroundService.running) phoneVoice.close() } }
     val voiceLifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(phoneVoice, voiceLifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) phoneVoice.pause()
+            if (event == Lifecycle.Event.ON_STOP && !CompiVoiceForegroundService.running) phoneVoice.pause()
         }
         voiceLifecycleOwner.lifecycle.addObserver(observer)
         onDispose { voiceLifecycleOwner.lifecycle.removeObserver(observer) }
@@ -189,7 +191,7 @@ fun MainAppNavHost(
         if (authorized) {
             while (true) {
                 delay(3_000L)
-                dashboardVm.refresh()
+                if (!CompiVoiceForegroundService.running) dashboardVm.refresh()
             }
         }
     }
