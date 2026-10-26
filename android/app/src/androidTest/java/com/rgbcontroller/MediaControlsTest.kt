@@ -60,6 +60,20 @@ class MediaControlsTest {
         compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
     }
 
+    @Test fun dfplayerVolumeAvailableEvenWithoutSd() {
+        var command: Pair<String, String?>? = null
+        compose.setContent {
+            MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) {
+                CompiAudioPlayerCard(true,
+                    AudioHardwareState(true, 0, -1, "UNKNOWN", -1, 10, false, true),
+                    false, null, { verb, value -> command = verb to value })
+            } }
+        }
+        compose.onNodeWithTag("audio_output_dfplayer").performClick()
+        compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
+        compose.onNodeWithTag("dfplayer_volume").assertIsEnabled()
+    }
+
     @Test fun missingUartExplainsPhysicalWiringAndBlocksPlayback() {
         compose.setContent {
             MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) {
