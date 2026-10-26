@@ -64,10 +64,10 @@ class DfPlayerRuntime final {
       return;
     }
     if(poll_==0 && age(now,lastCycle_)<1000 && cycleStarted_ && commandsSincePoll_<2) return;
-    if(poll_==0) {lastCycle_=now; cycleStarted_=true;}
     const uint8_t queries[]={0x3f,0x42,0x48,0x4c,0x43};
     const uint8_t query=queries[poll_];
     if(transmit(query,0,now)) {
+      if(poll_==0) {lastCycle_=now; cycleStarted_=true;}
       poll_=(poll_+1)%5;
       commandsSincePoll_=0;
       waiting_=query;
