@@ -175,6 +175,7 @@ class ComponentStatusRepository(
             deviceId = next,
             firmwareStatus = null,
             firmwareTelemetry = null,
+            firmwareVoiceEvent = null,
             alertStates = emptyMap(),
             alertEvents = emptyList(),
             automationStates = emptyMap(),
@@ -192,7 +193,8 @@ class ComponentStatusRepository(
             _state.value.copy(
                 connected = false,
                 firmwareStatus = null,
-                firmwareTelemetry = null
+                firmwareTelemetry = null,
+                firmwareVoiceEvent = null
             )
         }
     }
@@ -202,6 +204,7 @@ class ComponentStatusRepository(
         _state.value = _state.value.copy(
             firmwareStatus = null,
             firmwareTelemetry = null,
+            firmwareVoiceEvent = null,
             authorityError = message
         )
     }
@@ -210,6 +213,7 @@ class ComponentStatusRepository(
     fun invalidateLiveTelemetry(message: String) {
         _state.value = _state.value.copy(
             firmwareTelemetry = null,
+            firmwareVoiceEvent = null,
             authorityError = message
         )
     }
