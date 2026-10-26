@@ -60,7 +60,7 @@ fun CompiAudioPlayerCard(
                     style = MaterialTheme.typography.labelMedium,
                     color = if (authorized && hardware?.modulePresent == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text("DFPlayer Mini · microSD", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
             Text(when {
                 !authorized -> "Conecta y autoriza Bluetooth o Wi-Fi."
                 hardware == null -> "Esperando estado del firmware…"
@@ -73,9 +73,9 @@ fun CompiAudioPlayerCard(
             }, modifier = Modifier.testTag("dfplayer_status"))
             Text(when {
                 !authorized || hardware == null || !hardware.modulePresent || hardware.playback == "UNKNOWN" -> "Reproducción sin confirmar"
-                hardware.playing -> "Módulo reporta reproducción · índice SD ${hardware.track.takeIf { it >= 0 } ?: "—"}"
-                hardware.playback == "PAUSED" -> "Módulo reporta pausa"
-                hardware.playback == "STOPPED" -> "Módulo reporta detenido"
+                hardware.playing -> "Reproduciendo · pista ${hardware.track.takeIf { it >= 0 } ?: "—"}"
+                hardware.playback == "PAUSED" -> "En pausa"
+                hardware.playback == "STOPPED" -> "Detenido"
                 else -> "Reproducción sin confirmar"
             })
             OutlinedTextField(value = trackText,
@@ -103,7 +103,7 @@ fun CompiAudioPlayerCard(
                 OutlinedButton(onClick = { onCommand("STOP", null) }, enabled = authorized && hardware?.modulePresent == true && !busy,
                     modifier = Modifier.weight(1f)) { Text("Parar") }
             }
-            Text("Volumen DFPlayer: ${hardware?.volume?.takeIf { it >= 0 } ?: "—"}/30")
+            Text("Volumen · ${hardware?.volume?.takeIf { it >= 0 } ?: "—"}/30")
             Slider(value = volume, onValueChange = { volume = it }, valueRange = 0f..30f,
                 enabled = moduleReady, modifier = Modifier.testTag("dfplayer_volume"))
             OutlinedButton(onClick = { onCommand("VOLUME", volume.toInt().toString()) }, enabled = moduleReady) {
