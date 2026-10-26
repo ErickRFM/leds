@@ -15,6 +15,7 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
     private var device: String? = null
     private val events = EnvironmentalSpeechEngine()
     private var pendingInitialization = false
+    private var lastEnabled = false
 
     init {
         tts = TextToSpeech(context.applicationContext, this)
@@ -54,8 +55,17 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
             device = deviceId
             events.reset()
         }
+        val enabled = preferences.getBoolean("phone_enabled", false)
+        if (!enabled) {
+            if (lastEnabled) tts?.stop()
+            events.reset()
+            lastEnabled = false
+            return
+        }
+        if (!lastEnabled) events.reset()
+        lastEnabled = true
         val cues = events.evaluate(temperatureC, lightPercent, sampleAtMs, nowMs)
-        if (!preferences.getBoolean("phone_enabled", false) || !initialized) return
+        if (!initialized) return
         val engine = tts ?: return
         cues.forEachIndexed { index, cue ->
             engine.speak(
