@@ -2,6 +2,7 @@ package com.rgbcontroller.core.voice
 
 import android.content.Context
 import android.speech.tts.TextToSpeech
+import android.os.Bundle
 import java.util.Locale
 
 /** Independent local speech output; never blocks the ESP32 DFPlayer. */
@@ -16,7 +17,6 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
     private val events = EnvironmentalSpeechEngine()
     private var pendingInitialization = false
     private var lastEnabled = false
-    private var lastConnectionAnnounced = false
     private val recentAnnouncements = mutableMapOf<String, Long>()
 
     init {
@@ -35,6 +35,17 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
         initialized = result != TextToSpeech.LANG_MISSING_DATA &&
             result != TextToSpeech.LANG_NOT_SUPPORTED
         pendingInitialization = false
+        applyPreferences()
+    }
+
+    private fun applyPreferences() {
+        val rate = preferences.getInt("phone_rate", 100).coerceIn(70, 130) / 100f
+        tts?.setSpeechRate(rate)
+    }
+
+    private fun speechParams(): Bundle = Bundle().apply {
+        putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME,
+            preferences.getInt("phone_volume", 100).coerceIn(0, 100) / 100f)
     }
 
     fun accept(
@@ -49,7 +60,6 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
         if (!connected || deviceId.isNullOrEmpty()) {
             tts?.stop()
             device = null
-            lastConnectionAnnounced = false
             recentAnnouncements.clear()
             events.reset()
             return
@@ -74,6 +84,7 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
         val cues = events.evaluate(temperatureC, lightPercent, sampleAtMs, nowMs)
         if (!initialized) return
         val engine = tts ?: return
+        applyPreferences()
         cues.forEachIndexed { index, cue ->
             val key = "${deviceId}:${cue.name}"
             val previous = recentAnnouncements[key]
@@ -88,7 +99,7 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
             engine.speak(
                 cue.message,
                 if (index == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD,
-                null,
+                speechParams(),
                 "compi-${cue.name}-${sampleAtMs}"
             )
         }
@@ -98,10 +109,11 @@ class CompiVoiceController(context: Context) : TextToSpeech.OnInitListener {
     fun speakTest(): Boolean {
         if (closed || !initialized) return false
         val engine = tts ?: return false
+        applyPreferences()
         return engine.speak(
             "Hola, soy Compi. La voz de tu celular está funcionando.",
             TextToSpeech.QUEUE_FLUSH,
-            null,
+            speechParams(),
             "compi-voice-test"
         ) != TextToSpeech.ERROR
     }
