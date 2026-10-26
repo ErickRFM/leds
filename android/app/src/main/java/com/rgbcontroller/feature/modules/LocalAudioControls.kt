@@ -2,6 +2,7 @@ package com.rgbcontroller.feature.modules
 
 import android.content.Intent
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -62,6 +63,21 @@ fun LocalAudioControls() {
         message = if (added > 0) "$added canciones añadidas" else if (uris.isNotEmpty()) "Las canciones ya estaban añadidas o no se pudieron leer." else null
     }
     val tracks = remember(revision) { queue.tracks() }
+    val displayNames = remember(tracks) {
+        tracks.associateWith { item ->
+            val uri = Uri.parse(item)
+            runCatching {
+                context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME),
+                    null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                            .takeIf { it >= 0 }?.let(cursor::getString)
+                    } else null
+                }
+            }.getOrNull()?.takeIf { it.isNotBlank() }
+                ?: uri.lastPathSegment ?: "Audio"
+        }
+    }
     if (confirmClear) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
@@ -83,7 +99,7 @@ fun LocalAudioControls() {
     Card(Modifier.fillMaxWidth().testTag("local_audio_controls")) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Mi biblioteca", style = MaterialTheme.typography.titleMedium)
-            Text(queue.current()?.let { Uri.parse(it).lastPathSegment } ?: "Aún no hay canciones", style = MaterialTheme.typography.titleMedium, maxLines = 2)
+            Text(queue.current()?.let(displayNames::get) ?: "Aún no hay canciones", style = MaterialTheme.typography.titleMedium, maxLines = 2)
             Text(if (tracks.isEmpty()) "Añade canciones desde tu teléfono" else "${tracks.size} canciones · ${playback.description}", style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = { importer.launch(arrayOf("audio/*")) }) { Text("Añadir canciones") }
             if (tracks.isNotEmpty()) {
@@ -96,7 +112,7 @@ fun LocalAudioControls() {
                 if (showLibrary) {
                     LazyColumn(Modifier.fillMaxWidth().heightIn(max = 240.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     itemsIndexed(tracks) { index, uri ->
-                        val fileName = Uri.parse(uri).lastPathSegment ?: "Canción ${index + 1}"
+                        val fileName = displayNames[uri] ?: "Canción ${index + 1}"
                         OutlinedButton(
                             onClick = {
                                 if (queue.currentIndex != index) {
