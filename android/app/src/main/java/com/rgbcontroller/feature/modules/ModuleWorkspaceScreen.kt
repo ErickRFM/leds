@@ -383,25 +383,6 @@ fun ModuleWorkspaceScreen(
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 40.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Música Compi",
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Bold)
-                            Text("Añade canciones y elige dónde reproducir.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Surface(
-                                color = MaterialTheme.colorScheme.secondaryContainer,
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text("Teléfono · DFPlayer",
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer)
-                            }
-                        }
-                    }
                     item(key = "dfplayer_audio_controls") {
                         CompiAudioPlayerCard(
                             authorized = mediaAuthorized,
