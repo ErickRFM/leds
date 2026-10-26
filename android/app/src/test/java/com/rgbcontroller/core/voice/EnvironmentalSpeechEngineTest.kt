@@ -40,6 +40,17 @@ class EnvironmentalSpeechEngineTest {
         assertTrue(engine.evaluate(null, 5f, 66000, 90000).isEmpty())
     }
 
+    @Test fun jumpingDirectlyBetweenExtremeBandsUsesTheActualDestination() {
+        val engine = EnvironmentalSpeechEngine()
+        engine.evaluate(15f, null, 1000, 1000)
+        assertTrue(engine.evaluate(30f, null, 2000, 2000).isEmpty())
+        assertEquals(listOf(EnvironmentalSpeechEngine.Cue.HOT),
+            engine.evaluate(30f, null, 5000, 5000))
+        assertTrue(engine.evaluate(15f, null, 66000, 66000).isEmpty())
+        assertEquals(listOf(EnvironmentalSpeechEngine.Cue.COLD),
+            engine.evaluate(15f, null, 69000, 69000))
+    }
+
     @Test fun temperatureSpikeDoesNotAnnounce() {
         val engine = EnvironmentalSpeechEngine()
         engine.evaluate(23f, null, 1000, 1000)
