@@ -289,6 +289,7 @@ fun MainAppNavHost(
                 composable(Screen.Code.route) { ProgramEditorScreen(session, bleManager) }
                 composable(Screen.Settings.route) {
                     SettingsScreen(bleManager, preferencesRepository,
+                        onVoiceTest = { phoneVoice.speakTest() },
                         onOpenHub = { navController.navigateTopLevel(Screen.Hub) },
                         onOpenPrograms = { navController.navigateTopLevel(Screen.Code) })
                 }
