@@ -8,6 +8,7 @@ import org.junit.Test
 class BleLdrCalibrationProtocolTest {
     @Test fun requestIsStrictAndBounded() {
         assertEquals("LDR,17,500,3500", BleLdrCalibrationProtocol.request(17, 500, 3500))
+        assertEquals("LDR,18,3500,500", BleLdrCalibrationProtocol.request(18, 3500, 500))
         for (bad in listOf(0, -1, 65536)) {
             try {
                 BleLdrCalibrationProtocol.request(bad, 500, 3500)
