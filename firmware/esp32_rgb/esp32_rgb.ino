@@ -14,6 +14,7 @@
 #include "modules/LedRgbModule.h"
 #include "core/LocalWifiControl.h"
 #include "core/EnvironmentalVoicePolicy.h"
+#include "core/AutonomousSpokenReport.h"
 #include "core/RgbCommandCodec.h"
 #include "core/RgbCommandInbox.h"
 #include "core/BleCommandInbox.h"
@@ -130,6 +131,13 @@
 #endif
 #ifndef COMPI_DFPLAYER_TX
 #define COMPI_DFPLAYER_TX 14
+#endif
+// DFPlayer BUSY is active LOW; standalone optional button pulls GPIO23 to GND.
+#ifndef COMPI_DFPLAYER_BUSY_PIN
+#define COMPI_DFPLAYER_BUSY_PIN 33
+#endif
+#ifndef COMPI_REPORT_BUTTON_PIN
+#define COMPI_REPORT_BUTTON_PIN 23
 #endif
 #if COMPI_ENABLE_DFPLAYER
 esp32core::AudioSnapshot audioStatusSnapshot(void*);
@@ -1467,6 +1475,10 @@ void servePhysicalWindow(uint32_t now) {
 
 #if COMPI_ENABLE_DFPLAYER
 esp32core::EnvironmentalVoicePolicy voicePolicy;
+esp32core::AutonomousSpokenReport spokenReport;
+uint32_t lastSpokenReportAt = 0;
+uint32_t lastManualAudioAt = 0;
+bool hasStartedSpokenReport = false;
 // Single active UART owner for MP3 commands in this sketch.
 HardwareSerial dfplayerSerial(2);
 Preferences audioPreferences;
@@ -1484,14 +1496,23 @@ esp32core::AudioSnapshot audioStatusSnapshot(void*) {
 bool dfplayerTrack(uint16_t track) {
   return dfplayerRuntime.command("play",track,millis());
 }
+bool playSpokenFragment(uint16_t track, void*) { return dfplayerTrack(track); }
 bool audioControlCommand(const char* verb, int param, void*) {
   if (verb == nullptr) return false;
   if (std::strcmp(verb, "voice") == 0) {
     if ((param != 0 && param != 1) || !audioPreferencesReady) return false;
     if(audioPreferences.putBool("voice",param==1)!=1) return false;
     automaticVoiceEnabled = (param == 1);
+    if (!automaticVoiceEnabled) spokenReport.cancel();
     voicePolicy=esp32core::EnvironmentalVoicePolicy{};
     return true;
+  }
+  const bool manual = std::strcmp(verb, "play") == 0 ||
+      std::strcmp(verb, "pause") == 0 || std::strcmp(verb, "resume") == 0 ||
+      std::strcmp(verb, "stop") == 0;
+  if (manual) {
+    spokenReport.cancel();
+    lastManualAudioAt = millis();
   }
   return dfplayerRuntime.command(verb,param,millis());
 }
@@ -1504,6 +1525,8 @@ void setup() {
 #if COMPI_ENABLE_DFPLAYER
   // UART2 ESP32 RX13 <- DFPlayer TX, ESP32 TX14 -> DFPlayer RX (1k series); DHT11 remains GPIO16.
   dfplayerSerial.begin(9600, SERIAL_8N1, COMPI_DFPLAYER_RX, COMPI_DFPLAYER_TX);
+  pinMode(COMPI_DFPLAYER_BUSY_PIN, INPUT_PULLUP);
+  pinMode(COMPI_REPORT_BUTTON_PIN, INPUT_PULLUP);
   audioPreferencesReady=audioPreferences.begin("compi-audio",false);
   automaticVoiceEnabled=audioPreferencesReady && audioPreferences.getBool("voice",true);
   Serial.printf("BOOT: environmental voice=%s (persisted preference respected)\n", automaticVoiceEnabled ? "ON" : "OFF");
@@ -1545,6 +1568,8 @@ void setup() {
   // is enabled. These pins are not free user GPIO in the full lab profile.
   pinManager.registerSystemPin(COMPI_DFPLAYER_TX, "audio.dfplayer");
   pinManager.registerSystemPin(COMPI_DFPLAYER_RX, "audio.dfplayer");
+  pinManager.registerSystemPin(COMPI_DFPLAYER_BUSY_PIN, "audio.dfplayer.busy");
+  pinManager.registerSystemPin(COMPI_REPORT_BUTTON_PIN, "audio.report.button");
 #endif
   pinManager.registerSystemPin(LED_R, "led.rgb");
   pinManager.registerSystemPin(LED_G, "led.rgb");
@@ -1736,6 +1761,24 @@ void loop() {
       uart.lastResponse, audio.modulePresent, audio.sdPresent, audio.tracks);
   }
   const auto voicePlayerState=dfplayerRuntime.snapshot(now);
+  const bool busyPlaying = digitalRead(COMPI_DFPLAYER_BUSY_PIN) == LOW;
+  static bool lastRawPressed = false;
+  static bool stablePressed = false;
+  static uint32_t buttonChangeAt = 0;
+  static bool userRequestedReport = false;
+  const bool rawPressed = digitalRead(COMPI_REPORT_BUTTON_PIN) == LOW;
+  if (rawPressed != lastRawPressed) {
+    lastRawPressed = rawPressed;
+    buttonChangeAt = now;
+  }
+  if (rawPressed != stablePressed &&
+      static_cast<uint32_t>(now - buttonChangeAt) >= 60u) {
+    stablePressed = rawPressed;
+    if (stablePressed) userRequestedReport = true;
+  }
+  if (!automaticVoiceEnabled || !voicePlayerState.modulePresent ||
+      voicePlayerState.sdPresent != 1) spokenReport.cancel();
+  esp32core::SpokenMeasurements spokenSample{};
   // Sample ambient conditions even while a user-selected track is playing.
   // Never interrupt manual audio; hold at most one pending environmental cue.
   static esp32core::VoiceCue pendingVoiceCue = esp32core::VoiceCue::None;
@@ -1769,16 +1812,46 @@ void loop() {
       voiceSample.lightPercent = light.value;
     }
 #endif
+    spokenSample.temperatureFresh = voiceSample.temperatureFresh;
+    spokenSample.temperatureC = voiceSample.temperatureC;
+    spokenSample.humidityFresh = voiceSample.humidityFresh;
+    spokenSample.humidityPercent = voiceSample.humidityPercent;
+    spokenSample.lightFresh = voiceSample.lightFresh;
+    spokenSample.lightPercent = voiceSample.lightPercent;
     const auto cue = voicePolicy.evaluate(voiceSample, now);
     if (cue != esp32core::VoiceCue::None) {
       pendingVoiceCue = cue;
     }
   }
-  if (automaticVoiceEnabled && pendingVoiceCue != esp32core::VoiceCue::None &&
+  if (automaticVoiceEnabled && !spokenReport.active() &&
+      pendingVoiceCue != esp32core::VoiceCue::None &&
       voicePlayerState.modulePresent && voicePlayerState.sdPresent == 1 &&
       std::strcmp(voicePlayerState.playback, "STOPPED") == 0 &&
       dfplayerTrack(static_cast<uint16_t>(pendingVoiceCue))) {
     pendingVoiceCue = esp32core::VoiceCue::None;
+  }
+  // No Android required: first report at 45 s, repeat each 5 minutes.
+  const bool reportDue = hasStartedSpokenReport
+      ? static_cast<uint32_t>(now - lastSpokenReportAt) >= 300000u
+      : now >= 45000u;
+  if (automaticVoiceEnabled && !spokenReport.active() &&
+      (reportDue || userRequestedReport) &&
+      pendingVoiceCue == esp32core::VoiceCue::None &&
+      voicePlayerState.modulePresent && voicePlayerState.sdPresent == 1 &&
+      std::strcmp(voicePlayerState.playback, "STOPPED") == 0 &&
+      !busyPlaying && static_cast<uint32_t>(now - lastManualAudioAt) >= 30000u &&
+      spokenReport.start(spokenSample, now)) {
+    hasStartedSpokenReport = true;
+    lastSpokenReportAt = now;
+    userRequestedReport = false;
+    Serial.printf("VOICE REPORT start: %u clips (GPIO%d BUSY)\n",
+        static_cast<unsigned>(spokenReport.count()), COMPI_DFPLAYER_BUSY_PIN);
+  }
+  const bool wasSpeaking = spokenReport.active();
+  spokenReport.tick(now, busyPlaying, playSpokenFragment, nullptr);
+  if (wasSpeaking && !spokenReport.active()) {
+    Serial.printf("VOICE REPORT result=%u (1=complete,2=no BUSY,3=timeout)\n",
+        static_cast<unsigned>(spokenReport.result()));
   }
 #endif
 
