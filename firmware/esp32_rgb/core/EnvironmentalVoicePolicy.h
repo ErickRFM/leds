@@ -31,6 +31,15 @@ class EnvironmentalVoicePolicy {
       else if (s.temperatureC<30) next=VoiceCue::Warm;
       else if (s.temperatureC<35) next=VoiceCue::Hot;
       else next=VoiceCue::Extreme;
+      // Align speech switching with the RGB module's 0.5 C hysteresis.
+      // A band is re-armed only after a genuine boundary crossing.
+      if (announcedTemp_ != VoiceCue::None && next != announcedTemp_) {
+        const uint8_t from = static_cast<uint8_t>(announcedTemp_);
+        const uint8_t to = static_cast<uint8_t>(next);
+        const float boundaries[] = {20.f, 26.f, 30.f, 35.f};
+        if (to > from && s.temperatureC < boundaries[from-2] + 0.5f) next = announcedTemp_;
+        else if (to < from && s.temperatureC >= boundaries[to-2] - 0.5f) next = announcedTemp_;
+      }
       if (next==pendingTemp_) {
         if (s.temperatureSampleAt != lastTemperatureSampleAt_ && sameTemp_<3) ++sameTemp_;
       }
