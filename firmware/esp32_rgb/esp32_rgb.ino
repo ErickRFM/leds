@@ -15,6 +15,7 @@
 #include "core/LocalWifiControl.h"
 #include "core/EnvironmentalVoicePolicy.h"
 #include "core/AutonomousSpokenReport.h"
+#include "core/AutonomousReportButton.h"
 #include "core/RgbCommandCodec.h"
 #include "core/RgbCommandInbox.h"
 #include "core/BleCommandInbox.h"
@@ -1476,6 +1477,7 @@ void servePhysicalWindow(uint32_t now) {
 #if COMPI_ENABLE_DFPLAYER
 esp32core::EnvironmentalVoicePolicy voicePolicy;
 esp32core::AutonomousSpokenReport spokenReport;
+esp32core::AutonomousReportButton reportButton;
 uint32_t lastSpokenReportAt = 0;
 uint32_t lastManualAudioAt = 0;
 bool hasStartedSpokenReport = false;
@@ -1764,22 +1766,26 @@ void loop() {
   }
   const auto voicePlayerState=dfplayerRuntime.snapshot(now);
   const bool busyPlaying = digitalRead(COMPI_DFPLAYER_BUSY_PIN) == LOW;
-  static bool lastRawPressed = false;
-  static bool stablePressed = false;
-  static uint32_t buttonChangeAt = 0;
   static bool userRequestedReport = false;
-  const bool rawPressed = digitalRead(COMPI_REPORT_BUTTON_PIN) == LOW;
-  if (rawPressed != lastRawPressed) {
-    lastRawPressed = rawPressed;
-    buttonChangeAt = now;
+  const auto buttonEvent = reportButton.update(
+      digitalRead(COMPI_REPORT_BUTTON_PIN) == LOW, now);
+  if (buttonEvent == esp32core::AutonomousReportButton::Event::SpeakNow) {
+    userRequestedReport = true; // independent from automatic voice preference
+  } else if (buttonEvent ==
+             esp32core::AutonomousReportButton::Event::ToggleAutomatic) {
+    if (audioPreferencesReady &&
+        audioPreferences.putBool("voice", !automaticVoiceEnabled) == 1) {
+      automaticVoiceEnabled = !automaticVoiceEnabled;
+      voicePolicy = esp32core::EnvironmentalVoicePolicy{};
+      if (!automaticVoiceEnabled) spokenReport.cancel();
+      Serial.printf("VOICE: automatic announcements %s via GPIO23\n",
+                    automaticVoiceEnabled ? "ON" : "OFF");
+    } else {
+      Serial.println("VOICE: unable to persist automatic preference");
+    }
   }
-  if (rawPressed != stablePressed &&
-      static_cast<uint32_t>(now - buttonChangeAt) >= 60u) {
-    stablePressed = rawPressed;
-    if (stablePressed) userRequestedReport = true;
-  }
-  if (!automaticVoiceEnabled || !voicePlayerState.modulePresent ||
-      voicePlayerState.sdPresent != 1) spokenReport.cancel();
+  if (!voicePlayerState.modulePresent || voicePlayerState.sdPresent != 1)
+    spokenReport.cancel();
   // Always capture valid sensor values, not just on the 250 ms voice-policy tick:
   // otherwise a physical button or periodic trigger sees an empty sample.
   esp32core::VoiceSample voiceSample{};
@@ -1842,8 +1848,8 @@ void loop() {
   const bool reportDue = hasStartedSpokenReport
       ? static_cast<uint32_t>(now - lastSpokenReportAt) >= 300000u
       : now >= 45000u;
-  if (automaticVoiceEnabled && !spokenReport.active() &&
-      (reportDue || userRequestedReport) &&
+  if ((userRequestedReport || (automaticVoiceEnabled && reportDue)) &&
+      !spokenReport.active() &&
       pendingVoiceCue == esp32core::VoiceCue::None &&
       !cueQueuedThisLoop &&
       (!hasAutoVoiceCueQueued ||
