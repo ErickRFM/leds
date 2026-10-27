@@ -1839,7 +1839,8 @@ void loop() {
       pendingVoiceCue == esp32core::VoiceCue::None &&
       voicePlayerState.modulePresent && voicePlayerState.sdPresent == 1 &&
       std::strcmp(voicePlayerState.playback, "STOPPED") == 0 &&
-      !busyPlaying && static_cast<uint32_t>(now - lastManualAudioAt) >= 30000u &&
+      !busyPlaying && (lastManualAudioAt == 0 ||
+      static_cast<uint32_t>(now - lastManualAudioAt) >= 30000u) &&
       spokenReport.start(spokenSample, now)) {
     hasStartedSpokenReport = true;
     lastSpokenReportAt = now;
