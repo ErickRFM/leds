@@ -70,6 +70,8 @@ internal fun ModuleReadings(
             var darkReference by rememberSaveable { mutableStateOf<Int?>(null) }
             var brightReference by rememberSaveable { mutableStateOf<Int?>(null) }
             var showCalibrationHelp by rememberSaveable { mutableStateOf(false) }
+            var darkCapturedAt by rememberSaveable { mutableStateOf<Long?>(null) }
+            var brightCapturedAt by rememberSaveable { mutableStateOf<Long?>(null) }
             val light = if (active && live) reading("ambient_light")?.value else null
             val raw = if (active && live) reading("ambient_light_raw")?.value?.toInt() else null
             val status = ComponentTelemetryCodec.find(measurements.orEmpty(), "ambient_light")?.status
@@ -128,8 +130,10 @@ internal fun ModuleReadings(
                             Text(if (showCalibrationHelp) "Ocultar guía" else "¿Cómo calibrar?")
                         }
                         if (showCalibrationHelp) {
-                            Text("Cubre el LDR, actualiza y captura oscuridad. Luego ilumínalo, " +
-                                "actualiza y captura claridad. Aplica con BLE propietario o Wi-Fi autorizado.",
+                            Text("1. Cubre el sensor y espera que el ADC se estabilice; actualiza y captura Oscuridad. " +
+                                "2. Destápalo e ilumínalo, espera, actualiza y captura Claridad. " +
+                                "3. Comprueba la separación y aplica. No necesitas alcanzar RAW 1000: " +
+                                "la escala depende de la conexión del módulo. Los módulos con polaridad inversa también funcionan.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -142,12 +146,12 @@ internal fun ModuleReadings(
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(
-                                onClick = { darkReference = raw },
+                                onClick = { darkReference = raw; darkCapturedAt = System.currentTimeMillis() },
                                 enabled = canCalibrateLdr && raw != null,
                                 modifier = Modifier.weight(1f).testTag("ldr_capture_dark")
                             ) { Text("Oscuridad") }
                             OutlinedButton(
-                                onClick = { brightReference = raw },
+                                onClick = { brightReference = raw; brightCapturedAt = System.currentTimeMillis() },
                                 enabled = canCalibrateLdr && raw != null,
                                 modifier = Modifier.weight(1f).testTag("ldr_capture_bright")
                             ) { Text("Claridad") }
@@ -155,13 +159,15 @@ internal fun ModuleReadings(
                         Text("Referencia oscura: ${darkReference ?: "—"} · clara: ${brightReference ?: "—"}",
                              style = MaterialTheme.typography.bodySmall)
                         val referenceSpan = if (darkReference != null && brightReference != null)
-                            brightReference!! - darkReference!! else null
+                            kotlin.math.abs(brightReference!! - darkReference!!) else null
                         Text(
                             when {
                                 referenceSpan == null -> "Actualiza y captura ambas referencias por separado."
-                                referenceSpan <= 0 -> "Referencias iguales o invertidas: cambia la luz y vuelve a actualizar."
+                                referenceSpan == 0 -> "Las dos referencias son iguales. Cambia la iluminación y vuelve a capturar."
                                 referenceSpan < 32 -> "Cambio ADC insuficiente (${referenceSpan}); se requieren al menos 32 puntos."
-                                else -> "Separación válida: ${referenceSpan} puntos. Puedes aplicar la calibración."
+                                else -> "Separación válida: ${referenceSpan} puntos · " +
+                                    (if (brightReference!! < darkReference!!) "polaridad inversa detectada." else "polaridad directa.") +
+                                    " Puedes guardar la calibración."
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = if (referenceSpan != null && referenceSpan < 32)
@@ -171,14 +177,16 @@ internal fun ModuleReadings(
                         Button(
                             enabled = canCalibrateLdr && darkReference != null &&
                                 brightReference != null &&
-                                brightReference!! - darkReference!! >= 32,
+                                kotlin.math.abs(brightReference!! - darkReference!!) >= 32 &&
+                                darkCapturedAt != null && brightCapturedAt != null &&
+                                darkCapturedAt != brightCapturedAt,
                             onClick = {
                                 val dark = darkReference
                                 val bright = brightReference
                                 if (dark != null && bright != null) onCalibrateLdr(dark, bright)
                             },
                             modifier = Modifier.fillMaxWidth().testTag("ldr_apply_calibration")
-                        ) { Text("Aplicar calibración") }
+                        ) { Text("Guardar calibración en ESP32") }
                         if (calibrationMessage != null) {
                             Text(calibrationMessage, style = MaterialTheme.typography.bodySmall)
                         }
