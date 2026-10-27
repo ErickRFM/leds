@@ -3,89 +3,62 @@
 #include <cmath>
 
 namespace esp32core {
-
-// No speech is inferred from stale or absent measurements. This policy has no
-// hardware dependencies and can be exercised by the native firmware test suite.
-enum class VoiceCue : uint8_t { None = 0, Hello = 1, Cold = 2, Hot = 3,
-                                Dark = 4, LightRestored = 5 };
+// Values are stable /MP3/NNNN.mp3 filenames, not SD insertion indices.
+enum class VoiceCue : uint8_t {
+  None=0, Hello=1, Cold=2, Comfortable=3, Warm=4,
+  Hot=5, Extreme=6, Humid=7, Dark=8, LightRestored=9
+};
 struct VoiceSample {
-  bool temperatureFresh = false;
-  float temperatureC = 0;
-  bool lightFresh = false;
-  float lightPercent = 0;
+  bool temperatureFresh=false; float temperatureC=0;
+  bool humidityFresh=false; float humidityPercent=0;
+  bool lightFresh=false; float lightPercent=0;
 };
 class EnvironmentalVoicePolicy {
  public:
-  // Minimum pause between actual play requests. Avoids looping voice prompts
-  // when sensors oscillate around thresholds or the player is busy.
-  VoiceCue evaluate(const VoiceSample& sample, uint32_t nowMs) {
-    const bool validTemperature = sample.temperatureFresh &&
-        std::isfinite(sample.temperatureC) && sample.temperatureC >= -40.0f &&
-        sample.temperatureC <= 80.0f;
-    const bool validLight = sample.lightFresh &&
-        std::isfinite(sample.lightPercent) && sample.lightPercent >= 0.0f &&
-        sample.lightPercent <= 100.0f;
-    if (validTemperature) {
-      if (sample.temperatureC >= 31.0f) hot_ = true;
-      else if (sample.temperatureC <= 29.0f) hot_ = false;
-      if (sample.temperatureC <= 16.0f) cold_ = true;
-      else if (sample.temperatureC >= 18.0f) cold_ = false;
+  VoiceCue evaluate(const VoiceSample& s, uint32_t now) {
+    const bool tempOK=s.temperatureFresh && std::isfinite(s.temperatureC) && s.temperatureC>=-40 && s.temperatureC<=80;
+    const bool humOK=s.humidityFresh && std::isfinite(s.humidityPercent) && s.humidityPercent>=0 && s.humidityPercent<=100;
+    const bool lightOK=s.lightFresh && std::isfinite(s.lightPercent) && s.lightPercent>=0 && s.lightPercent<=100;
+    if (!greeted_) {
+      if (now<3000u) return VoiceCue::None;
+      greeted_=true; mark(now); return VoiceCue::Hello;
     }
-    if (validLight) {
-      if (sample.lightPercent <= 20.0f) dark_ = true;
-      else if (sample.lightPercent >= 30.0f) dark_ = false;
+    VoiceCue next=VoiceCue::None;
+    if (tempOK) {
+      if (s.temperatureC<20) next=VoiceCue::Cold;
+      else if (s.temperatureC<26) next=VoiceCue::Comfortable;
+      else if (s.temperatureC<30) next=VoiceCue::Warm;
+      else if (s.temperatureC<35) next=VoiceCue::Hot;
+      else next=VoiceCue::Extreme;
+      if (next==pendingTemp_) {if (sameTemp_<3) ++sameTemp_;}
+      else {pendingTemp_=next; sameTemp_=1;}
+    } else {pendingTemp_=VoiceCue::None; sameTemp_=0;}
+    if (humOK) {
+      if (s.humidityPercent>=95) humid_=true;
+      else if (s.humidityPercent<=90) {humid_=false; humidityAnnounced_=false;}
     }
-    VoiceCue requested = VoiceCue::None;
-    // Speak once after the three-second startup window. The DFPlayer may not
-    // have a card inserted, so this is a command request, not audio feedback.
-    if (!greeted_ && nowMs >= kGreetingDelayMs) {
-      greeted_ = true;
-      lastPlayAt_ = nowMs;
-      hasPlayed_ = true;
-      return VoiceCue::Hello;
+    if (lightOK) {
+      if (s.lightPercent<=20) dark_=true;
+      else if (s.lightPercent>=30) dark_=false;
     }
-    if (!greeted_) return VoiceCue::None;
-    const bool repeatDue = !hasTemperatureCue_ ||
-        static_cast<uint32_t>(nowMs - lastTemperatureCueAt_) >= kTemperatureRepeatMs;
-    if (validTemperature && hot_ && (!announcedHot_ || repeatDue)) requested = VoiceCue::Hot;
-    else if (validTemperature && cold_ && (!announcedCold_ || repeatDue)) requested = VoiceCue::Cold;
-    else if (validLight && dark_ && !announcedDark_) requested = VoiceCue::Dark;
-    else if (validLight && !dark_ && announcedDark_) requested = VoiceCue::LightRestored;
-    if (requested == VoiceCue::None) {
-      if (validTemperature && !hot_) announcedHot_ = false;
-      if (validTemperature && !cold_) announcedCold_ = false;
-      return requested;
-    }
-    if (hasPlayed_ && static_cast<uint32_t>(nowMs - lastPlayAt_) < 60000u)
-      return VoiceCue::None;
-    lastPlayAt_ = nowMs;
-    hasPlayed_ = true;
-    switch (requested) {
-      case VoiceCue::Hot:
-        announcedHot_ = true;
-        hasTemperatureCue_ = true;
-        lastTemperatureCueAt_ = nowMs;
-        break;
-      case VoiceCue::Cold:
-        announcedCold_ = true;
-        hasTemperatureCue_ = true;
-        lastTemperatureCueAt_ = nowMs;
-        break;
-      case VoiceCue::Dark: announcedDark_ = true; break;
-      case VoiceCue::LightRestored: announcedDark_ = false; break;
-      default: break;
-    }
+    VoiceCue requested=VoiceCue::None;
+    if (tempOK && sameTemp_>=3 && next!=announcedTemp_) requested=next;
+    else if (humOK && humid_ && !humidityAnnounced_) requested=VoiceCue::Humid;
+    else if (lightOK && dark_ && !darkAnnounced_) requested=VoiceCue::Dark;
+    else if (lightOK && !dark_ && darkAnnounced_) requested=VoiceCue::LightRestored;
+    if (requested==VoiceCue::None || (played_ && uint32_t(now-lastPlay_)<15000u)) return VoiceCue::None;
+    mark(now);
+    if (requested==VoiceCue::Humid) humidityAnnounced_=true;
+    else if (requested==VoiceCue::Dark) darkAnnounced_=true;
+    else if (requested==VoiceCue::LightRestored) darkAnnounced_=false;
+    else announcedTemp_=requested;
     return requested;
   }
  private:
-  static constexpr uint32_t kGreetingDelayMs = 3000u;
-  static constexpr uint32_t kTemperatureRepeatMs = 300000u;
-  bool greeted_ = false;
-  bool hasTemperatureCue_ = false;
-  uint32_t lastTemperatureCueAt_ = 0;
-  bool hot_ = false, cold_ = false, dark_ = false;
-  bool announcedHot_ = false, announcedCold_ = false, announcedDark_ = false;
-  bool hasPlayed_ = false;
-  uint32_t lastPlayAt_ = 0;
+  void mark(uint32_t now) {lastPlay_=now;played_=true;}
+  bool greeted_=false,played_=false,humid_=false,humidityAnnounced_=false,dark_=false,darkAnnounced_=false;
+  VoiceCue pendingTemp_=VoiceCue::None,announcedTemp_=VoiceCue::None;
+  uint8_t sameTemp_=0;
+  uint32_t lastPlay_=0;
 };
 } // namespace esp32core
