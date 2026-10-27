@@ -8,7 +8,9 @@ static VoiceCue announce(float temp) {
   auto s=sample(temp);
   assert(p.evaluate(s,3000)==VoiceCue::Hello);
   assert(p.evaluate(s,18000)==VoiceCue::None);
+  s.temperatureSampleAt=1;
   assert(p.evaluate(s,18001)==VoiceCue::None);
+  s.temperatureSampleAt=2;
   return p.evaluate(s,18002);
 }
 int main() {
@@ -22,6 +24,7 @@ int main() {
   assert(p.evaluate(s,3000)==VoiceCue::Hello);
   assert(p.evaluate(s,18000)==VoiceCue::None);
   assert(p.evaluate(s,18001)==VoiceCue::None);
+  s.temperatureSampleAt=2;
   assert(p.evaluate(s,18002)==VoiceCue::Comfortable);
   assert(p.evaluate(s,40000)==VoiceCue::None);
   s.humidityFresh=true;s.humidityPercent=98;
