@@ -1498,6 +1498,9 @@ bool audioControlCommand(const char* verb, int param, void*) {
 #endif
 
 void setup() {
+  // Bring up diagnostics before any peripheral or NVS operation.
+  Serial.begin(115200);
+  Serial.println("\n--- COMPI boot diagnostics ---");
 #if COMPI_ENABLE_DFPLAYER
   // UART2 ESP32 RX13 <- DFPlayer TX, ESP32 TX14 -> DFPlayer RX (1k series); DHT11 remains GPIO16.
   dfplayerSerial.begin(9600, SERIAL_8N1, COMPI_DFPLAYER_RX, COMPI_DFPLAYER_TX);
@@ -1509,8 +1512,7 @@ void setup() {
   dfplayerRuntime.command("volume",15,millis());
 #endif
 
-  Serial.begin(115200);
-  Serial.println("\n--- COMPI ESP32 LAB V16 ---");
+  Serial.println("--- COMPI ESP32 LAB V16 ---");
 
   if (!deviceIdentity.begin()) {
     Serial.println("ERROR: V4 identity NVS unavailable; control services disabled");
