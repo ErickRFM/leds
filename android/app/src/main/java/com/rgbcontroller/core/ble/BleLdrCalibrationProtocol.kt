@@ -11,7 +11,7 @@ object BleLdrCalibrationProtocol {
     fun request(id: Int, dark: Int, bright: Int): String {
         require(id in 1..65535)
         require(dark in 0..4095 && bright in 0..4095 &&
-            bright - dark >= 32)
+            kotlin.math.abs(bright - dark) >= 32)
         return "LDR,$id,$dark,$bright"
     }
 
