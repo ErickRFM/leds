@@ -77,9 +77,9 @@ fun CompiAudioPlayerCard(
             LocalAudioControls()
         } else {
     Card(Modifier.fillMaxWidth().testTag("dfplayer_physical_controls"), shape = RoundedCornerShape(22.dp)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Módulo físico", style = MaterialTheme.typography.titleMedium)
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Módulo físico", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                 Text(if (!authorized) "○ Sin autorización" else if (hardware?.modulePresent == true) "● UART confirmado" else "○ Sin respuesta",
                     style = MaterialTheme.typography.labelMedium,
                     color = if (authorized && hardware?.modulePresent == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
@@ -117,9 +117,9 @@ fun CompiAudioPlayerCard(
                 modifier = Modifier.fillMaxWidth().testTag("dfplayer_play")) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Reproducir archivo")
+                Text("Reproducir pista")
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { onCommand("PAUSE", null) }, enabled = available && shownPlayback == "PLAYING",
                     modifier = Modifier.weight(1f)) { Text("Pausa") }
                 OutlinedButton(onClick = { onCommand("RESUME", null) }, enabled = available && shownPlayback == "PAUSED",
@@ -127,14 +127,14 @@ fun CompiAudioPlayerCard(
                 OutlinedButton(onClick = { onCommand("STOP", null) }, enabled = authorized && hardware?.modulePresent == true && !busy,
                     modifier = Modifier.weight(1f)) { Text("Parar") }
             }
-            Text("Volumen · ${hardware?.volume?.takeIf { it >= 0 } ?: "—"}/30")
+            Text("Volumen del módulo · ${hardware?.volume?.takeIf { it >= 0 } ?: "—"}/30", style = MaterialTheme.typography.titleSmall)
             Slider(value = volume, onValueChange = { volume = it }, valueRange = 0f..30f,
                 enabled = moduleReady, modifier = Modifier.testTag("dfplayer_volume"))
             OutlinedButton(onClick = { onCommand("VOLUME", volume.toInt().toString()) }, enabled = moduleReady) {
                 Text("Aplicar volumen ${volume.toInt()}")
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Avisos ambientales")
+                Text("Avisos ambientales", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                 Switch(checked = hardware?.voiceEnabled == true,
                     onCheckedChange = { onCommand("VOICE", if (it) "1" else "0") },
                     enabled = authorized && hardware?.fresh == true && !busy,
