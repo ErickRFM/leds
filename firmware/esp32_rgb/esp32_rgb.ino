@@ -1479,6 +1479,8 @@ esp32core::AutonomousSpokenReport spokenReport;
 uint32_t lastSpokenReportAt = 0;
 uint32_t lastManualAudioAt = 0;
 bool hasStartedSpokenReport = false;
+uint32_t lastAutoVoiceCueQueuedAt = 0;
+bool hasAutoVoiceCueQueued = false;
 // Single active UART owner for MP3 commands in this sketch.
 HardwareSerial dfplayerSerial(2);
 Preferences audioPreferences;
@@ -1778,16 +1780,15 @@ void loop() {
   }
   if (!automaticVoiceEnabled || !voicePlayerState.modulePresent ||
       voicePlayerState.sdPresent != 1) spokenReport.cancel();
+  // Always capture valid sensor values, not just on the 250 ms voice-policy tick:
+  // otherwise a physical button or periodic trigger sees an empty sample.
+  esp32core::VoiceSample voiceSample{};
   esp32core::SpokenMeasurements spokenSample{};
   // Sample ambient conditions even while a user-selected track is playing.
   // Never interrupt manual audio; hold at most one pending environmental cue.
   static esp32core::VoiceCue pendingVoiceCue = esp32core::VoiceCue::None;
   if (!automaticVoiceEnabled) pendingVoiceCue = esp32core::VoiceCue::None;
-  if (automaticVoiceEnabled && voicePlayerState.modulePresent &&
-      voicePlayerState.sdPresent==1 &&
-      static_cast<uint32_t>(now - lastVoiceSampleAt) >= 250u) {
-    lastVoiceSampleAt = now;
-    esp32core::VoiceSample voiceSample{};
+  {
 #if COMPI_BUILD_DHT11
     if (dht11Module.ready()) {
       const auto& temp = dht11Module.temperatureReading();
@@ -1818,17 +1819,24 @@ void loop() {
     spokenSample.humidityPercent = voiceSample.humidityPercent;
     spokenSample.lightFresh = voiceSample.lightFresh;
     spokenSample.lightPercent = voiceSample.lightPercent;
-    const auto cue = voicePolicy.evaluate(voiceSample, now);
-    if (cue != esp32core::VoiceCue::None) {
-      pendingVoiceCue = cue;
+    if (automaticVoiceEnabled && voicePlayerState.modulePresent &&
+        voicePlayerState.sdPresent == 1 &&
+        static_cast<uint32_t>(now - lastVoiceSampleAt) >= 250u) {
+      lastVoiceSampleAt = now;
+      const auto cue = voicePolicy.evaluate(voiceSample, now);
+      if (cue != esp32core::VoiceCue::None) pendingVoiceCue = cue;
     }
   }
+  bool cueQueuedThisLoop = false;
   if (automaticVoiceEnabled && !spokenReport.active() &&
       pendingVoiceCue != esp32core::VoiceCue::None &&
       voicePlayerState.modulePresent && voicePlayerState.sdPresent == 1 &&
       std::strcmp(voicePlayerState.playback, "STOPPED") == 0 &&
       dfplayerTrack(static_cast<uint16_t>(pendingVoiceCue))) {
     pendingVoiceCue = esp32core::VoiceCue::None;
+    lastAutoVoiceCueQueuedAt = now;
+    hasAutoVoiceCueQueued = true;
+    cueQueuedThisLoop = true;
   }
   // No Android required: first report at 45 s, repeat each 5 minutes.
   const bool reportDue = hasStartedSpokenReport
@@ -1837,6 +1845,9 @@ void loop() {
   if (automaticVoiceEnabled && !spokenReport.active() &&
       (reportDue || userRequestedReport) &&
       pendingVoiceCue == esp32core::VoiceCue::None &&
+      !cueQueuedThisLoop &&
+      (!hasAutoVoiceCueQueued ||
+       static_cast<uint32_t>(now - lastAutoVoiceCueQueuedAt) >= 15000u) &&
       voicePlayerState.modulePresent && voicePlayerState.sdPresent == 1 &&
       std::strcmp(voicePlayerState.playback, "STOPPED") == 0 &&
       !busyPlaying && (lastManualAudioAt == 0 ||
