@@ -23,6 +23,7 @@ int main() {
   auto s=sample(24);
   assert(p.evaluate(s,3000)==VoiceCue::Hello);
   assert(p.evaluate(s,18000)==VoiceCue::None);
+  s.temperatureSampleAt=1;
   assert(p.evaluate(s,18001)==VoiceCue::None);
   s.temperatureSampleAt=2;
   assert(p.evaluate(s,18002)==VoiceCue::Comfortable);
