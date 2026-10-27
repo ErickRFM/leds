@@ -30,6 +30,17 @@ fun CompiAudioPlayerCard(
     var volume by remember(hardware?.modulePresent) {
         mutableFloatStateOf((hardware?.volume?.takeIf { it >= 0 } ?: 15).toFloat())
     }
+    // Preserve a confirmed state while UART polling temporarily invalidates
+    // its readback. Never treat acceptance of a command as playback proof.
+    var lastConfirmedPlayback by rememberSaveable { mutableStateOf("UNKNOWN") }
+    LaunchedEffect(hardware?.playback, hardware?.modulePresent) {
+        if (hardware?.modulePresent != true) lastConfirmedPlayback = "UNKNOWN"
+        else if (hardware.playback in listOf("PLAYING", "PAUSED", "STOPPED")) {
+            lastConfirmedPlayback = hardware.playback
+        }
+    }
+    val shownPlayback = if (hardware?.playback in listOf("PLAYING", "PAUSED", "STOPPED"))
+        hardware!!.playback else lastConfirmedPlayback
     val moduleReady = authorized && hardware?.modulePresent == true && !busy
     val available = moduleReady && hardware?.sdPresent == 1
     val sdCount = hardware?.tracks ?: -1
@@ -85,10 +96,10 @@ fun CompiAudioPlayerCard(
                 else -> "MicroSD lista · ${sdCount.takeIf { it >= 0 }?.toString() ?: "—"} pistas"
             }, modifier = Modifier.testTag("dfplayer_status"))
             Text(when {
-                !authorized || hardware == null || !hardware.modulePresent || hardware.playback == "UNKNOWN" -> "Reproducción sin confirmar"
-                hardware.playing -> "Reproduciendo · pista ${hardware.track.takeIf { it >= 0 } ?: "—"}"
-                hardware.playback == "PAUSED" -> "En pausa"
-                hardware.playback == "STOPPED" -> "Detenido"
+                !authorized || hardware == null || !hardware.modulePresent || shownPlayback == "UNKNOWN" -> "Reproducción sin confirmar"
+                shownPlayback == "PLAYING" -> "Reproduciendo · pista ${hardware.track.takeIf { it >= 0 } ?: "—"}"
+                shownPlayback == "PAUSED" -> "En pausa"
+                shownPlayback == "STOPPED" -> "Detenido"
                 else -> "Reproducción sin confirmar"
             })
             OutlinedTextField(value = trackText,
@@ -109,9 +120,9 @@ fun CompiAudioPlayerCard(
                 Text("Reproducir archivo")
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedButton(onClick = { onCommand("PAUSE", null) }, enabled = available && hardware?.playing == true,
+                OutlinedButton(onClick = { onCommand("PAUSE", null) }, enabled = available && shownPlayback == "PLAYING",
                     modifier = Modifier.weight(1f)) { Text("Pausa") }
-                OutlinedButton(onClick = { onCommand("RESUME", null) }, enabled = available && hardware?.playback == "PAUSED",
+                OutlinedButton(onClick = { onCommand("RESUME", null) }, enabled = available && shownPlayback == "PAUSED",
                     modifier = Modifier.weight(1f)) { Text("Seguir") }
                 OutlinedButton(onClick = { onCommand("STOP", null) }, enabled = authorized && hardware?.modulePresent == true && !busy,
                     modifier = Modifier.weight(1f)) { Text("Parar") }
