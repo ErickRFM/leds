@@ -40,6 +40,25 @@ int main() {
   assert(p.evaluate(s,96000)==VoiceCue::LightRestored);
   s.temperatureFresh=false;s.lightFresh=false;
   assert(p.evaluate(s,112000)==VoiceCue::None);
+  // RGB and voice share half-degree temperature transitions.
+  EnvironmentalVoicePolicy hysteresis;
+  auto h=sample(25.0f);
+  hysteresis.evaluate(h,3000u);
+  hysteresis.evaluate(h,19000u);
+  h.temperatureSampleAt=1000u;
+  hysteresis.evaluate(h,19001u);
+  h.temperatureSampleAt=2000u;
+  assert(hysteresis.evaluate(h,19002u)==VoiceCue::Comfortable);
+  h.temperatureC=26.2f;
+  h.temperatureSampleAt=3000u;
+  assert(hysteresis.evaluate(h,35000u)==VoiceCue::None);
+  h.temperatureC=26.7f;
+  h.temperatureSampleAt=4000u;
+  assert(hysteresis.evaluate(h,52000u)==VoiceCue::None);
+  h.temperatureSampleAt=5000u;
+  assert(hysteresis.evaluate(h,53000u)==VoiceCue::None);
+  h.temperatureSampleAt=6000u;
+  assert(hysteresis.evaluate(h,54000u)==VoiceCue::Warm);
   EnvironmentalVoicePolicy bad;
   auto invalid=sample(std::numeric_limits<float>::quiet_NaN());
   bad.evaluate(invalid,3000);
