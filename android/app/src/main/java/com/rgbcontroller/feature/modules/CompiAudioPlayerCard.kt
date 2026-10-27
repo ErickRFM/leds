@@ -102,9 +102,9 @@ fun CompiAudioPlayerCard(
                 !hardware.modulePresent -> "DFPlayer sin respuesta"
                 hardware.sdPresent == 0 -> "MicroSD ausente."
                 hardware.sdPresent != 1 -> "DFPlayer conectado · tarjeta sin confirmar"
-                sdCount == 0 -> "MicroSD vacía · 0 canciones"
+                sdCount == 0 -> "MicroSD detectada · conteo UART 0 (no incluye necesariamente /MP3)"
                 !hardware.fresh -> "Módulo conectado · actualizando datos"
-                else -> "MicroSD lista · ${sdCount.takeIf { it >= 0 }?.toString() ?: "—"} pistas"
+                else -> "MicroSD lista · conteo UART: ${sdCount.takeIf { it >= 0 }?.toString() ?: "—"} (no es el catálogo /MP3)"
             }, modifier = Modifier.testTag("dfplayer_status"))
             Text(when {
                 !authorized || hardware == null || !hardware.modulePresent || shownPlayback == "UNKNOWN" -> "Reproducción sin confirmar"
@@ -113,26 +113,47 @@ fun CompiAudioPlayerCard(
                 shownPlayback == "STOPPED" -> "Detenido"
                 else -> "Reproducción sin confirmar"
             })
-            Text("Biblioteca del módulo", style = MaterialTheme.typography.titleMedium)
-            Text("Avisos ambientales: 9 pistas numeradas. La microSD debe contener /MP3/0001.mp3 a /MP3/0009.mp3.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Reproducir desde microSD", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Selecciona cualquier pista /MP3/NNNN.mp3 (1–2999). El DFPlayer no entrega los nombres de los archivos por UART y su contador no es una lista fiable de la carpeta.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text("Atajos de los 9 avisos automáticos", style = MaterialTheme.typography.titleSmall)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("1" to "Saludo", "2" to "Frío", "3" to "Agradable", "4" to "Tibio", "5" to "Calor", "6" to "Extremo", "7" to "Humedad", "8" to "Oscuro", "9" to "Luz").forEach { (number, name) ->
                     FilterChip(selected = trackText == number, onClick = { trackText = number }, label = { Text(name) })
                 }
             }
-            if (sdCount in 0..8) Text("Hay ${sdCount} pistas detectadas. Para los nueve avisos automáticos, copia los nueve archivos MP3.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            if (sdCount == 0) Text(
+                "El módulo informó 0 al consultar el total, pero podría reproducir archivos /MP3. Prueba su número; un archivo ausente dará error del reproductor.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             OutlinedTextField(value = trackText,
                 onValueChange = { if (it.length <= 4 && it.all { c -> c in '0'..'9' }) trackText = it },
                 label = { Text("Número de archivo MP3 (1–2999)") }, singleLine = true,
                 modifier = Modifier.fillMaxWidth().testTag("dfplayer_track"))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = { trackText = ((trackText.toIntOrNull() ?: 1) - 1).coerceIn(1, 2999).toString() },
+                    enabled = (trackText.toIntOrNull() ?: 1) > 1,
+                    modifier = Modifier.weight(1f).testTag("dfplayer_previous_track")
+                ) { Text("Anterior") }
+                OutlinedButton(
+                    onClick = { trackText = ((trackText.toIntOrNull() ?: 0) + 1).coerceIn(1, 2999).toString() },
+                    enabled = (trackText.toIntOrNull() ?: 0) < 2999,
+                    modifier = Modifier.weight(1f).testTag("dfplayer_next_track")
+                ) { Text("Siguiente") }
+            }
             if (advancedHelp) Text("Archivo: /MP3/${trackText.padStart(4, '0')}.mp3", style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = { advancedHelp = !advancedHelp }) {
                 Text(if (advancedHelp) "Ocultar detalles del módulo" else "Ver detalles del módulo")
             }
             if (advancedHelp) Text("La app solo muestra respuestas UART; verifica 5 V, GND, ESP32 TX14 → RX y RX13 ← TX si el módulo no responde. No se detecta eléctricamente la bocina.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (sdCount == 0 && advancedHelp) Text("Comprueba FAT32 y la ruta /MP3/0001.mp3.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            if (sdCount == 0 && advancedHelp) Text("La consulta de conteo no confirma si existe una pista. Verifica FAT32 y /MP3/NNNN.mp3.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Button(onClick = { lastManualRequest = "PLAY"; onCommand("PLAY", trackText) },
-                enabled = available && sdCount != 0 && trackText.toIntOrNull() in 1..2999,
+                enabled = available && trackText.toIntOrNull() in 1..2999,
                 modifier = Modifier.fillMaxWidth().testTag("dfplayer_play")) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
                 Spacer(Modifier.width(8.dp))

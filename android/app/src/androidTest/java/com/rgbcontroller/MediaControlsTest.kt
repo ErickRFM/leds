@@ -112,17 +112,23 @@ class MediaControlsTest {
         compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
     }
 
-    @Test fun zeroFileCountExplainsWhyPlaybackIsDisabled() {
+    @Test fun zeroFileCountAllowsNumberedPlaybackAndTrackTenRemainsAvailable() {
+        var sent: Pair<String, String?>? = null
         compose.setContent {
             MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) {
                 CompiAudioPlayerCard(true,
                     AudioHardwareState(true, 1, 0, "STOPPED", 0, 10, false, true),
-                    false, null, { _, _ -> error("No playback for empty SD") })
+                    false, null, { verb, value -> sent = verb to value })
             } }
         }
         compose.onNodeWithTag("audio_output_dfplayer").performClick()
-        compose.onNodeWithTag("dfplayer_status").assertTextContains("0 canciones", substring = true)
-        compose.onNodeWithTag("dfplayer_play").assertIsNotEnabled()
+        compose.onNodeWithTag("dfplayer_status").assertTextContains("conteo UART 0", substring = true)
+        compose.onNodeWithTag("dfplayer_track").performTextReplacement("9")
+        compose.onNodeWithTag("dfplayer_next_track").performScrollTo().performClick()
+        compose.onNodeWithTag("dfplayer_track").assertTextContains("10")
+        compose.onNodeWithTag("dfplayer_play").assertIsEnabled()
+        compose.onNodeWithTag("dfplayer_play").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals("PLAY" to "10", sent) }
     }
 
     @Test fun physicalPlayInvokesTheHardwareCommand() {

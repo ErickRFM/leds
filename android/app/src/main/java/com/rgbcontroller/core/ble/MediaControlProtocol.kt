@@ -6,9 +6,9 @@ data class AudioHardwareState(
     val playback: String, val track: Int, val volume: Int,
     val voiceEnabled: Boolean, val fresh: Boolean
 ) {
-    // Playback requires independently confirmed module and SD state, not unrelated
-    // track/count/volume polling, but rejects known empty cards (tracks == 0).
-    val canPlay: Boolean get() = modulePresent && sdPresent == 1 && tracks != 0
+    // /MP3/NNNN.mp3 filenames are not enumerable using the total-file query.
+    // A clone can report zero while a numbered MP3 is playable.
+    val canPlay: Boolean get() = modulePresent && sdPresent == 1
     val playing: Boolean get() = modulePresent && playback == "PLAYING"
 }
 

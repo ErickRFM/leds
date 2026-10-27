@@ -120,15 +120,20 @@ int main() {
   assert(pollRetry.snapshot(210).sdPresent==1);
   pollRetry.tick(310);
   assert(pollWire.bytes[3]==0x42);
-  // SD initialization alone is insufficient: a verified zero file count blocks PLAY.
+  // Some DFPlayer clones report zero for the total-file query while
+  // /MP3/0010.mp3 is playable. Never gate a numbered file on this count.
   Wire emptyWire; DfPlayerRuntime empty(send,&emptyWire);
   empty.tick(100); receive(empty,0x3f,2,110);
   empty.tick(210); receive(empty,0x42,0,220);
   empty.tick(320); receive(empty,0x48,0,330);
   assert(empty.snapshot(330).sdPresent==1);
   assert(empty.snapshot(330).tracks==0);
-  assert(!empty.command("play",1,340));
-  assert(empty.command("volume",10,340));
+  assert(empty.command("play",10,340));
+  assert(empty.command("play",2999,340));
+  assert(!empty.command("play",3000,340));
+  empty.tick(420);
+  assert(emptyWire.bytes[3]==0x12 && emptyWire.bytes[5]==0 && emptyWire.bytes[6]==10);
+  assert(empty.command("volume",10,430));
   // Diagnostics expose why a previously functional module appears absent.
   assert(runtime.diagnostics().rxBytes > 0);
   assert(runtime.diagnostics().validFrames > 0);
