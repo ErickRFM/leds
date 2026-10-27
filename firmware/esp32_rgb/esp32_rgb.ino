@@ -1739,6 +1739,7 @@ void loop() {
           temp.status == esp32core::MeasurementStatus::Fresh &&
           static_cast<uint32_t>(now - temp.timestampMs) <= 10000u;
       voiceSample.temperatureC = temp.value;
+      voiceSample.temperatureSampleAt = temp.timestampMs;
       const auto& humidity = dht11Module.humidityReading();
       voiceSample.humidityFresh = humidity.valid &&
           humidity.status == esp32core::MeasurementStatus::Fresh &&
