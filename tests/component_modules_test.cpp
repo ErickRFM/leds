@@ -182,7 +182,7 @@ int main() {
     assert(!ldr.calibrated());
 
     // Invalid calibration rejected
-    assert(!ldr.setCalibration(4000, 1000));  // backwards for 3V3->LDR->ADC->GND
+    assert(ldr.setCalibration(4000, 1000));  // inverted photoresistor wiring is supported
     assert(!ldr.setCalibration(1000, 1015));  // too little contrast
     assert(!ldr.setCalibration(2000, 2000));
     assert(!ldr.setCalibration(5000, 1000));
