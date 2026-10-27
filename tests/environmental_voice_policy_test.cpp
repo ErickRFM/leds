@@ -1,50 +1,43 @@
 #include <cassert>
 #include <limits>
 #include "../firmware/esp32_rgb/core/EnvironmentalVoicePolicy.h"
-
+using namespace esp32core;
+static VoiceSample sample(float t) {VoiceSample s{};s.temperatureFresh=true;s.temperatureC=t;return s;}
+static VoiceCue announce(float temp) {
+  EnvironmentalVoicePolicy p;
+  auto s=sample(temp);
+  assert(p.evaluate(s,3000)==VoiceCue::Hello);
+  assert(p.evaluate(s,18000)==VoiceCue::None);
+  assert(p.evaluate(s,18001)==VoiceCue::None);
+  return p.evaluate(s,18002);
+}
 int main() {
-  using namespace esp32core;
-  EnvironmentalVoicePolicy voice;
-  VoiceSample comfortable{};
-  comfortable.temperatureFresh = true;
-  comfortable.temperatureC = 24.0f;
-  assert(voice.evaluate(comfortable, 0u) == VoiceCue::None);
-  assert(voice.evaluate(comfortable, 2999u) == VoiceCue::None);
-  assert(voice.evaluate(comfortable, 3000u) == VoiceCue::Hello);
-  assert(voice.evaluate(comfortable, 4000u) == VoiceCue::None);
-
-  VoiceSample cold{};
-  cold.temperatureFresh = true;
-  cold.temperatureC = 14.0f;
-  assert(voice.evaluate(cold, 64000u) == VoiceCue::Cold);
-  assert(voice.evaluate(cold, 65000u) == VoiceCue::None);
-  assert(voice.evaluate(cold, 364000u) == VoiceCue::Cold);
-
-  VoiceSample missing{};
-  assert(voice.evaluate(missing, 664000u) == VoiceCue::None);
-  assert(voice.evaluate(cold, 665000u) == VoiceCue::Cold);
-
-  EnvironmentalVoicePolicy other;
-  VoiceSample hot{};
-  hot.temperatureFresh = true;
-  hot.temperatureC = 33.0f;
-  assert(other.evaluate(hot, 3000u) == VoiceCue::Hello);
-  assert(other.evaluate(hot, 63000u) == VoiceCue::Hot);
-  assert(other.evaluate(hot, 363000u) == VoiceCue::Hot);
-
-  EnvironmentalVoicePolicy invalid;
-  VoiceSample bad{};
-  bad.temperatureFresh = true;
-  bad.temperatureC = std::numeric_limits<float>::quiet_NaN();
-  bad.lightFresh = true;
-  bad.lightPercent = -5.0f;
-  assert(invalid.evaluate(bad, 3000u) == VoiceCue::Hello);
-  assert(invalid.evaluate(bad, 63000u) == VoiceCue::None);
-  bad.temperatureC = 200.0f;
-  bad.lightPercent = 150.0f;
-  assert(invalid.evaluate(bad, 123000u) == VoiceCue::None);
-  bad.temperatureC = 14.0f;
-  assert(invalid.evaluate(bad, 183000u) == VoiceCue::Cold);
-  bad.temperatureC = std::numeric_limits<float>::infinity();
-  assert(invalid.evaluate(bad, 483000u) == VoiceCue::None);
+  assert(announce(19)==VoiceCue::Cold);
+  assert(announce(24)==VoiceCue::Comfortable);
+  assert(announce(28)==VoiceCue::Warm);
+  assert(announce(32)==VoiceCue::Hot);
+  assert(announce(36)==VoiceCue::Extreme);
+  EnvironmentalVoicePolicy p;
+  auto s=sample(24);
+  assert(p.evaluate(s,3000)==VoiceCue::Hello);
+  assert(p.evaluate(s,18000)==VoiceCue::None);
+  assert(p.evaluate(s,18001)==VoiceCue::None);
+  assert(p.evaluate(s,18002)==VoiceCue::Comfortable);
+  assert(p.evaluate(s,40000)==VoiceCue::None);
+  s.humidityFresh=true;s.humidityPercent=98;
+  assert(p.evaluate(s,41000)==VoiceCue::Humid);
+  assert(p.evaluate(s,60000)==VoiceCue::None);
+  s.humidityPercent=88; p.evaluate(s,61000);
+  s.humidityPercent=100;
+  assert(p.evaluate(s,62000)==VoiceCue::Humid);
+  s.humidityFresh=false;s.lightFresh=true;s.lightPercent=15;
+  assert(p.evaluate(s,80000)==VoiceCue::Dark);
+  s.lightPercent=35;
+  assert(p.evaluate(s,96000)==VoiceCue::LightRestored);
+  s.temperatureFresh=false;s.lightFresh=false;
+  assert(p.evaluate(s,112000)==VoiceCue::None);
+  EnvironmentalVoicePolicy bad;
+  auto invalid=sample(std::numeric_limits<float>::quiet_NaN());
+  bad.evaluate(invalid,3000);
+  for (unsigned i=0;i<10;i++) assert(bad.evaluate(invalid,20000+i*20000)==VoiceCue::None);
 }
