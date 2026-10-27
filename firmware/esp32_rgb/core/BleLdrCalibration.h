@@ -28,7 +28,8 @@ inline bool parseBleLdrCalibration(const char* input, BleLdrCalibration& out) {
   }
   if (values[0] == 0 || values[0] > 65535u ||
       values[1] > 4095u || values[2] > 4095u ||
-      values[2] <= values[1] || values[2] - values[1] < 32u) return false;
+      (values[2] > values[1] ? values[2] - values[1] :
+       values[1] - values[2]) < 32u) return false;
   out = {static_cast<uint16_t>(values[0]), static_cast<uint16_t>(values[1]),
          static_cast<uint16_t>(values[2])};
   return true;
