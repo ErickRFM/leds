@@ -199,6 +199,14 @@ int main() {
     assert(std::fabs(ldr.lightReading().value - 100.0f) < 1.0f);
     assert(ldr.lightReading().valid);
 
+    // Inverted ADC polarity is valid even when neither reference reaches 1000.
+    // Some four-pin LDR modules output a lower voltage under more light.
+    assert(ldr.setCalibration(750, 320));
+    for (int i = 0; i < 40; ++i) ldr.applySample(750, 500 + i);
+    assert(std::fabs(ldr.lightReading().value - 0.0f) < 1.0f);
+    for (int i = 0; i < 40; ++i) ldr.applySample(320, 600 + i);
+    assert(std::fabs(ldr.lightReading().value - 100.0f) < 1.0f);
+
     ldr.clearCalibration();
     ldr.applySample(1000, 20000);
     assert(ldr.lightReading().status == MeasurementStatus::NotCalibrated);
