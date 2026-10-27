@@ -165,7 +165,7 @@ fun ModuleWorkspaceScreen(
         val id = if (openedId == "dfplayer_mp3") "compi_dfplayer" else openedId!!
         Column(Modifier.fillMaxSize()) {
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = {
@@ -207,8 +207,8 @@ fun ModuleWorkspaceScreen(
 
                     LazyColumn(
                         modifier = Modifier.fillMaxSize().testTag("compi_station_dashboard"),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
+                        verticalArrangement = Arrangement.spacedBy(18.dp)
                     ) {
                         if (stationSection == "Resumen") {
                             item {

@@ -47,7 +47,7 @@ class LdrLightModule final : public IModule {
   // Calibration: darkRaw (lower ADC value) and brightRaw (higher ADC value)
   bool setCalibration(uint16_t darkRaw, uint16_t brightRaw) {
     if (darkRaw > kAdcMax || brightRaw > kAdcMax ||
-        darkRaw >= brightRaw || brightRaw - darkRaw < kMinCalibrationSpan) return false;
+        darkRaw == brightRaw || (darkRaw > brightRaw ? darkRaw - brightRaw : brightRaw - darkRaw) < kMinCalibrationSpan) return false;
     darkRaw_ = darkRaw;
     brightRaw_ = brightRaw;
     calibrated_ = true;

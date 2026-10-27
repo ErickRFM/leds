@@ -1726,9 +1726,12 @@ void loop() {
       uart.lastResponse, audio.modulePresent, audio.sdPresent, audio.tracks);
   }
   const auto voicePlayerState=dfplayerRuntime.snapshot(now);
+  // Sample ambient conditions even while a user-selected track is playing.
+  // Never interrupt manual audio; hold at most one pending environmental cue.
+  static esp32core::VoiceCue pendingVoiceCue = esp32core::VoiceCue::None;
+  if (!automaticVoiceEnabled) pendingVoiceCue = esp32core::VoiceCue::None;
   if (automaticVoiceEnabled && voicePlayerState.modulePresent &&
       voicePlayerState.sdPresent==1 &&
-      std::strcmp(voicePlayerState.playback,"STOPPED")==0 &&
       static_cast<uint32_t>(now - lastVoiceSampleAt) >= 250u) {
     lastVoiceSampleAt = now;
     esp32core::VoiceSample voiceSample{};
@@ -1739,6 +1742,12 @@ void loop() {
           temp.status == esp32core::MeasurementStatus::Fresh &&
           static_cast<uint32_t>(now - temp.timestampMs) <= 10000u;
       voiceSample.temperatureC = temp.value;
+      voiceSample.temperatureSampleAt = temp.timestampMs;
+      const auto& humidity = dht11Module.humidityReading();
+      voiceSample.humidityFresh = humidity.valid &&
+          humidity.status == esp32core::MeasurementStatus::Fresh &&
+          static_cast<uint32_t>(now - humidity.timestampMs) <= 10000u;
+      voiceSample.humidityPercent = humidity.value;
     }
 #endif
 #if COMPI_BUILD_LDR
@@ -1752,8 +1761,14 @@ void loop() {
 #endif
     const auto cue = voicePolicy.evaluate(voiceSample, now);
     if (cue != esp32core::VoiceCue::None) {
-      dfplayerTrack(static_cast<uint16_t>(cue));
+      pendingVoiceCue = cue;
     }
+  }
+  if (automaticVoiceEnabled && pendingVoiceCue != esp32core::VoiceCue::None &&
+      voicePlayerState.modulePresent && voicePlayerState.sdPresent == 1 &&
+      std::strcmp(voicePlayerState.playback, "STOPPED") == 0 &&
+      dfplayerTrack(static_cast<uint16_t>(pendingVoiceCue))) {
+    pendingVoiceCue = esp32core::VoiceCue::None;
   }
 #endif
 

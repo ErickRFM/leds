@@ -8,6 +8,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -25,16 +27,36 @@ fun CompiAudioPlayerCard(
     var output by rememberSaveable { mutableStateOf("PHONE") }
     var trackText by rememberSaveable { mutableStateOf("1") }
     var advancedHelp by rememberSaveable { mutableStateOf(false) }
+    var lastManualRequest by rememberSaveable { mutableStateOf("") }
     // Preserve slider edits across automatic UART polling. Only initialize the
     // local edit when module identity changes, never on each volume readback.
     var volume by remember(hardware?.modulePresent) {
         mutableFloatStateOf((hardware?.volume?.takeIf { it >= 0 } ?: 15).toFloat())
     }
+    // Preserve a confirmed state while UART polling temporarily invalidates
+    // its readback. Never treat acceptance of a command as playback proof.
+    var lastConfirmedPlayback by rememberSaveable { mutableStateOf("UNKNOWN") }
+    LaunchedEffect(hardware?.playback, hardware?.modulePresent) {
+        if (hardware?.modulePresent != true) lastConfirmedPlayback = "UNKNOWN"
+        else if (hardware.playback in listOf("PLAYING", "PAUSED", "STOPPED")) {
+            lastConfirmedPlayback = hardware.playback
+        }
+    }
+    val shownPlayback = if (hardware?.playback in listOf("PLAYING", "PAUSED", "STOPPED"))
+        hardware!!.playback else lastConfirmedPlayback
+    val effectivePlayback = when {
+        hardware?.modulePresent != true -> "UNKNOWN"
+        hardware.playback in listOf("PLAYING", "PAUSED", "STOPPED") -> hardware.playback
+        else -> shownPlayback
+    }
+    val canPause = effectivePlayback == "PLAYING" || (lastManualRequest == "PLAY" && effectivePlayback != "PAUSED")
+    val canResume = effectivePlayback == "PAUSED" || (lastManualRequest == "PAUSE" && effectivePlayback != "PLAYING")
     val moduleReady = authorized && hardware?.modulePresent == true && !busy
     val available = moduleReady && hardware?.sdPresent == 1
     val sdCount = hardware?.tracks ?: -1
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Música Compi", style = MaterialTheme.typography.titleLarge)
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Música Compi", style = MaterialTheme.typography.headlineSmall)
+        Text("Elige dónde reproducir. Los controles del módulo físico se sincronizan por UART.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
                 selected = output == "PHONE",
@@ -66,9 +88,9 @@ fun CompiAudioPlayerCard(
             LocalAudioControls()
         } else {
     Card(Modifier.fillMaxWidth().testTag("dfplayer_physical_controls"), shape = RoundedCornerShape(22.dp)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Módulo físico", style = MaterialTheme.typography.titleMedium)
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Módulo físico", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                 Text(if (!authorized) "○ Sin autorización" else if (hardware?.modulePresent == true) "● UART confirmado" else "○ Sin respuesta",
                     style = MaterialTheme.typography.labelMedium,
                     color = if (authorized && hardware?.modulePresent == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
@@ -85,12 +107,20 @@ fun CompiAudioPlayerCard(
                 else -> "MicroSD lista · ${sdCount.takeIf { it >= 0 }?.toString() ?: "—"} pistas"
             }, modifier = Modifier.testTag("dfplayer_status"))
             Text(when {
-                !authorized || hardware == null || !hardware.modulePresent || hardware.playback == "UNKNOWN" -> "Reproducción sin confirmar"
-                hardware.playing -> "Reproduciendo · pista ${hardware.track.takeIf { it >= 0 } ?: "—"}"
-                hardware.playback == "PAUSED" -> "En pausa"
-                hardware.playback == "STOPPED" -> "Detenido"
+                !authorized || hardware == null || !hardware.modulePresent || shownPlayback == "UNKNOWN" -> "Reproducción sin confirmar"
+                shownPlayback == "PLAYING" -> "Reproduciendo · pista ${hardware.track.takeIf { it >= 0 } ?: "—"}"
+                shownPlayback == "PAUSED" -> "En pausa"
+                shownPlayback == "STOPPED" -> "Detenido"
                 else -> "Reproducción sin confirmar"
             })
+            Text("Biblioteca del módulo", style = MaterialTheme.typography.titleMedium)
+            Text("Avisos ambientales: 9 pistas numeradas. La microSD debe contener /MP3/0001.mp3 a /MP3/0009.mp3.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("1" to "Saludo", "2" to "Frío", "3" to "Agradable", "4" to "Tibio", "5" to "Calor", "6" to "Extremo", "7" to "Humedad", "8" to "Oscuro", "9" to "Luz").forEach { (number, name) ->
+                    FilterChip(selected = trackText == number, onClick = { trackText = number }, label = { Text(name) })
+                }
+            }
+            if (sdCount in 0..8) Text("Hay ${sdCount} pistas detectadas. Para los nueve avisos automáticos, copia los nueve archivos MP3.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             OutlinedTextField(value = trackText,
                 onValueChange = { if (it.length <= 4 && it.all { c -> c in '0'..'9' }) trackText = it },
                 label = { Text("Número de archivo MP3 (1–2999)") }, singleLine = true,
@@ -101,34 +131,36 @@ fun CompiAudioPlayerCard(
             }
             if (advancedHelp) Text("La app solo muestra respuestas UART; verifica 5 V, GND, ESP32 TX14 → RX y RX13 ← TX si el módulo no responde. No se detecta eléctricamente la bocina.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (sdCount == 0 && advancedHelp) Text("Comprueba FAT32 y la ruta /MP3/0001.mp3.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            Button(onClick = { onCommand("PLAY", trackText) },
+            Button(onClick = { lastManualRequest = "PLAY"; onCommand("PLAY", trackText) },
                 enabled = available && sdCount != 0 && trackText.toIntOrNull() in 1..2999,
                 modifier = Modifier.fillMaxWidth().testTag("dfplayer_play")) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Reproducir archivo")
+                Text("Reproducir pista")
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedButton(onClick = { onCommand("PAUSE", null) }, enabled = available && hardware?.playing == true,
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { lastManualRequest = "PAUSE"; onCommand("PAUSE", null) }, enabled = available && canPause,
                     modifier = Modifier.weight(1f)) { Text("Pausa") }
-                OutlinedButton(onClick = { onCommand("RESUME", null) }, enabled = available && hardware?.playback == "PAUSED",
+                OutlinedButton(onClick = { lastManualRequest = "RESUME"; onCommand("RESUME", null) }, enabled = available && canResume,
                     modifier = Modifier.weight(1f)) { Text("Seguir") }
-                OutlinedButton(onClick = { onCommand("STOP", null) }, enabled = authorized && hardware?.modulePresent == true && !busy,
+                OutlinedButton(onClick = { lastManualRequest = "STOP"; onCommand("STOP", null) }, enabled = authorized && hardware?.modulePresent == true && !busy,
                     modifier = Modifier.weight(1f)) { Text("Parar") }
             }
-            Text("Volumen · ${hardware?.volume?.takeIf { it >= 0 } ?: "—"}/30")
+            HorizontalDivider()
+            Text("Volumen del módulo · ${hardware?.volume?.takeIf { it >= 0 } ?: "—"}/30", style = MaterialTheme.typography.titleSmall)
             Slider(value = volume, onValueChange = { volume = it }, valueRange = 0f..30f,
                 enabled = moduleReady, modifier = Modifier.testTag("dfplayer_volume"))
             OutlinedButton(onClick = { onCommand("VOLUME", volume.toInt().toString()) }, enabled = moduleReady) {
                 Text("Aplicar volumen ${volume.toInt()}")
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Avisos ambientales")
+                Text("Avisos ambientales", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                 Switch(checked = hardware?.voiceEnabled == true,
                     onCheckedChange = { onCommand("VOICE", if (it) "1" else "0") },
                     enabled = authorized && hardware?.fresh == true && !busy,
                     modifier = Modifier.testTag("dfplayer_voice"))
             }
+            Text("Para escuchar avisos automáticos, activa este interruptor y deja las 9 pistas en la microSD.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (advancedHelp) Text("Estado disponible con ESP32 autorizado; aceptar una orden no certifica sonido.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
