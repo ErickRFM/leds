@@ -12,7 +12,7 @@ namespace esp32core {
 // A discrete two-terminal photoresistor also needs a voltage divider.
 // For a divider 3V3 -> LDR -> ADC node -> 10k -> GND, greater light
 // normally raises the ADC value. Other module topologies can invert it.
-// Calibration currently requires darkRaw < brightRaw (min span 32).
+// Calibration supports either ADC polarity (minimum separation 32).
 //
 // Reports the raw sample as AdcRaw, and relative ambient_light percentage (0-100%)
 // when calibrated with darkRaw and brightRaw reference points.
@@ -44,7 +44,7 @@ class LdrLightModule final : public IModule {
     return true;
   }
 
-  // Calibration: darkRaw (lower ADC value) and brightRaw (higher ADC value)
+  // Calibration is defined by physical conditions, not ADC ordering: inverted modules supported.
   bool setCalibration(uint16_t darkRaw, uint16_t brightRaw) {
     if (darkRaw > kAdcMax || brightRaw > kAdcMax ||
         darkRaw == brightRaw || (darkRaw > brightRaw ? darkRaw - brightRaw : brightRaw - darkRaw) < kMinCalibrationSpan) return false;
