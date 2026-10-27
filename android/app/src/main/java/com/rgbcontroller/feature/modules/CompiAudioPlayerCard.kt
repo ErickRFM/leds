@@ -49,8 +49,8 @@ fun CompiAudioPlayerCard(
         hardware.playback in listOf("PLAYING", "PAUSED", "STOPPED") -> hardware.playback
         else -> shownPlayback
     }
-    val canPause = effectivePlayback == "PLAYING" || (effectivePlayback == "UNKNOWN" && lastManualRequest == "PLAY")
-    val canResume = effectivePlayback == "PAUSED" || (effectivePlayback == "UNKNOWN" && lastManualRequest == "PAUSE")
+    val canPause = effectivePlayback == "PLAYING" || (lastManualRequest == "PLAY" && effectivePlayback != "PAUSED")
+    val canResume = effectivePlayback == "PAUSED" || (lastManualRequest == "PAUSE" && effectivePlayback != "PLAYING")
     val moduleReady = authorized && hardware?.modulePresent == true && !busy
     val available = moduleReady && hardware?.sdPresent == 1
     val sdCount = hardware?.tracks ?: -1
@@ -120,6 +120,7 @@ fun CompiAudioPlayerCard(
                     FilterChip(selected = trackText == number, onClick = { trackText = number }, label = { Text(name) })
                 }
             }
+            if (sdCount in 0..8) Text("Hay ${sdCount} pistas detectadas. Para los nueve avisos automáticos, copia los nueve archivos MP3.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             OutlinedTextField(value = trackText,
                 onValueChange = { if (it.length <= 4 && it.all { c -> c in '0'..'9' }) trackText = it },
                 label = { Text("Número de archivo MP3 (1–2999)") }, singleLine = true,
