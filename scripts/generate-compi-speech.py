@@ -41,8 +41,9 @@ def generate(output: Path, force: bool) -> None:
                 check=True, stdout=subprocess.DEVNULL)
             subprocess.run([
                 "ffmpeg", "-v", "error", "-y", "-i", str(wav),
-                "-codec:a", "libmp3lame", "-q:a", "5",
-                "-ar", "22050", str(destination)
+                "-codec:a", "libmp3lame", "-b:a", "128k",
+                "-ar", "44100", "-ac", "1", "-write_xing", "0",
+                "-id3v2_version", "0", str(destination)
             ], check=True)
     (output / "manifest.json").write_text(
         json.dumps({"folder": "/MP3", "tracks": PHRASES},
