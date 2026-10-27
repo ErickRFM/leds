@@ -105,7 +105,8 @@ class LocalWifiControl final {
     if (ldrCalibration_ == nullptr || script_.active() ||
         experiment_.active() || automation_.active() ||
         environmentalRgbEnabled_ || hasManual() ||
-        bright <= dark || bright - dark < 32u || bright > 4095u) return false;
+        dark > 4095u || bright > 4095u ||
+        (bright > dark ? bright - dark : dark - bright) < 32u) return false;
     return ldrCalibration_(dark, bright, ldrCalibrationContext_);
   }
 
@@ -367,7 +368,7 @@ class LocalWifiControl final {
       int dark = -1, bright = -1;
       if (!parseInt("darkRaw", 0, 4095, dark) ||
           !parseInt("brightRaw", 0, 4095, bright) ||
-          dark >= bright || bright - dark < 32) {
+          (dark > bright ? dark - bright : bright - dark) < 32) {
         jsonError(400, "invalid_ldr_calibration");
         return;
       }
