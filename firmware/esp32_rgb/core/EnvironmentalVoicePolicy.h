@@ -12,6 +12,7 @@ struct VoiceSample {
   bool temperatureFresh=false; float temperatureC=0;
   bool humidityFresh=false; float humidityPercent=0;
   bool lightFresh=false; float lightPercent=0;
+  uint32_t temperatureSampleAt=0;
 };
 class EnvironmentalVoicePolicy {
  public:
@@ -30,8 +31,11 @@ class EnvironmentalVoicePolicy {
       else if (s.temperatureC<30) next=VoiceCue::Warm;
       else if (s.temperatureC<35) next=VoiceCue::Hot;
       else next=VoiceCue::Extreme;
-      if (next==pendingTemp_) {if (sameTemp_<3) ++sameTemp_;}
+      if (next==pendingTemp_) {
+        if (s.temperatureSampleAt != lastTemperatureSampleAt_ && sameTemp_<3) ++sameTemp_;
+      }
       else {pendingTemp_=next; sameTemp_=1;}
+      lastTemperatureSampleAt_=s.temperatureSampleAt;
     } else {pendingTemp_=VoiceCue::None; sameTemp_=0;}
     if (humOK) {
       if (s.humidityPercent>=95) humid_=true;
@@ -59,6 +63,6 @@ class EnvironmentalVoicePolicy {
   bool greeted_=false,played_=false,humid_=false,humidityAnnounced_=false,dark_=false,darkAnnounced_=false;
   VoiceCue pendingTemp_=VoiceCue::None,announcedTemp_=VoiceCue::None;
   uint8_t sameTemp_=0;
-  uint32_t lastPlay_=0;
+  uint32_t lastPlay_=0, lastTemperatureSampleAt_=0;
 };
 } // namespace esp32core
