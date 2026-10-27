@@ -46,6 +46,15 @@ class MediaControlProtocolTest {
         assertFalse(audio.fresh)
     }
 
+    @Test fun `zero SD count does not block numbered MP3 playback`() {
+        val audio = MediaControlProtocol.parseReply("AUD,8,OK,1,1,0,STOPPED,0,10,0,1")!!.audio!!
+        assertTrue(audio.canPlay)
+        assertEquals(0, audio.tracks)
+        assertEquals("AUD,9,PLAY,10", MediaControlProtocol.request("AUD", "9", "PLAY", "10"))
+        assertEquals("AUD,9,PLAY,2999", MediaControlProtocol.request("AUD", "9", "PLAY", "2999"))
+        assertNull(MediaControlProtocol.request("AUD", "9", "PLAY", "3000"))
+    }
+
     @Test fun `OLED readback determines scene and controls`() {
         val oled = MediaControlProtocol.parseReply("OLD,9,OK,1,dance,128,1,0")!!.oled!!
         assertEquals("dance", oled.scene)
