@@ -1502,7 +1502,8 @@ void setup() {
   // UART2 ESP32 RX13 <- DFPlayer TX, ESP32 TX14 -> DFPlayer RX (1k series); DHT11 remains GPIO16.
   dfplayerSerial.begin(9600, SERIAL_8N1, COMPI_DFPLAYER_RX, COMPI_DFPLAYER_TX);
   audioPreferencesReady=audioPreferences.begin("compi-audio",false);
-  automaticVoiceEnabled=audioPreferencesReady && audioPreferences.getBool("voice",false);
+  automaticVoiceEnabled=audioPreferencesReady && audioPreferences.getBool("voice",true);
+  Serial.printf("BOOT: environmental voice=%s (persisted preference respected)\n", automaticVoiceEnabled ? "ON" : "OFF");
   // A startup level of 1/30 is barely audible on many DFPlayer boards.
   // Begin at a moderate 15/30; UART readback still determines actual volume.
   dfplayerRuntime.command("volume",15,millis());
@@ -1628,6 +1629,13 @@ void setup() {
   wifiLab.setEnvironmentalRgbSnapshot(getLiveEnvironmentalRgbSnapshot, nullptr);
   wifiLab.setLoopDiagnostics(getLoopDiagnostics, nullptr);
   wifiLab.begin();
+  // Power-on default: ambient RGB follows fresh DHT temperature without Android.
+  // Explicit manual override and scripts still take precedence in loop().
+  if (wifiLab.startEnvironmentalRgb()) {
+    Serial.println("BOOT: environmental RGB auto-start requested");
+  } else {
+    Serial.println("WARN: environmental RGB auto-start rejected; inspect mode conflicts");
+  }
   Serial.print("BOOT: Wi-Fi mode=");
   Serial.print(static_cast<int>(WiFi.getMode()));
   Serial.print(" AP-IP=");
