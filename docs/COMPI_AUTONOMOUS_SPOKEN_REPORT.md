@@ -56,18 +56,22 @@ números. Los avisos 0001..0009 y las demás pistas manuales continúan.
 ## Comportamiento
 1. Al encender, el primer reporte se programa tras 45 segundos.
 2. Los reportes periódicos se solicitan cada cinco minutos.
-3. Al pulsar GPIO23 se solicita un reporte inmediato cuando el audio
-   esté libre y existan lecturas frescas.
-4. Cada segmento se solicita por la cola UART, espera BUSY bajo para
+3. Pulsación **corta** del GPIO23 (al soltar): solicita un reporte en cuanto
+   el audio esté libre y existan lecturas frescas, incluso con los avisos
+   automáticos desactivados.
+4. Pulsación **larga** de 3 segundos: activa/desactiva los avisos automáticos
+   y guarda la preferencia en NVS. El pulsador utiliza 60 ms de antirrebote.
+   Una pulsación larga NO solicita también un reporte.
+5. Cada segmento se solicita por la cola UART, espera BUSY bajo para
    confirmar que empezó y BUSY alto para confirmar fin, dejando una
    pausa breve entre segmentos. El loop de ESP32 nunca usa delay para
    la voz.
-5. Si no está el cable BUSY o falta un MP3, se cancela después de 5 s
+6. Si no está el cable BUSY o falta un MP3, se cancela después de 5 s
    sin dar la reproducción por comprobada. Un audio atascado se cancela
    después de 20 s.
-6. La voz automática respeta la preferencia almacenada, espera
+7. La voz automática respeta la preferencia almacenada, espera
    reproducción manual y conserva las alertas ambientales anteriores.
-7. Si DHT11 o LDR no tienen una lectura fresca, se omite sólo esa
+8. Si DHT11 o LDR no tienen una lectura fresca, se omite sólo esa
    medición, sin valores ficticios.
 
 ## Cómo probar
@@ -75,7 +79,9 @@ números. Los avisos 0001..0009 y las demás pistas manuales continúan.
 - Verifica calibración del LDR al tapar/iluminar: su porcentaje debe cambiar.
 - Abre Serial 115200 y reinicia el ESP32.
 - Busca VOICE REPORT start: N clips y VOICE REPORT result=1 al terminar.
-- Pulsa el botón GPIO23 y verifica las frases reales.
+- Pulsa y suelta GPIO23 para pedir las mediciones incluso con avisos automáticos apagados.
+- Mantén pulsado GPIO23 al menos 3 segundos: comprueba en Serial el cambio ON/OFF; reinicia y comprueba que se conservó.
+- Verifica que pulsación larga no reproduzca una frase accidentalmente.
 - Quita intencionalmente la señal BUSY con el equipo APAGADO, vuelve a
   encender y verifica result=2; vuelve a colocar el cable apagado.
 - Prueba que OLED, RGB, BLE, Wi-Fi y las pistas anteriores no se bloqueen.
@@ -84,7 +90,20 @@ números. Los avisos 0001..0009 y las demás pistas manuales continúan.
   documentado, comprobando tamaño; nunca asumas que compilarlo prueba sonido.
 
 ## Alcance de validación
-Los tests de host validan la construcción de la frase y la máquina de
+Los tests de host validan la construcción de la frase, la máquina de
 estados, no el resultado acústico. La certificación final exige tarjeta
 microSD, altavoz y GPIO BUSY reales; no afirmar que se oyó el audio
 hasta completar esa prueba física.
+
+## Correcciones de auditoría (27-10-2026)
+- La captura de sensores se hace **en cada ciclo del loop**, no únicamente
+  durante la evaluación de avisos cada 250 ms. De esta manera la pulsación
+  física y el reporte periódico obtienen las lecturas recientes disponibles.
+- Si un aviso ambiental acaba de encolarse, un reporte numérico no podrá
+  encolarse en ese mismo ciclo. Se reserva una ventana de 15 segundos para
+  permitir que termine el aviso previo.
+- El botón físico y las preferencias automáticas son independientes: una
+  pulsación corta solicita el reporte aun con automático OFF.
+- Los tests C++ del botón y de la voz son ahora pasos obligatorios en CI.
+- El contenedor de audios y la compilación **no prueban sonido físico**; el
+  pin BUSY, microSD, bocina, LDR calibrado y alimentación se verifican en mesa.
