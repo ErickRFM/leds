@@ -19,7 +19,8 @@ struct AutonomousVoiceArbitration {
 
   bool mayQueueCue() const {
     return automaticEnabled && !reportActive && !buttonRequested &&
-           cuePending && playerReady && playbackStopped && !busyPinPlaying;
+           cuePending && !cueRecentlyQueued && playerReady &&
+           playbackStopped && !busyPinPlaying;
   }
 
   bool mayStartReport() const {
