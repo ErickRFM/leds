@@ -174,7 +174,8 @@ tarjeta SD, la senal BUSY y el sonido por SPK1/SPK2.
 **Obligatorio**: el DFPlayer debe tener microSD FAT32 con los audios
 `/MP3/2000.mp3`, `/MP3/2001.mp3`, `/MP3/2002.mp3`,
 `/MP3/2100.mp3` a `/MP3/2199.mp3` y `/MP3/2200.mp3`
-(108 archivos en total). La carga del firmware NO copia audios a
+(108 fragmentos numericos + 9 pistas ambientales 0001-0009 = 117 audios en total).
+La carga del firmware NO copia audios a
 microSD. Conserva `/MP3/0001.mp3` a `/MP3/0009.mp3` ambientales.
 
 El programa por defecto usa **GPIO23 a GND**, no GPIO25. Opcionalmente
