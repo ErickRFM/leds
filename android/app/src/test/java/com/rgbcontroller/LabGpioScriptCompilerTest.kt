@@ -17,7 +17,7 @@ class LabGpioScriptCompilerTest {
     }
 
     @Test fun rejectsRgbPinsAndOtherUnapprovedPins() {
-        for (pin in listOf(0, 6, 12, 25, 26, 27, 34)) {
+        for (pin in listOf(0, 6, 12, 21, 22, 23, 25, 26, 27, 32, 33, 34)) {
             assertThrows(IllegalArgumentException::class.java) {
                 LabGpioScriptCompiler.compile("GPIO $pin HIGH\nWAIT 500")
             }
