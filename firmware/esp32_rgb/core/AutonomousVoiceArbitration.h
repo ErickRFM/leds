@@ -27,8 +27,8 @@ struct AutonomousVoiceArbitration {
     if (!(buttonRequested || (automaticEnabled && periodicDue)) ||
         reportActive || !playerReady || !playbackStopped ||
         busyPinPlaying || cueQueuedThisLoop || cueRecentlyQueued ||
-        !manualQuietElapsed) return false;
-    // A new physical request may take priority over an unqueued event.
+        (!buttonRequested && !manualQuietElapsed)) return false;
+    // A physical request may bypass the *time-only* manual grace period,\n    // but never playback status, BUSY or the previously queued cue guard.\n    // Physical requests take priority over an unqueued ambient event.
     return buttonRequested || !cuePending;
   }
 };

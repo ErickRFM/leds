@@ -139,8 +139,11 @@ class BoardCompatibilityTest {
         )
         assertEquals(CompatibilityLevel.REQUIRES_REMAP, report.level)
         val newSoilPin = report.remapped.single().toPins.single()
-        assertTrue(newSoilPin in setOf(33, 34, 35, 36, 39))
-        assertFalse(newSoilPin in setOf(25, 26, 27))
+        assertTrue(newSoilPin in setOf(34, 35, 36, 39))
+        assertFalse(newSoilPin in setOf(21, 22, 23, 25, 26, 27, 32))
+        // OLED keeps GPIO21/22; only soil moisture is remapped.
+        assertEquals("soil_moisture", report.remapped.single().componentId)
+        assertTrue(report.unmappedComponentIds.isEmpty())
     }
 
     @Test
@@ -163,7 +166,11 @@ class BoardCompatibilityTest {
     fun assignablePinsExcludeReserved() {
         val pins = BoardProfiles.ESP32_LEGACY_V1.assignablePins
         assertTrue(pins.none { it in BoardProfiles.ESP32_LEGACY_V1.reservedPins })
-        assertTrue(pins.contains(32))
+        assertTrue(pins.contains(32)) // dedicated LDR/DHT22 capable pin
+        assertTrue(pins.contains(21)) // dedicated OLED SDA, not lab output
+        assertTrue(pins.contains(22)) // dedicated OLED SCL, not lab output
+        assertFalse(pins.contains(23)) // GPIO23 physical report button
+        assertFalse(pins.contains(33)) // DFPlayer BUSY
         assertFalse(pins.contains(10))
     }
 }

@@ -37,7 +37,11 @@ int main() {
   assert(!a.mayQueueCue());
   a.reportActive = false;
   a.manualQuietElapsed = false;
-  assert(!a.mayStartReport());
+  // Explicit button press skips the artificial 30-second cooldown only.
+  assert(a.mayStartReport());
+  a.buttonRequested = false;
+  assert(!a.mayStartReport());  // periodic report still respects cooldown
+  a.buttonRequested = true;
   a.manualQuietElapsed = true;
   // Short press must work with automatic alerts disabled.
   a.automaticEnabled = false;

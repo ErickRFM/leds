@@ -139,3 +139,31 @@ El DFPlayer requiere además **BUSY a GPIO33**, separado del pulsador.
 
 **Certificación pendiente:** el CI valida código, no puede confirmar la
 pulsación eléctrica de tu botón, ni la voz audible de tu DFPlayer.
+
+
+## Auditoria del temporizador del boton (27-10-2026, PR siguiente a #290)
+
+- Se extrajo la programacion del ESP32 a core/AutonomousVoiceSchedule.h;
+  el loop() y el callback Android utilizan esa misma clase.
+- La pulsacion corta abre una solicitud con caducidad de 10 segundos.
+  Si transcurre sin SD, sin datos validos o con audio ocupado, se descarta
+  sin reproducirse minutos despues. Serial registra el descarte.
+- La pulsacion corta omite exclusivamente la espera artificial de 30 segundos
+  despues de un control manual. **Nunca** omite la prueba de STOPPED,
+  la senal BUSY ni el resguardo del evento ya encolado.
+- Activar de nuevo los avisos automaticos desde el boton largo o desde
+  Android inicia un nuevo intervalo de 5 minutos; no dispara informes atrasados.
+- Al arrancar con avisos automaticos previamente habilitados, el primer
+  informe sigue programado a los 45 segundos, si los sensores y el MP3
+  estan realmente listos.
+- El log distingue expresamente un resultado Cancelado=4 y un error de
+  preferencias NVS al arrancar.
+- La app ahora oculta GPIO21/22 (OLED), GPIO23 (boton), GPIO32 (LDR),
+  GPIO33 (BUSY), GPIO16 (DHT11) y GPIO13/14 (UART) de las
+  salidas de laboratorio; se mantienen GPIO18 y GPIO19.
+- Pruebas adicionales obligatorias del CI:
+  autonomous_voice_schedule_test.cpp, autonomous_voice_arbitration_test.cpp,
+  autonomous_report_button_test.cpp y autonomous_spoken_report_test.cpp.
+
+La compilacion y las pruebas no reemplazan la comprobacion fisica de la
+tarjeta SD, la senal BUSY y el sonido por SPK1/SPK2.

@@ -75,3 +75,36 @@ control; hay un alta de propietario adicional. Para abrir ventana de alta/
 recuperación, mantener BOOT (GPIO0) durante 3 segundos con la placa
 ya encendida y leer el código temporal en monitor serie USB. No publicar
 ese código. La integración app↔propietario requiere prueba física.
+
+
+## Asignaciones Compi actuales: GPIO ocupados
+
+El editor y los scripts GPIO permiten **18 y 19** como salidas manuales en el montaje conectado. La antigua indicacion de que 21, 22 y 23 estan libres ya no es valida.
+
+| GPIO | Conexion actual |
+| --- | --- |
+| 0 | BOOT / apertura de ventana fisica de propietario |
+| 13 / 14 | UART2 DFPlayer |
+| 16 | DHT11 DATA |
+| 21 / 22 | OLED I2C SDA / SCL |
+| 23 | Boton normalmente abierto conectado a GND, pull-up interno |
+| 25 / 26 / 27 | RGB verde / azul / rojo |
+| 32 | LDR AO, calibracion persistente en NVS |
+| 33 | DFPlayer BUSY (3.3 V maximo) |
+
+El pin de boton es GPIO23, no GPIO25: GPIO25 ya controla RGB verde.
+
+- Pulsacion corta al soltar: pide reporte de temperatura, humedad y luz con datos frescos.
+- Pulsacion larga de 3 s: alterna avisos automaticos ON/OFF y conserva el estado en NVS.
+- La solicitud manual caduca a los 10 segundos si no hay SD/sensor/audio disponibles, para no hablar inesperadamente minutos despues.
+- El boton no hereda la espera artificial de 30 segundos tras audio manual, pero si debe respetar STOPPED y BUSY.
+- La reactivacion del automatico comienza un nuevo intervalo de 5 minutos y no anuncia de inmediato el reporte atrasado.
+
+Diagnostico en monitor Serial 115200:
+
+- VOICE BUTTON: short release on GPIO23; report requested
+- VOICE BUTTON: report request expired after 10000 ms; no late playback
+- VOICE REPORT start: N clips
+- VOICE REPORT result=1 (1=complete, 2=no BUSY, 3=timeout, 4=canceled)
+
+Ver docs/COMPI_AUTONOMOUS_SPOKEN_REPORT.md para conexiones y pruebas reales. El CI confirma software; no certifica audio ni boton en hardware.

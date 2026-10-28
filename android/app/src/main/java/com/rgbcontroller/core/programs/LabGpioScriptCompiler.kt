@@ -51,7 +51,7 @@ object LabGpioScriptCompiler {
                     if (pendingLevel != null) fail("Falta WAIT antes de cambiar la salida.")
                     val pin = parts[1].toIntOrNull() ?: fail("El GPIO debe ser numérico.")
                     if (!Esp32BoardPinout.canWrite(pin)) {
-                        fail("GPIO $pin no está permitido. Usa 18, 19, 21, 22 o 23.")
+                        fail("GPIO $pin está reservado o no está permitido. Usa 18 o 19.")
                     }
                     if (selectedPin != null && selectedPin != pin) {
                         fail("Este motor admite un único GPIO por programa.")
