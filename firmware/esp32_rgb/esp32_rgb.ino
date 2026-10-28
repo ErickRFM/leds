@@ -16,6 +16,7 @@
 #include "core/EnvironmentalVoicePolicy.h"
 #include "core/AutonomousSpokenReport.h"
 #include "core/AutonomousReportButton.h"
+#include "core/AutonomousVoiceArbitration.h"
 #include "core/RgbCommandCodec.h"
 #include "core/RgbCommandInbox.h"
 #include "core/BleCommandInbox.h"
@@ -1507,7 +1508,8 @@ bool audioControlCommand(const char* verb, int param, void*) {
     if ((param != 0 && param != 1) || !audioPreferencesReady) return false;
     if(audioPreferences.putBool("voice",param==1)!=1) return false;
     automaticVoiceEnabled = (param == 1);
-    if (!automaticVoiceEnabled) spokenReport.cancel();
+    // Turning automatic announcements OFF must not interrupt a
+    // button-requested spoken report that is already underway.
     voicePolicy=esp32core::EnvironmentalVoicePolicy{};
     return true;
   }
@@ -1771,13 +1773,15 @@ void loop() {
       digitalRead(COMPI_REPORT_BUTTON_PIN) == LOW, now);
   if (buttonEvent == esp32core::AutonomousReportButton::Event::SpeakNow) {
     userRequestedReport = true; // independent from automatic voice preference
+    Serial.printf("VOICE BUTTON: short release on GPIO%d; report requested\n",
+                  COMPI_REPORT_BUTTON_PIN);
   } else if (buttonEvent ==
              esp32core::AutonomousReportButton::Event::ToggleAutomatic) {
     if (audioPreferencesReady &&
         audioPreferences.putBool("voice", !automaticVoiceEnabled) == 1) {
       automaticVoiceEnabled = !automaticVoiceEnabled;
       voicePolicy = esp32core::EnvironmentalVoicePolicy{};
-      if (!automaticVoiceEnabled) spokenReport.cancel();
+      // Preserve an in-progress on-demand spoken report while toggling.
       Serial.printf("VOICE: automatic announcements %s via GPIO23\n",
                     automaticVoiceEnabled ? "ON" : "OFF");
     } else {
@@ -1833,31 +1837,41 @@ void loop() {
       if (cue != esp32core::VoiceCue::None) pendingVoiceCue = cue;
     }
   }
+  // A physical report request outranks only an UNQUEUED automatic cue.
+  // Never start immediately after a previously enqueued clip: accepted UART
+  // commands may be delayed even if BUSY still reads HIGH for that moment.
   bool cueQueuedThisLoop = false;
-  if (automaticVoiceEnabled && !spokenReport.active() &&
-      pendingVoiceCue != esp32core::VoiceCue::None &&
-      voicePlayerState.modulePresent && voicePlayerState.sdPresent == 1 &&
-      std::strcmp(voicePlayerState.playback, "STOPPED") == 0 &&
+  const bool playerReady = voicePlayerState.modulePresent &&
+      voicePlayerState.sdPresent == 1;
+  const bool playbackStopped =
+      std::strcmp(voicePlayerState.playback, "STOPPED") == 0;
+  const bool reportDue = hasStartedSpokenReport
+      ? static_cast<uint32_t>(now - lastSpokenReportAt) >= 300000u
+      : now >= 45000u;
+  const bool manualQuiet = lastManualAudioAt == 0 ||
+      static_cast<uint32_t>(now - lastManualAudioAt) >= 30000u;
+  const bool recentCue = hasAutoVoiceCueQueued &&
+      static_cast<uint32_t>(now - lastAutoVoiceCueQueuedAt) < 15000u;
+  esp32core::AutonomousVoiceArbitration arbitration{};
+  arbitration.automaticEnabled = automaticVoiceEnabled;
+  arbitration.reportActive = spokenReport.active();
+  arbitration.buttonRequested = userRequestedReport;
+  arbitration.periodicDue = reportDue;
+  arbitration.cuePending = pendingVoiceCue != esp32core::VoiceCue::None;
+  arbitration.cueRecentlyQueued = recentCue;
+  arbitration.playerReady = playerReady;
+  arbitration.playbackStopped = playbackStopped;
+  arbitration.busyPinPlaying = busyPlaying;
+  arbitration.manualQuietElapsed = manualQuiet;
+  if (arbitration.mayQueueCue() &&
       dfplayerTrack(static_cast<uint16_t>(pendingVoiceCue))) {
     pendingVoiceCue = esp32core::VoiceCue::None;
     lastAutoVoiceCueQueuedAt = now;
     hasAutoVoiceCueQueued = true;
     cueQueuedThisLoop = true;
   }
-  // No Android required: first report at 45 s, repeat each 5 minutes.
-  const bool reportDue = hasStartedSpokenReport
-      ? static_cast<uint32_t>(now - lastSpokenReportAt) >= 300000u
-      : now >= 45000u;
-  if ((userRequestedReport || (automaticVoiceEnabled && reportDue)) &&
-      !spokenReport.active() &&
-      pendingVoiceCue == esp32core::VoiceCue::None &&
-      !cueQueuedThisLoop &&
-      (!hasAutoVoiceCueQueued ||
-       static_cast<uint32_t>(now - lastAutoVoiceCueQueuedAt) >= 15000u) &&
-      voicePlayerState.modulePresent && voicePlayerState.sdPresent == 1 &&
-      std::strcmp(voicePlayerState.playback, "STOPPED") == 0 &&
-      !busyPlaying && (lastManualAudioAt == 0 ||
-      static_cast<uint32_t>(now - lastManualAudioAt) >= 30000u) &&
+  arbitration.cueQueuedThisLoop = cueQueuedThisLoop;
+  if (arbitration.mayStartReport() &&
       spokenReport.start(spokenSample, now)) {
     hasStartedSpokenReport = true;
     lastSpokenReportAt = now;
