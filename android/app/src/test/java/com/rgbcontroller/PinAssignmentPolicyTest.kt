@@ -82,6 +82,9 @@ class PinAssignmentPolicyTest {
         assertFalse(PinAssignmentPolicy.validate("actuator_relay", listOf(21)).isEmpty()) // OLED SDA
         assertFalse(PinAssignmentPolicy.validate("actuator_relay", listOf(22)).isEmpty()) // OLED SCL
         assertFalse(PinAssignmentPolicy.validate("actuator_relay", listOf(23)).isEmpty()) // button
+        assertFalse(PinAssignmentPolicy.validate("dht22", listOf(21)).isEmpty()) // OLED
+        assertFalse(PinAssignmentPolicy.validate("analog_sensor", listOf(32)).isEmpty()) // wired LDR
+        assertFalse(PinAssignmentPolicy.validate("soil_moisture", listOf(32)).isEmpty()) // wired LDR
         assertFalse(PinAssignmentPolicy.validate("ghost", listOf(18)).isEmpty())
     }
 }
