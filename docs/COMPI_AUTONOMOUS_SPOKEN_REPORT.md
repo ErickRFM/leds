@@ -107,3 +107,35 @@ hasta completar esa prueba física.
 - Los tests C++ del botón y de la voz son ahora pasos obligatorios en CI.
 - El contenedor de audios y la compilación **no prueban sonido físico**; el
   pin BUSY, microSD, bocina, LDR calibrado y alimentación se verifican en mesa.
+
+## Auditoría del botón y prioridad de audio (27-10-2026)
+
+El firmware actual usa **GPIO23 a GND** para el pulsador. **GPIO25 es RGB
+verde y no debe utilizarse**. GPIO35 carece de pull-up interno; nunca
+cambiar a GPIO35 sin resistencia externa y ajustar el firmware primero.
+El DFPlayer requiere además **BUSY a GPIO33**, separado del pulsador.
+
+- Pulsación corta (al soltar): solicitud prioritaria sobre un aviso
+  ambiental **aún no enviado**. Funciona aunque el automático esté OFF.
+- Pulsación larga (3 segundos): alterna y guarda automático ON/OFF;
+  **no corta un reporte que ya esté hablando**.
+- Si ya existe un aviso en la cola UART se espera a que termine; el
+  ESP32 conserva un resguardo de 15 segundos después de encolarlo.
+- La reproducción manual, el estado BUSY bajo o la SD ausente bloquean
+  el inicio de un informe; nunca se fuerza la salida del DFPlayer.
+- El monitor Serie a **115200** muestra
+  `VOICE BUTTON: short release on GPIO23; report requested` al soltar.
+  Cuando consigue arrancar la locución muestra `VOICE REPORT start`;
+  al acabar muestra `VOICE REPORT result=1` si BUSY confirmó la
+  secuencia completa, `2` si no empezó algún fragmento y `3` si
+  algún fragmento quedó ocupado hasta agotar el límite.
+- Si aparece el mensaje del botón pero no `VOICE REPORT start`, comprobar
+  `DFPLAYER UART ... present=1 sd=1`, la reproducción manual, GPIO33
+  y al menos un sensor con lectura fresca. Si faltan los archivos 2000+
+  la cola termina con error y no puede pronunciar números.
+- Las pruebas portables `autonomous_voice_arbitration_test.cpp`,
+  `autonomous_report_button_test.cpp` y
+  `autonomous_spoken_report_test.cpp` se ejecutan en CI.
+
+**Certificación pendiente:** el CI valida código, no puede confirmar la
+pulsación eléctrica de tu botón, ni la voz audible de tu DFPlayer.

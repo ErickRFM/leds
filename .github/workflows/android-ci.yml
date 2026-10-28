@@ -81,7 +81,7 @@ jobs:
           /tmp/environmental_voice_policy_test
       - name: Autonomous spoken report and physical button regressions
         run: |
-          for test in autonomous_spoken_report autonomous_report_button; do
+          for test in autonomous_spoken_report autonomous_report_button autonomous_voice_arbitration; do
             g++ -std=c++17 -Wall -Wextra -Werror -pedantic "tests/${test}_test.cpp" -o "/tmp/${test}_test"
             "/tmp/${test}_test"
           done
