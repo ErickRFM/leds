@@ -40,6 +40,8 @@ class PinAssignmentPolicyTest {
         assertFalse(PinAssignmentPolicy.validate("dht22", listOf(25)).isEmpty()) // RGB reserved
         assertTrue(PinAssignmentPolicy.validate("dht22", listOf(16)).isEmpty()) // firmware output
         assertFalse(PinAssignmentPolicy.validate("dht22", listOf(0)).isEmpty()) // strap
+        assertFalse(PinAssignmentPolicy.validate("dht22", listOf(23)).isEmpty()) // button
+        assertFalse(PinAssignmentPolicy.validate("dht22", listOf(33)).isEmpty()) // DFPlayer BUSY
     }
 
     @Test fun oledRequiresDifferentSdaAndScl() {
@@ -75,6 +77,9 @@ class PinAssignmentPolicyTest {
     @Test fun protectsReservedPinsAndUnknownProfiles() {
         assertFalse(PinAssignmentPolicy.validate("dht22", listOf(12)).isEmpty())
         assertFalse(PinAssignmentPolicy.validate("dht22", listOf(11)).isEmpty())
+        assertFalse(PinAssignmentPolicy.validate("actuator_relay", listOf(21)).isEmpty()) // OLED SDA
+        assertFalse(PinAssignmentPolicy.validate("actuator_relay", listOf(22)).isEmpty()) // OLED SCL
+        assertFalse(PinAssignmentPolicy.validate("actuator_relay", listOf(23)).isEmpty()) // button
         assertFalse(PinAssignmentPolicy.validate("ghost", listOf(18)).isEmpty())
     }
 }
