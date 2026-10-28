@@ -26,9 +26,11 @@ object PinAssignmentPolicy {
     // Matches the ESP32 PinManager output policy. GPIO 25/26/27 are reserved
     // for led.rgb by firmware at boot, even when its current lease is inactive.
     val rgbReserved = setOf(25, 26, 27)
-    val generalOutputs = setOf(16, 17, 18, 19, 21, 22, 23, 32, 33)
+    // GPIO23 button and GPIO33 DFPlayer BUSY are system-reserved.
+    val generalOutputs = setOf(16, 17, 18, 19, 21, 22, 32)
+    val labOutputs = setOf(18, 19)
     val pwmOutputs = generalOutputs + rgbReserved
-    val adc1Inputs = setOf(32, 33, 34, 35, 36, 39)
+    val adc1Inputs = setOf(32, 34, 35, 36, 39)
     val digitalInputs = generalOutputs + setOf(34, 35, 36, 39)
 
     private fun signal(name: String, pins: Set<Int>, default: Int) =
@@ -49,8 +51,8 @@ object PinAssignmentPolicy {
             signal("Reloj I²C · SCL", generalOutputs, 22)
         )),
         ModuleWiringProfile("analog_sensor", listOf(signal("ADC1", adc1Inputs, 35))),
-        ModuleWiringProfile("digital_sensor", listOf(signal("Entrada digital", digitalInputs, 18))),
-        ModuleWiringProfile("actuator_relay", listOf(signal("Control de relé", generalOutputs, 19)))
+        ModuleWiringProfile("digital_sensor", listOf(signal("Entrada digital", labOutputs + setOf(34, 35, 36, 39), 18))),
+        ModuleWiringProfile("actuator_relay", listOf(signal("Control de relé", labOutputs, 19)))
     )
 
     fun profile(id: String): ModuleWiringProfile? = profiles.firstOrNull { it.componentId == id }
