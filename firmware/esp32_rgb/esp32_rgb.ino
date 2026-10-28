@@ -1257,7 +1257,7 @@ void restoreLdrCalibration() {
   if (packed != 0 && ldrModule.setCalibration(darkRaw, brightRaw)) {
     Serial.println("BOOT: LDR calibration restored from NVS");
   } else {
-    Serial.println("BOOT: LDR uncalibrated; capture dark and bright ADC levels");
+    Serial.println("BOOT: LDR relative % estimate active; dark/bright calibration improves precision");
   }
 }
 
@@ -1941,9 +1941,9 @@ void loop() {
        static_cast<uint32_t>(now - lastOledTelemetryAt) >= 1000U)) {
     lastOledTelemetryAt = now;
     std::strcpy(oledScene,"telemetry");
-    // Mixed view: a friendly face AND live measurements on the physical
-    // 128x64 OLED. Raw ADC is labelled RAW until the LDR is calibrated;
-    // never present raw samples as invented percent/lux values.
+    // Mixed view: a friendly face and live measurements on the 128x64 OLED.
+    // Relative LDR percentage is shown, not diagnostic raw ADC counts.
+    // Manual dark/bright calibration improves precision; this is not lux.
     const auto& temperature = dht11Module.temperatureReading();
     const auto& humidity = dht11Module.humidityReading();
     oledDriver.clearDisplay();
@@ -1985,10 +1985,6 @@ void loop() {
         ldrModule.lightReading().status == esp32core::MeasurementStatus::Fresh &&
         static_cast<uint32_t>(now - ldrModule.lightReading().timestampMs) <= 10000u) {
       oledDriver.printf("L %.0f%%", static_cast<double>(ldrModule.lightReading().value));
-    } else if (ldrModule.ready() && ldrModule.rawReading().valid &&
-               ldrModule.rawReading().status == esp32core::MeasurementStatus::Fresh &&
-               static_cast<uint32_t>(now - ldrModule.rawReading().timestampMs) <= 10000u) {
-      oledDriver.printf("RAW %.0f", static_cast<double>(ldrModule.rawReading().value));
     } else {
       oledDriver.print("L --");
     }
