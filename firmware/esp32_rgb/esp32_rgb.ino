@@ -1984,7 +1984,8 @@ void loop() {
     if (ldrModule.ready() && ldrModule.lightReading().valid &&
         ldrModule.lightReading().status == esp32core::MeasurementStatus::Fresh &&
         static_cast<uint32_t>(now - ldrModule.lightReading().timestampMs) <= 10000u) {
-      oledDriver.printf("L %.0f%%", static_cast<double>(ldrModule.lightReading().value));
+      oledDriver.printf(ldrModule.calibrated() ? "L %.0f%%" : "L~%.0f%%",
+                        static_cast<double>(ldrModule.lightReading().value));
     } else {
       oledDriver.print("L --");
     }
