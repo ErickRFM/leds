@@ -2,8 +2,11 @@
 #include <cstdint>
 #include <limits>
 #include "../firmware/esp32_rgb/core/AutonomousSpokenReport.h"
+#include "../firmware/esp32_rgb/core/EnvironmentalVoicePolicy.h"
+#include "../firmware/esp32_rgb/modules/LdrLightModule.h"
 using namespace esp32core;
 struct Sender { unsigned calls=0; uint16_t last=0; };
+static int readDark(uint8_t, void*) { return 0; }
 static bool play(uint16_t track, void* context) {
   auto& s=*static_cast<Sender*>(context);
   ++s.calls; s.last=track; return true;
@@ -63,4 +66,33 @@ int main() {
   report.tick(38400,true,play,&sender);
   report.tick(59000,true,play,&sender);
   assert(report.result()==AutonomousSpokenReport::Result::ClipTimeout);
+
+  // End-to-end: a fresh LDR raw=0 becomes a truthful relative 0%, a spoken
+  // light fragment and a low-light automatic cue even without NVS calibration.
+  PinManager pins;
+  LdrLightModule ldr(32, readDark, nullptr);
+  assert(ldr.begin(pins));
+  assert(ldr.applySample(0, 61000));
+  assert(!ldr.calibrated() && ldr.lightReading().valid);
+  assert(ldr.lightReading().value==0.f);
+  SpokenMeasurements dark{};
+  dark.lightFresh=ldr.lightReading().valid;
+  dark.lightPercent=ldr.lightReading().value;
+  AutonomousSpokenReport lightReport;
+  assert(lightReport.start(dark, 61000));
+  assert(lightReport.count()==3);
+  assert(lightReport.track(0)==AutonomousSpokenReport::kLight);
+  assert(lightReport.track(1)==AutonomousSpokenReport::kNumberBase);
+  assert(lightReport.track(2)==AutonomousSpokenReport::kPercent);
+  EnvironmentalVoicePolicy lightPolicy;
+  VoiceSample lightSample{};
+  lightSample.lightFresh=true;
+  lightSample.lightPercent=dark.lightPercent;
+  assert(lightPolicy.evaluate(lightSample,3000)==VoiceCue::Hello);
+  assert(lightPolicy.evaluate(lightSample,19000)==VoiceCue::Dark);
+  for(int i=0;i<30;++i) assert(ldr.applySample(1135,62000u+static_cast<uint32_t>(i)));
+  assert(ldr.lightReading().value>90.f);
+  lightSample.lightPercent=ldr.lightReading().value;
+  assert(lightPolicy.evaluate(lightSample,40000)==VoiceCue::LightRestored);
+  ldr.stop(pins);
 }
