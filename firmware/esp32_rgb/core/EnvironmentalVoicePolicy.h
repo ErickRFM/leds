@@ -55,10 +55,12 @@ class EnvironmentalVoicePolicy {
       else if (s.lightPercent>=30) dark_=false;
     }
     VoiceCue requested=VoiceCue::None;
-    if (tempOK && sameTemp_>=3 && next!=announcedTemp_) requested=next;
-    else if (humOK && humid_ && !humidityAnnounced_) requested=VoiceCue::Humid;
-    else if (lightOK && dark_ && !darkAnnounced_) requested=VoiceCue::Dark;
+    // Calibrated 0% is real darkness, not a missing reading. Prioritize
+    // light changes over temperature-band narration; keep the hysteresis.
+    if (lightOK && dark_ && !darkAnnounced_) requested=VoiceCue::Dark;
     else if (lightOK && !dark_ && darkAnnounced_) requested=VoiceCue::LightRestored;
+    else if (humOK && humid_ && !humidityAnnounced_) requested=VoiceCue::Humid;
+    else if (tempOK && sameTemp_>=3 && next!=announcedTemp_) requested=next;
     if (requested==VoiceCue::None || (played_ && uint32_t(now-lastPlay_)<15000u)) return VoiceCue::None;
     mark(now);
     if (requested==VoiceCue::Humid) humidityAnnounced_=true;
