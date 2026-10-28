@@ -28,6 +28,8 @@ class PinAssignmentPolicyTest {
         assertFalse(PinAssignmentPolicy.validate("led_rgb", listOf(27, 27, 26)).isEmpty())
         assertFalse(PinAssignmentPolicy.validate("led_rgb", listOf(27, 25)).isEmpty())
         assertFalse(PinAssignmentPolicy.validate("led_rgb", listOf(34, 25, 26)).isEmpty())
+        assertFalse(PinAssignmentPolicy.validate("led_rgb", listOf(21, 25, 26)).isEmpty()) // OLED SDA
+        assertFalse(PinAssignmentPolicy.validate("led_rgb", listOf(23, 25, 26)).isEmpty()) // voice button
     }
 
     @Test fun singleAdc1AndInputOnlyPinsAreNotPwm() {
