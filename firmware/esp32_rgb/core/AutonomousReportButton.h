@@ -29,6 +29,8 @@ class AutonomousReportButton {
     }
     return Event::None;
   }
+  // Read-only debounced state for electrical diagnostics in the main loop.
+  bool isPressed() const { return stable_; }
  private:
   bool raw_ = false;
   bool stable_ = false;
