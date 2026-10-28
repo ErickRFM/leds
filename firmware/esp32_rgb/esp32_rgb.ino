@@ -17,6 +17,7 @@
 #include "core/AutonomousSpokenReport.h"
 #include "core/AutonomousReportButton.h"
 #include "core/AutonomousVoiceArbitration.h"
+#include "core/AutonomousVoiceSchedule.h"
 #include "core/RgbCommandCodec.h"
 #include "core/RgbCommandInbox.h"
 #include "core/BleCommandInbox.h"
@@ -1479,9 +1480,8 @@ void servePhysicalWindow(uint32_t now) {
 esp32core::EnvironmentalVoicePolicy voicePolicy;
 esp32core::AutonomousSpokenReport spokenReport;
 esp32core::AutonomousReportButton reportButton;
-uint32_t lastSpokenReportAt = 0;
+esp32core::AutonomousVoiceSchedule voiceSchedule;
 uint32_t lastManualAudioAt = 0;
-bool hasStartedSpokenReport = false;
 uint32_t lastAutoVoiceCueQueuedAt = 0;
 bool hasAutoVoiceCueQueued = false;
 // Single active UART owner for MP3 commands in this sketch.
@@ -1508,8 +1508,8 @@ bool audioControlCommand(const char* verb, int param, void*) {
     if ((param != 0 && param != 1) || !audioPreferencesReady) return false;
     if(audioPreferences.putBool("voice",param==1)!=1) return false;
     automaticVoiceEnabled = (param == 1);
-    // Turning automatic announcements OFF must not interrupt a
-    // button-requested spoken report that is already underway.
+    voiceSchedule.setAutomaticEnabled(automaticVoiceEnabled, millis());
+    // Changing automatic cues must never cancel an ongoing manual request.
     voicePolicy=esp32core::EnvironmentalVoicePolicy{};
     return true;
   }
@@ -1535,7 +1535,13 @@ void setup() {
   pinMode(COMPI_REPORT_BUTTON_PIN, INPUT_PULLUP);
   audioPreferencesReady=audioPreferences.begin("compi-audio",false);
   automaticVoiceEnabled=audioPreferencesReady && audioPreferences.getBool("voice",true);
-  Serial.printf("BOOT: environmental voice=%s (persisted preference respected)\n", automaticVoiceEnabled ? "ON" : "OFF");
+  voiceSchedule.initialize(automaticVoiceEnabled);
+  if (!audioPreferencesReady) {
+    Serial.println("ERROR: audio preferences NVS unavailable; automatic voice OFF");
+  } else {
+    Serial.printf("BOOT: environmental voice=%s (persisted preference loaded)\n",
+                  automaticVoiceEnabled ? "ON" : "OFF");
+  }
   // A startup level of 1/30 is barely audible on many DFPlayer boards.
   // Begin at a moderate 15/30; UART readback still determines actual volume.
   dfplayerRuntime.command("volume",15,millis());
@@ -1768,11 +1774,10 @@ void loop() {
   }
   const auto voicePlayerState=dfplayerRuntime.snapshot(now);
   const bool busyPlaying = digitalRead(COMPI_DFPLAYER_BUSY_PIN) == LOW;
-  static bool userRequestedReport = false;
   const auto buttonEvent = reportButton.update(
       digitalRead(COMPI_REPORT_BUTTON_PIN) == LOW, now);
   if (buttonEvent == esp32core::AutonomousReportButton::Event::SpeakNow) {
-    userRequestedReport = true; // independent from automatic voice preference
+    voiceSchedule.requestReport(now);
     Serial.printf("VOICE BUTTON: short release on GPIO%d; report requested\n",
                   COMPI_REPORT_BUTTON_PIN);
   } else if (buttonEvent ==
@@ -1780,6 +1785,7 @@ void loop() {
     if (audioPreferencesReady &&
         audioPreferences.putBool("voice", !automaticVoiceEnabled) == 1) {
       automaticVoiceEnabled = !automaticVoiceEnabled;
+      voiceSchedule.setAutomaticEnabled(automaticVoiceEnabled, now);
       voicePolicy = esp32core::EnvironmentalVoicePolicy{};
       // Preserve an in-progress on-demand spoken report while toggling.
       Serial.printf("VOICE: automatic announcements %s via GPIO23\n",
@@ -1787,6 +1793,10 @@ void loop() {
     } else {
       Serial.println("VOICE: unable to persist automatic preference");
     }
+  }
+  if (voiceSchedule.expireButtonRequest(now)) {
+    Serial.printf("VOICE BUTTON: report request expired after %lu ms; no late playback\n",
+        static_cast<unsigned long>(esp32core::AutonomousVoiceSchedule::kRequestLifetimeMs));
   }
   if (!voicePlayerState.modulePresent || voicePlayerState.sdPresent != 1)
     spokenReport.cancel();
@@ -1845,17 +1855,15 @@ void loop() {
       voicePlayerState.sdPresent == 1;
   const bool playbackStopped =
       std::strcmp(voicePlayerState.playback, "STOPPED") == 0;
-  const bool reportDue = hasStartedSpokenReport
-      ? static_cast<uint32_t>(now - lastSpokenReportAt) >= 300000u
-      : now >= 45000u;
+  const bool reportDue = voiceSchedule.periodicDue(now);
   const bool manualQuiet = lastManualAudioAt == 0 ||
       static_cast<uint32_t>(now - lastManualAudioAt) >= 30000u;
   const bool recentCue = hasAutoVoiceCueQueued &&
       static_cast<uint32_t>(now - lastAutoVoiceCueQueuedAt) < 15000u;
   esp32core::AutonomousVoiceArbitration arbitration{};
-  arbitration.automaticEnabled = automaticVoiceEnabled;
+  arbitration.automaticEnabled = voiceSchedule.automaticEnabled();
   arbitration.reportActive = spokenReport.active();
-  arbitration.buttonRequested = userRequestedReport;
+  arbitration.buttonRequested = voiceSchedule.buttonRequested();
   arbitration.periodicDue = reportDue;
   arbitration.cuePending = pendingVoiceCue != esp32core::VoiceCue::None;
   arbitration.cueRecentlyQueued = recentCue;
@@ -1873,16 +1881,14 @@ void loop() {
   arbitration.cueQueuedThisLoop = cueQueuedThisLoop;
   if (arbitration.mayStartReport() &&
       spokenReport.start(spokenSample, now)) {
-    hasStartedSpokenReport = true;
-    lastSpokenReportAt = now;
-    userRequestedReport = false;
+    voiceSchedule.reportStarted(now);
     Serial.printf("VOICE REPORT start: %u clips (GPIO%d BUSY)\n",
         static_cast<unsigned>(spokenReport.count()), COMPI_DFPLAYER_BUSY_PIN);
   }
   const bool wasSpeaking = spokenReport.active();
   spokenReport.tick(now, busyPlaying, playSpokenFragment, nullptr);
   if (wasSpeaking && !spokenReport.active()) {
-    Serial.printf("VOICE REPORT result=%u (1=complete,2=no BUSY,3=timeout)\n",
+    Serial.printf("VOICE REPORT result=%u (1=complete,2=no BUSY,3=timeout,4=canceled)\n",
         static_cast<unsigned>(spokenReport.result()));
   }
 #endif
