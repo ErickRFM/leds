@@ -167,3 +167,36 @@ pulsación eléctrica de tu botón, ni la voz audible de tu DFPlayer.
 
 La compilacion y las pruebas no reemplazan la comprobacion fisica de la
 tarjeta SD, la senal BUSY y el sonido por SPK1/SPK2.
+
+
+## Diagnostico del boton instalado y banco de voz
+
+**Obligatorio**: el DFPlayer debe tener microSD FAT32 con los audios
+`/MP3/2000.mp3`, `/MP3/2001.mp3`, `/MP3/2002.mp3`,
+`/MP3/2100.mp3` a `/MP3/2199.mp3` y `/MP3/2200.mp3`
+(108 archivos en total). La carga del firmware NO copia audios a
+microSD. Conserva `/MP3/0001.mp3` a `/MP3/0009.mp3` ambientales.
+
+El programa por defecto usa **GPIO23 a GND**, no GPIO25. Opcionalmente
+se puede compilar para GPIO18, pero hay que cambiar la constante del
+firmware y cargar esa version: nunca suponer que cambia solo al mover
+el cable. GPIO35 no dispone de pull-up interno y no es apropiado sin
+resistencia externa. GPIO33 corresponde a DFPlayer BUSY (activo LOW).
+
+Al arrancar, `VOICE BUTTON CONFIG` indica el GPIO compilado y si
+se lee inicialmente como HIGH (sin pulsar) o LOW (pulsado). El
+monitor Serial 115200 imprimira `VOICE BUTTON GPIO23: PRESSED`,
+luego `RELEASED` al soltar el boton tras antirrebote de 60 ms.
+Si no hay estos mensajes el problema es electricamente GPIO/pulsador,
+o se esta ejecutando otra version del firmware.
+
+Si aparece `VOICE BUTTON: short release ...`, el boton funciona.
+Si la locucion no inicia, `VOICE BUTTON WAIT` incluye el estado:
+`df` (DFPlayer y SD listos), `sd` (-1/0/1),
+`playback` (STOPPED/UNKNOWN/PLAYING),
+`busy` (1 indica clip sonando), `cueLock` (proteccion
+de audio ambiental), y `fresh[T/H/L]` (lecturas vigentes).
+Despues de 10 s una solicitud bloqueada se descarta sin hablar tarde.
+La proteccion del audio ambiental se libera 500 ms despues de
+que BUSY confirme el fin del clip; sin evidencia BUSY se conserva
+la guarda de 15 s para evitar comandos superpuestos.
