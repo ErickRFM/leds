@@ -108,3 +108,39 @@ Diagnostico en monitor Serial 115200:
 - VOICE REPORT result=1 (1=complete, 2=no BUSY, 3=timeout, 4=canceled)
 
 Ver docs/COMPI_AUTONOMOUS_SPOKEN_REPORT.md para conexiones y pruebas reales. El CI confirma software; no certifica audio ni boton en hardware.
+
+
+## Compilar y cargar Compi ESP32 real: placa 4 MB
+
+El perfil probado para la placa del usuario usa **huge_app** en
+compilacion Y carga, y no borra manualmente el flash/NVS. Desde la raiz:
+
+```powershell
+git switch main
+git pull --ff-only origin main
+arduino-cli lib install "Adafruit BusIO" "Adafruit GFX Library" "Adafruit SSD1306"
+python -m pip install "esptool>=4,<6"
+powershell -ExecutionPolicy Bypass -File .\scripts\compi-safe-flash.ps1 -Port COM5
+powershell -ExecutionPolicy Bypass -File .\scripts\compi-safe-flash.ps1 -Port COM5 -Upload
+arduino-cli monitor -p COM5 -c baudrate=115200
+```
+
+El primer comando de script **solo compila**; el segundo vuelve a
+compilar, crea respaldo privado del flash completo (4 MB) en
+LOCALAPPDATA/Compi/FlashBackups y carga el binario. El script detecta
+esptool 4 (`read_flash`) o 5 (`read-flash`). `-BackupDir` permite
+elegir otra carpeta **local que no se sincronice** con OneDrive. El
+respaldo incluye secretos del propietario, por lo que se debe proteger.
+
+El script exige que el binario de aplicacion sea menor a 3 MB y usa
+`esp32:esp32:esp32:PartitionScheme=huge_app,FlashSize=4M`. Cierra el
+monitor serie y otras aplicaciones que utilicen COM5 antes de cargar.
+Si sale `Wrong boot mode 0x13`, manten BOOT pulsado mientras el
+cargador intenta conectar y sueltalo al iniciar la escritura.
+
+Cambiar la tabla de particiones **puede hacer que los datos NVS
+anteriores queden inaccesibles**, incluso si se guardo una copia.
+No ejecutes `erase_flash` o `erase-flash` para "arreglar" el
+arranque; tampoco subas el respaldo completo a Git o chats publicos.
+La tarjeta microSD con 108 audios para lectura autonoma se prepara
+aparte: la carga del firmware no copia archivos al DFPlayer.
