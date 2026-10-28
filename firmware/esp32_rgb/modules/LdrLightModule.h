@@ -14,8 +14,11 @@ namespace esp32core {
 // normally raises the ADC value. Other module topologies can invert it.
 // Calibration supports either ADC polarity (minimum separation 32).
 //
-// Reports the raw sample as AdcRaw, and relative ambient_light percentage (0-100%)
-// when calibrated with darkRaw and brightRaw reference points.
+// Reports a diagnostic raw ADC sample and a relative light percentage (0-100%).
+// Until explicit dark/bright calibration exists, a provisional estimate uses
+// 0 as dark and a learned stable bright reference (starting at 1024 ADC).
+// That estimate is NOT lux or an absolute lighting measurement: physically
+// captured calibration always takes priority and supports inverted modules.
 class LdrLightModule final : public IModule {
  public:
   using AdcReadFn = int (*)(uint8_t pin, void* context);
@@ -38,6 +41,8 @@ class LdrLightModule final : public IModule {
     lastSampleMs_ = 0;
     raw_ = 0;
     filtered_ = 0.0f;
+    estimatedBrightRaw_ = kInitialBrightReference;
+    brightCandidateSamples_ = 0;
     haveSample_ = false;
     rawReading_ = {MeasurementType::AmbientLightRaw, MeasurementStatus::Absent, false, 0.0f, "raw", 0};
     lightReading_ = {MeasurementType::AmbientLight, MeasurementStatus::NotCalibrated, false, 0.0f, "%", 0};
@@ -51,10 +56,15 @@ class LdrLightModule final : public IModule {
     darkRaw_ = darkRaw;
     brightRaw_ = brightRaw;
     calibrated_ = true;
+    brightCandidateSamples_ = 0;
     return true;
   }
 
-  void clearCalibration() { calibrated_ = false; }
+  void clearCalibration() {
+    calibrated_ = false;
+    estimatedBrightRaw_ = kInitialBrightReference;
+    brightCandidateSamples_ = 0;
+  }
 
   void tick(uint32_t nowMs) override {
     if (!ready_ || read_ == nullptr) return;
@@ -80,18 +90,21 @@ class LdrLightModule final : public IModule {
     if (!haveSample_) {
       filtered_ = static_cast<float>(raw);
       haveSample_ = true;
+    } else if (!calibrated_ && raw <= kNearDarkRaw) {
+      // A covered sensor can legitimately read zero. Announce darkness promptly
+      // rather than retaining several seconds of the previous bright average.
+      filtered_ = 0.0f;
     } else {
       filtered_ += (static_cast<float>(raw) - filtered_) / 4.0f;
     }
     rawReading_ = {MeasurementType::AmbientLightRaw, MeasurementStatus::Fresh, true,
                    static_cast<float>(raw), "raw", nowMs};
-    if (!calibrated_) {
-      lightReading_ = {MeasurementType::AmbientLight,
-                       MeasurementStatus::NotCalibrated, false, 0.0f, "%", nowMs};
-      return true;
-    }
+    // No explicit calibration yet? Provide a visibly useful RELATIVE estimate
+    // for the display and spoken report. No raw ADC is passed as a percent.
+    const float relativePercent = calibrated_ ? percentFromFiltered()
+                                               : estimatePercent(raw);
     lightReading_ = {MeasurementType::AmbientLight, MeasurementStatus::Fresh,
-                     true, percentFromFiltered(), "%", nowMs};
+                     true, relativePercent, "%", nowMs};
     return true;
   }
 
@@ -108,6 +121,8 @@ class LdrLightModule final : public IModule {
 
   static constexpr uint16_t kAdcMax = 4095;
   static constexpr uint16_t kMinCalibrationSpan = 32;
+  static constexpr uint16_t kInitialBrightReference = 1024;
+  static constexpr uint16_t kNearDarkRaw = 16;
 
   bool configurePin(uint8_t next) {
     if (ready_ || !PinManager::analogInputCapable(next) ||
@@ -133,6 +148,23 @@ class LdrLightModule final : public IModule {
   const Measurement& lightReading() const { return lightReading_; }
 
  private:
+  float estimatePercent(uint16_t raw) {
+    // The user's LDR wiring rises with light and approaches zero in darkness.
+    // Learn higher bright references only after 3 consecutive raw samples;
+    // a single ADC spike must not permanently ruin the visible percentage.
+    if (raw >= estimatedBrightRaw_ + 100.0f) {
+      if (++brightCandidateSamples_ >= 3) {
+        if (filtered_ > estimatedBrightRaw_) estimatedBrightRaw_ = filtered_;
+        brightCandidateSamples_ = 0;
+      }
+    } else {
+      brightCandidateSamples_ = 0;
+    }
+    const float percent = filtered_ * 100.0f / estimatedBrightRaw_;
+    if (percent < 0.0f) return 0.0f;
+    if (percent > 100.0f) return 100.0f;
+    return percent;
+  }
   float percentFromFiltered() const {
     const float span = static_cast<float>(brightRaw_) - static_cast<float>(darkRaw_);
     if (span == 0.0f) return 0.0f;
@@ -154,6 +186,8 @@ class LdrLightModule final : public IModule {
   uint16_t darkRaw_ = 0;
   uint16_t brightRaw_ = 0;
   float filtered_ = 0.0f;
+  float estimatedBrightRaw_ = kInitialBrightReference;
+  uint8_t brightCandidateSamples_ = 0;
   Measurement rawReading_{};
   Measurement lightReading_{};
 };
