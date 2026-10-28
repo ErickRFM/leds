@@ -59,6 +59,24 @@ int main() {
   assert(hysteresis.evaluate(h,53000u)==VoiceCue::None);
   h.temperatureSampleAt=6000u;
   assert(hysteresis.evaluate(h,54000u)==VoiceCue::Warm);
+  // A valid zero-percent light reading takes priority when both the
+  // temperature and darkness alerts become due. Restoration uses 30%.
+  EnvironmentalVoicePolicy lightPriority;
+  auto lp=sample(24);
+  lp.lightFresh=true; lp.lightPercent=0;
+  assert(lightPriority.evaluate(lp,3000u)==VoiceCue::Hello);
+  lp.temperatureSampleAt=1;
+  assert(lightPriority.evaluate(lp,18000u)==VoiceCue::Dark);
+  lp.temperatureSampleAt=2;
+  assert(lightPriority.evaluate(lp,34000u)==VoiceCue::None);
+  lp.temperatureSampleAt=3;
+  assert(lightPriority.evaluate(lp,34001u)==VoiceCue::Comfortable);
+  lp.lightPercent=25;
+  assert(lightPriority.evaluate(lp,50000u)==VoiceCue::None);
+  lp.lightPercent=30;
+  assert(lightPriority.evaluate(lp,66000u)==VoiceCue::LightRestored);
+  lp.lightFresh=false; lp.lightPercent=0;
+  assert(lightPriority.evaluate(lp,82000u)==VoiceCue::None);
   EnvironmentalVoicePolicy bad;
   auto invalid=sample(std::numeric_limits<float>::quiet_NaN());
   bad.evaluate(invalid,3000);
