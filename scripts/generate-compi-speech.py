@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the /MP3 voice bank for autonomous ESP32 reporting.
+"""Generate all 117 /MP3 tracks (9 environmental cues + 108 numeric clips).
 
 Requires offline espeak and ffmpeg on PATH. Do not overwrite user music.
 Run: python scripts/generate-compi-speech.py --output build/compi-voice
@@ -11,7 +11,18 @@ import shutil
 import subprocess
 import tempfile
 
+# Keep these stable: firmware EnvironmentalVoicePolicy uses VoiceCue 1..9
+# for startup, temperature bands, high humidity and light transitions.
 PHRASES = {
+    1: "Hola, soy Compi. Estoy listo para ayudarte.",
+    2: "Hace frío. La temperatura ambiental está baja.",
+    3: "La temperatura está en una zona confortable.",
+    4: "El ambiente está cálido.",
+    5: "Hace calor. La temperatura ambiental es alta.",
+    6: "Atención. La temperatura ambiental es extrema.",
+    7: "Atención. La humedad ambiental es muy alta.",
+    8: "La iluminación es baja.",
+    9: "La iluminación ha aumentado.",
     2000: "La temperatura es de",
     2001: "grados Celsius",
     2002: "La humedad relativa es del",

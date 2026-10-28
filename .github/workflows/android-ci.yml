@@ -79,9 +79,11 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/environmental_voice_policy_test.cpp -o /tmp/environmental_voice_policy_test
           /tmp/environmental_voice_policy_test
+      - name: Complete Compi voice bank contract (117 MP3 identifiers)
+        run: python3 tests/compi_voice_bank_contract_test.py
       - name: Autonomous spoken report and physical button regressions
         run: |
-          for test in autonomous_spoken_report autonomous_report_button autonomous_voice_arbitration autonomous_voice_schedule; do
+          for test in autonomous_spoken_report autonomous_report_button autonomous_voice_arbitration autonomous_voice_schedule autonomous_cue_guard; do
             g++ -std=c++17 -Wall -Wextra -Werror -pedantic "tests/${test}_test.cpp" -o "/tmp/${test}_test"
             "/tmp/${test}_test"
           done

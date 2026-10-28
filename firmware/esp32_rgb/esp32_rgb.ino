@@ -18,6 +18,7 @@
 #include "core/AutonomousReportButton.h"
 #include "core/AutonomousVoiceArbitration.h"
 #include "core/AutonomousVoiceSchedule.h"
+#include "core/AutonomousCueGuard.h"
 #include "core/RgbCommandCodec.h"
 #include "core/RgbCommandInbox.h"
 #include "core/BleCommandInbox.h"
@@ -141,6 +142,9 @@
 #endif
 #ifndef COMPI_REPORT_BUTTON_PIN
 #define COMPI_REPORT_BUTTON_PIN 23
+#endif
+#if COMPI_REPORT_BUTTON_PIN != 23 && COMPI_REPORT_BUTTON_PIN != 18
+#error "Compi report button: choose GPIO23 or GPIO18 (GPIO35 has no internal pull-up)"
 #endif
 #if COMPI_ENABLE_DFPLAYER
 esp32core::AudioSnapshot audioStatusSnapshot(void*);
@@ -1482,8 +1486,7 @@ esp32core::AutonomousSpokenReport spokenReport;
 esp32core::AutonomousReportButton reportButton;
 esp32core::AutonomousVoiceSchedule voiceSchedule;
 uint32_t lastManualAudioAt = 0;
-uint32_t lastAutoVoiceCueQueuedAt = 0;
-bool hasAutoVoiceCueQueued = false;
+esp32core::AutonomousCueGuard autoCueGuard;
 // Single active UART owner for MP3 commands in this sketch.
 HardwareSerial dfplayerSerial(2);
 Preferences audioPreferences;
@@ -1533,6 +1536,9 @@ void setup() {
   dfplayerSerial.begin(9600, SERIAL_8N1, COMPI_DFPLAYER_RX, COMPI_DFPLAYER_TX);
   pinMode(COMPI_DFPLAYER_BUSY_PIN, INPUT_PULLUP);
   pinMode(COMPI_REPORT_BUTTON_PIN, INPUT_PULLUP);
+  Serial.printf("VOICE BUTTON CONFIG: GPIO%d -> momentary switch -> GND; pull-up ON; initial=%s\n",
+      COMPI_REPORT_BUTTON_PIN,
+      digitalRead(COMPI_REPORT_BUTTON_PIN) == LOW ? "PRESSED (LOW)" : "RELEASED (HIGH)");
   audioPreferencesReady=audioPreferences.begin("compi-audio",false);
   automaticVoiceEnabled=audioPreferencesReady && audioPreferences.getBool("voice",true);
   voiceSchedule.initialize(automaticVoiceEnabled);
@@ -1774,8 +1780,16 @@ void loop() {
   }
   const auto voicePlayerState=dfplayerRuntime.snapshot(now);
   const bool busyPlaying = digitalRead(COMPI_DFPLAYER_BUSY_PIN) == LOW;
+  autoCueGuard.tick(now, busyPlaying);
   const auto buttonEvent = reportButton.update(
       digitalRead(COMPI_REPORT_BUTTON_PIN) == LOW, now);
+  static bool lastButtonDebouncedPressed = false;
+  if (lastButtonDebouncedPressed != reportButton.isPressed()) {
+    lastButtonDebouncedPressed = reportButton.isPressed();
+    Serial.printf("VOICE BUTTON GPIO%d: %s (debounced)\n",
+                  COMPI_REPORT_BUTTON_PIN,
+                  lastButtonDebouncedPressed ? "PRESSED" : "RELEASED");
+  }
   if (buttonEvent == esp32core::AutonomousReportButton::Event::SpeakNow) {
     voiceSchedule.requestReport(now);
     Serial.printf("VOICE BUTTON: short release on GPIO%d; report requested\n",
@@ -1788,8 +1802,8 @@ void loop() {
       voiceSchedule.setAutomaticEnabled(automaticVoiceEnabled, now);
       voicePolicy = esp32core::EnvironmentalVoicePolicy{};
       // Preserve an in-progress on-demand spoken report while toggling.
-      Serial.printf("VOICE: automatic announcements %s via GPIO23\n",
-                    automaticVoiceEnabled ? "ON" : "OFF");
+      Serial.printf("VOICE: automatic announcements %s via GPIO%d\n",
+                    automaticVoiceEnabled ? "ON" : "OFF", COMPI_REPORT_BUTTON_PIN);
     } else {
       Serial.println("VOICE: unable to persist automatic preference");
     }
@@ -1858,8 +1872,7 @@ void loop() {
   const bool reportDue = voiceSchedule.periodicDue(now);
   const bool manualQuiet = lastManualAudioAt == 0 ||
       static_cast<uint32_t>(now - lastManualAudioAt) >= 30000u;
-  const bool recentCue = hasAutoVoiceCueQueued &&
-      static_cast<uint32_t>(now - lastAutoVoiceCueQueuedAt) < 15000u;
+  const bool recentCue = autoCueGuard.blocks();
   esp32core::AutonomousVoiceArbitration arbitration{};
   arbitration.automaticEnabled = voiceSchedule.automaticEnabled();
   arbitration.reportActive = spokenReport.active();
@@ -1874,11 +1887,22 @@ void loop() {
   if (arbitration.mayQueueCue() &&
       dfplayerTrack(static_cast<uint16_t>(pendingVoiceCue))) {
     pendingVoiceCue = esp32core::VoiceCue::None;
-    lastAutoVoiceCueQueuedAt = now;
-    hasAutoVoiceCueQueued = true;
+    autoCueGuard.queued(now);
     cueQueuedThisLoop = true;
   }
   arbitration.cueQueuedThisLoop = cueQueuedThisLoop;
+  // Make a detected button press distinguishable from missing SD, BUSY,
+  // stale readings, and automatic cues. Do not print on every fast loop.
+  static uint32_t lastButtonWaitLogAt = 0;
+  if (voiceSchedule.buttonRequested() &&
+      static_cast<uint32_t>(now - lastButtonWaitLogAt) >= 1500u) {
+    lastButtonWaitLogAt = now;
+    Serial.printf("VOICE BUTTON WAIT: pin=GPIO%d df=%d sd=%d playback=%s busy=%d cueLock=%d fresh[T/H/L]=%d/%d/%d\n",
+                  COMPI_REPORT_BUTTON_PIN, playerReady, voicePlayerState.sdPresent,
+                  voicePlayerState.playback, busyPlaying, recentCue,
+                  spokenSample.temperatureFresh, spokenSample.humidityFresh,
+                  spokenSample.lightFresh);
+  }
   if (arbitration.mayStartReport() &&
       spokenReport.start(spokenSample, now)) {
     voiceSchedule.reportStarted(now);
