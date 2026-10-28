@@ -28,8 +28,11 @@ data class BoardProfile(
     /** Pins that may be assigned, i.e. 0..39 minus the reserved ones. */
     val assignablePins: Set<Int>
         get() = if (id == "esp32-legacy-v1") {
-            // Same allowlist as the classic ESP32 firmware PinManager.
-            (PinAssignmentPolicy.pwmOutputs + PinAssignmentPolicy.adc1Inputs) - reservedPins
+            // Board-level assignability includes dedicated sensor/display pins,
+            // even though GPIO21/22 are NOT general-purpose lab outputs.
+            // Per-module signal profiles prevent cross-claiming OLED pins.
+            (PinAssignmentPolicy.pwmOutputs + PinAssignmentPolicy.adc1Inputs +
+                setOf(16, 17, 21, 22)) - reservedPins
         } else {
             (0..39).filterNot { it in reservedPins }.toSet()
         }
@@ -231,8 +234,8 @@ object BoardProfiles {
         // RGB 25/26/27 are reserved by their owning module, not globally.
         reservedPins = setOf(0, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15),
         preferredPins = mapOf(
-            "sensor" to listOf(32, 33, 34, 35),
-            "actuator" to listOf(18, 19, 21, 22, 23),
+            "sensor" to listOf(32, 34, 35),
+            "actuator" to listOf(18, 19),
             "lighting" to listOf(27, 25, 26),
             "display" to listOf(21, 22)
         )
