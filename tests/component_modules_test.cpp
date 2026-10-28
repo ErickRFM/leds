@@ -173,13 +173,24 @@ int main() {
     assert(ldr.begin(pins));
     assert(pins.belongsTo(36, "sensor.ldr_light"));
 
-    // Without calibration, raw is fresh, percentage is NotCalibrated
+    // Without user calibration the firmware still publishes a provisional
+    // relative percentage, never a bare ADC count interpreted as percent.
     assert(ldr.applySample(1000, 100));
-    assert(ldr.lightReading().status == MeasurementStatus::NotCalibrated);
-    assert(!ldr.lightReading().valid);
+    assert(ldr.lightReading().status == MeasurementStatus::Fresh);
+    assert(ldr.lightReading().valid);
+    assert(ldr.lightReading().value > 95.0f && ldr.lightReading().value <= 100.0f);
     assert(ldr.rawReading().valid);
     assert(ldr.rawReading().value == 1000.0f);
     assert(!ldr.calibrated());
+    // A covered LDR reading of zero must reach 0% immediately, and must not
+    // be treated as missing data by the voice/darkness policy.
+    assert(ldr.applySample(0, 101));
+    assert(ldr.lightReading().valid);
+    assert(ldr.lightReading().value == 0.0f);
+    for (int i = 0; i < 20; ++i) ldr.applySample(1135, 102 + i);
+    assert(ldr.lightReading().value > 90.0f);
+    assert(ldr.lightReading().value <= 100.0f);
+    // Explicit dark/bright calibration always replaces the estimate.
 
     // Invalid calibration rejected
     assert(ldr.setCalibration(4000, 1000));  // inverted photoresistor wiring is supported
@@ -209,7 +220,10 @@ int main() {
 
     ldr.clearCalibration();
     ldr.applySample(1000, 20000);
-    assert(ldr.lightReading().status == MeasurementStatus::NotCalibrated);
+    assert(!ldr.calibrated());
+    assert(ldr.lightReading().status == MeasurementStatus::Fresh);
+    assert(ldr.lightReading().valid);
+    assert(ldr.lightReading().value >= 0.0f && ldr.lightReading().value <= 100.0f);
 
     // Failed ADC read never becomes a valid temperature/light automation input.
     adc.value = -1;
