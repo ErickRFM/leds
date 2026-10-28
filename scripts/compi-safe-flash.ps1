@@ -1,6 +1,7 @@
 param(
     [string]$Port = "COM5",
-    [switch]$Upload
+    [switch]$Upload,
+    [string]$BackupDir = ""
 )
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
@@ -30,12 +31,36 @@ if (-not $Upload) {
 }
 # Preserve the current identity, owner pairing, calibration and other NVS data.
 # Changing partition tables can still make existing settings inaccessible.
-$backup = Join-Path $root ("compi-backup-" + (Get-Date -Format "yyyyMMdd-HHmmss") + "-4mb.bin")
-Write-Host "Reading 4 MB flash backup into $backup" -ForegroundColor Yellow
-& python -m esptool --chip esp32 --port $Port --baud 115200 read-flash 0x0 0x400000 $backup
+# Never put the backup in a OneDrive-synced git repository: it includes
+# private NVS identity, owner-enrollment records, and calibration.
+# A local app-data path is used unless the user explicitly chooses one.
+if ([string]::IsNullOrWhiteSpace($BackupDir)) {
+    $BackupDir = Join-Path $env:LOCALAPPDATA "Compi\FlashBackups"
+}
+New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null
+$backup = Join-Path $BackupDir ("compi-backup-" + (Get-Date -Format "yyyyMMdd-HHmmss") + "-4mb.bin")
+
+# esptool v4 uses read_flash, esptool v5 uses read-flash. Do not assume
+# the user's globally installed Python package matches Arduino's bundled tool.
+$versionLines = & python -m esptool version 2>&1
+if ($LASTEXITCODE -ne 0) {
+    throw "Python esptool is missing/broken. Install it with: python -m pip install esptool"
+}
+$versionText = $versionLines -join " "
+$versionMatch = [regex]::Match($versionText, 'v?(\d+)\.(\d+)')
+if (-not $versionMatch.Success) {
+    throw "Unable to detect esptool major version: $versionText"
+}
+$majorVersion = [int]$versionMatch.Groups[1].Value
+if ($majorVersion -lt 4) {
+    throw "Unsupported esptool version $majorVersion. Please install esptool 4 or newer."
+}
+$readCommand = if ($majorVersion -ge 5) { "read-flash" } else { "read_flash" }
+Write-Host "Reading 4 MB flash backup with esptool v$majorVersion ($readCommand) into $backup" -ForegroundColor Yellow
+& python -m esptool --chip esp32 --port $Port --baud 115200 $readCommand 0x0 0x400000 $backup
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $backup)) { throw "Flash backup failed. Nothing was flashed." }
 if ((Get-Item $backup).Length -ne 4194304) { throw "Flash backup incomplete. Nothing was flashed." }
-Write-Host "Backup verified: $backup" -ForegroundColor Green
+Write-Host "Backup verified: $backup (keep this file private)" -ForegroundColor Green
 Write-Host "Uploading with the SAME 4 MB Huge APP FQBN..." -ForegroundColor Cyan
 & arduino-cli upload --port $Port --fqbn $fqbn --input-dir $build $sketch
 if ($LASTEXITCODE -ne 0) { throw "Upload failed. Keep your flash backup." }
