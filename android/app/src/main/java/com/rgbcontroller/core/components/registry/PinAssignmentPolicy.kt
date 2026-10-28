@@ -29,7 +29,7 @@ object PinAssignmentPolicy {
     // GPIO23 button and GPIO33 DFPlayer BUSY are system-reserved.
     val generalOutputs = setOf(16, 17, 18, 19, 21, 22, 32)
     val labOutputs = setOf(18, 19)
-    val pwmOutputs = generalOutputs + rgbReserved
+    val pwmOutputs = labOutputs + rgbReserved
     val adc1Inputs = setOf(32, 34, 35, 36, 39)
     val digitalInputs = generalOutputs + setOf(34, 35, 36, 39)
 
