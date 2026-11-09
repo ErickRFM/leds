@@ -51,6 +51,7 @@
 #include "modules/SoilMoistureModule.h"
 #include "modules/LdrLightModule.h"
 #include "modules/OledSsd1306Module.h"
+#include "modules/CraneRoboticsModule.h"
 
 // ---------------------------------------------------------------------------
 // Optional modular hardware components.
@@ -66,6 +67,13 @@
 // DFPlayer and suitable 3W/4ohm speaker. Default 0 preserves safe rollout.
 #ifndef COMPI_FULL_LAB_PROFILE
 #define COMPI_FULL_LAB_PROFILE 0
+#endif
+#ifndef COMPI_BUILD_CRANE_ROBOTICS
+#define COMPI_BUILD_CRANE_ROBOTICS 1
+#endif
+#ifndef COMPI_ENABLE_CRANE_ROBOTICS
+// Physical servos/joystick remain opt-in until the external 5 V supply and wiring are verified.
+#define COMPI_ENABLE_CRANE_ROBOTICS 0
 #endif
 #ifndef COMPI_BUILD_DHT11
 #define COMPI_BUILD_DHT11 1
@@ -745,6 +753,9 @@ void renderEffect(uint32_t now) {
 esp32core::DeviceIdentity deviceIdentity;
 esp32core::PinManager pinManager;
 esp32core::ModuleRegistry moduleRegistry;
+#if COMPI_BUILD_CRANE_ROBOTICS
+esp32core::CraneRoboticsModule craneRoboticsModule;
+#endif
 esp32core::LedRgbModule rgbModule(
     LED_R, LED_G, LED_B, COMMON_ANODE,
     renderStatic, renderEffect,
@@ -1623,6 +1634,9 @@ void setup() {
 #endif
 #if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
   moduleRegistry.add(oledModule);
+#endif
+#if COMPI_ENABLE_CRANE_ROBOTICS && COMPI_BUILD_CRANE_ROBOTICS
+  moduleRegistry.add(craneRoboticsModule);
 #endif
   // RGB is the single required module. A missing optional OLED or sensor
   // must not suppress SoftAP/BLE or trap the board in an unrecoverable loop.
