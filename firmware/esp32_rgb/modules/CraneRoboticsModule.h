@@ -164,6 +164,12 @@ class CraneRoboticsModule final : public IModule {
     return true;
   }
 
+  bool touchRemoteLease(uint32_t nowMs) {
+    if (!ready_ || !remoteMode_) return false;
+    lastRemoteCommandAt_ = nowMs;
+    return true;
+  }
+
   bool homeRemote(uint32_t nowMs) {
     return applyRemoteTargets(90.0f, 90.0f, kDefaultSpeedDegPerSecond, nowMs);
   }
