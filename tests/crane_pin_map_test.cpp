@@ -1,5 +1,5 @@
 #include <cassert>
-#include "firmware/esp32_rgb/core/CranePinMap.h"
+#include "../firmware/esp32_rgb/core/CranePinMap.h"
 
 int main() {
   using namespace esp32core;
