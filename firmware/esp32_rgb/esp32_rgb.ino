@@ -52,6 +52,7 @@
 #include "modules/LdrLightModule.h"
 #include "modules/OledSsd1306Module.h"
 #include "modules/CraneRoboticsModule.h"
+#include "core/CraneProtocol.h"
 
 // ---------------------------------------------------------------------------
 // Optional modular hardware components.
@@ -700,13 +701,15 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
     esp32core::BleLdrCalibration calibration{};
     esp32core::MediaCommand media{};
     esp32core::BleSensorPinRequest pinRequest{};
+    esp32core::crane::ProtocolCommand craneCommand{};
     const bool valid = esp32core::parseRgbCommand(command.c_str(), parsed) ||
                        esp32core::parseMediaCommand(command.c_str(), media) ||
                        esp32core::parseBleSensorPinRequest(command.c_str(), pinRequest) ||
                        esp32core::isBleEnvironmentalCommand(command.c_str()) ||
                        esp32core::parseBleSnapshotRequest(command.c_str(),
                                                          kind, requestId) ||
-                       esp32core::parseBleLdrCalibration(command.c_str(), calibration);
+                       esp32core::parseBleLdrCalibration(command.c_str(), calibration) ||
+                       esp32core::crane::parseCraneCommand(command.c_str(), craneCommand);
     portENTER_CRITICAL(&bleInboxMux);
     const bool accepted = valid && bleInbox.push(command.c_str());
     if (!accepted && bleRejected < 65535) ++bleRejected;
@@ -1381,14 +1384,17 @@ void processBleCommands() {
     const bool mediaRequest=esp32core::parseMediaCommand(buffer,media);
     esp32core::BleSensorPinRequest pinRequest{};
     const bool sensorPinRequest=esp32core::parseBleSensorPinRequest(buffer,pinRequest);
+    esp32core::crane::ProtocolCommand craneCommand{};
+    const bool craneRequest=esp32core::crane::parseCraneCommand(buffer,craneCommand);
     esp32core::RgbCommand parsed{};
     if (!snapshotRequest && !calibrationRequest && !mediaRequest && !sensorPinRequest &&
-        environmental == esp32core::BleEnvironmentalAction::Invalid &&
+        !craneRequest && environmental == esp32core::BleEnvironmentalAction::Invalid &&
         !esp32core::parseRgbCommand(buffer, parsed)) {
       reject();
       continue;
     }
     const bool isStop =
+        (craneRequest && craneCommand.type == esp32core::crane::CommandType::Stop) ||
         environmental == esp32core::BleEnvironmentalAction::Stop ||
         (!mediaRequest && !sensorPinRequest && environmental == esp32core::BleEnvironmentalAction::Invalid &&
          (parsed.action == esp32core::RgbAction::StopEffect ||
@@ -1399,6 +1405,58 @@ void processBleCommands() {
       reject();
       continue;
     }
+#if COMPI_BUILD_CRANE_ROBOTICS
+    if (craneRequest) {
+      if (!craneRoboticsModule.ready()) {
+        char reply[64] = {};
+        std::snprintf(reply, sizeof(reply), "CRN,%u,ERR,UNAVAILABLE",
+                      static_cast<unsigned>(craneCommand.requestId));
+        publishControlReply(reply);
+        continue;
+      }
+      const uint32_t commandAt = millis();
+      bool applied = false;
+      switch (craneCommand.type) {
+        case esp32core::crane::CommandType::Get:
+          applied = true;
+          break;
+        case esp32core::crane::CommandType::Mode:
+          applied = craneRoboticsModule.setRemoteMode(craneCommand.mode, commandAt);
+          break;
+        case esp32core::crane::CommandType::Target:
+          applied = craneRoboticsModule.applyRemoteTargets(
+              craneCommand.baseDeg, craneCommand.armDeg,
+              craneCommand.speedDegPerSecond, commandAt);
+          break;
+        case esp32core::crane::CommandType::Axis:
+          applied = craneRoboticsModule.applyRemoteAxis(
+              craneCommand.baseAxis, craneCommand.angleDeg,
+              craneCommand.speedDegPerSecond, commandAt);
+          break;
+        case esp32core::crane::CommandType::Home:
+          applied = craneRoboticsModule.homeRemote(commandAt);
+          break;
+        case esp32core::crane::CommandType::Stop:
+          applied = craneRoboticsModule.stopRemote(commandAt);
+          break;
+        default:
+          break;
+      }
+      const auto& base = craneRoboticsModule.motion().base().snapshot();
+      const auto& arm = craneRoboticsModule.motion().arm().snapshot();
+      char reply[96] = {};
+      std::snprintf(reply, sizeof(reply),
+          "CRN,%u,%s,%.1f,%.1f,%s,%u",
+          static_cast<unsigned>(craneCommand.requestId),
+          applied ? "OK" : "ERR,REJECTED",
+          static_cast<double>(base.targetDeg),
+          static_cast<double>(arm.targetDeg),
+          esp32core::crane::controlModeName(craneRoboticsModule.controlMode()),
+          static_cast<unsigned>((base.moving || arm.moving) ? 1 : 0));
+      publishControlReply(reply);
+      continue;
+    }
+#endif
     if(sensorPinRequest) {
       const auto result=wifiLab.applySingleSensorPinBle(pinRequest);
       const char* outcome=result==esp32core::BlePinApplyResult::Applied ? "APPLIED" :
