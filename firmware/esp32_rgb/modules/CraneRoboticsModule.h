@@ -68,6 +68,11 @@ class CraneRoboticsModule final : public IModule {
 
   void tick(uint32_t nowMs) override {
     if (!ready_) return;
+    if (remoteMode_ && static_cast<uint32_t>(nowMs - lastRemoteCommandAt_) > kRemoteLeaseMs) {
+      motion_.stop();
+      remoteMode_ = false;
+      localRearmRequired_ = true;
+    }
     const crane::JoystickRaw raw{
         digitalRead(crane::kJoystickUpPin) == LOW,
         digitalRead(crane::kJoystickDownPin) == LOW,
@@ -77,12 +82,13 @@ class CraneRoboticsModule final : public IModule {
     };
     const uint8_t buttons = joystick_.sample(raw, nowMs);
     const bool middle = (buttons & crane::JoystickMiddle) != 0;
-    if (middle && !middleWasPressed_) {
+    if (!remoteMode_ && !localRearmRequired_ && middle && !middleWasPressed_) {
       motion_.setTargets(90.0f, 90.0f, kDefaultSpeedDegPerSecond);
     }
     middleWasPressed_ = middle;
 
-    if (static_cast<uint32_t>(nowMs - lastRepeatAt_) >= kRepeatIntervalMs) {
+    if (!remoteMode_ && !localRearmRequired_ &&
+        static_cast<uint32_t>(nowMs - lastRepeatAt_) >= kRepeatIntervalMs) {
       lastRepeatAt_ = nowMs;
       const bool up = (buttons & crane::JoystickUp) != 0;
       const bool down = (buttons & crane::JoystickDown) != 0;
@@ -100,6 +106,7 @@ class CraneRoboticsModule final : public IModule {
       }
     }
 
+    if (localRearmRequired_ && buttons == 0) localRearmRequired_ = false;
     motion_.tick(nowMs);
     const float baseNow = motion_.base().snapshot().commandedDeg;
     const float armNow = motion_.arm().snapshot().commandedDeg;
@@ -126,6 +133,54 @@ class CraneRoboticsModule final : public IModule {
     ready_ = false;
   }
 
+  bool setRemoteMode(crane::ControlMode mode, uint32_t nowMs) {
+    if (!ready_) return false;
+    remoteMode_ = mode == crane::ControlMode::Remote;
+    lastRemoteCommandAt_ = nowMs;
+    if (!remoteMode_) motion_.stop();
+    else localRearmRequired_ = true;
+    return true;
+  }
+
+  bool applyRemoteTargets(float baseDeg, float armDeg,
+                          float speedDegPerSecond, uint32_t nowMs) {
+    if (!ready_ || !motion_.setTargets(baseDeg, armDeg, speedDegPerSecond)) return false;
+    remoteMode_ = true;
+    localRearmRequired_ = true;
+    lastRemoteCommandAt_ = nowMs;
+    return true;
+  }
+
+  bool applyRemoteAxis(bool baseAxis, float angleDeg,
+                       float speedDegPerSecond, uint32_t nowMs) {
+    if (!ready_) return false;
+    const bool accepted = baseAxis
+        ? motion_.setBaseTarget(angleDeg, speedDegPerSecond)
+        : motion_.setArmTarget(angleDeg, speedDegPerSecond);
+    if (!accepted) return false;
+    remoteMode_ = true;
+    localRearmRequired_ = true;
+    lastRemoteCommandAt_ = nowMs;
+    return true;
+  }
+
+  bool homeRemote(uint32_t nowMs) {
+    return applyRemoteTargets(90.0f, 90.0f, kDefaultSpeedDegPerSecond, nowMs);
+  }
+
+  bool stopRemote(uint32_t nowMs) {
+    if (!ready_) return false;
+    motion_.stop();
+    remoteMode_ = true;
+    localRearmRequired_ = true;
+    lastRemoteCommandAt_ = nowMs;
+    return true;
+  }
+
+  crane::ControlMode controlMode() const {
+    return remoteMode_ ? crane::ControlMode::Remote : crane::ControlMode::Local;
+  }
+
   bool ready() const { return ready_; }
   const crane::CraneMotionController& motion() const { return motion_; }
 
@@ -136,6 +191,7 @@ class CraneRoboticsModule final : public IModule {
   static constexpr uint16_t kMinPulseUs = 1000;
   static constexpr uint16_t kMaxPulseUs = 2000;
   static constexpr uint32_t kRepeatIntervalMs = 35;
+  static constexpr uint32_t kRemoteLeaseMs = 1500;
   static constexpr float kDefaultSpeedDegPerSecond = 60.0f;
 
   static void writeAxis(uint8_t pin, float degrees) {
@@ -165,6 +221,9 @@ class CraneRoboticsModule final : public IModule {
   float lastArmWritten_ = -1.0f;
   uint32_t lastRepeatAt_ = 0;
   bool middleWasPressed_ = false;
+  bool remoteMode_ = false;
+  bool localRearmRequired_ = false;
+  uint32_t lastRemoteCommandAt_ = 0;
   bool baseAttached_ = false;
   bool armAttached_ = false;
   bool ready_ = false;
