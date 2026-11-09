@@ -1084,6 +1084,25 @@ class BleManager(private val context: Context) {
         return true
     }
 
+    /**
+     * Queue a Compi Robotics frame over the existing owner-authenticated GATT
+     * WRITE characteristic. This is intentionally separate from RGB's V1
+     * allow-list; the ESP32 parser remains the final command validator.
+     */
+    fun writeCraneCommand(frame: String): Boolean {
+        if (frame.length !in 7..64 || !frame.startsWith("CRN,") ||
+            frame.any { it.code !in 32..126 } ||
+            _connectionState.value != BleConnectionState.Ready ||
+            _securityState.value != BleSecurityState.Authorized) return false
+        synchronized(pending) {
+            // Do not evict enrollment or privileged hardware commands.
+            if (pending.size >= 16) return false
+            pending.addLast(frame)
+        }
+        drainQueue()
+        return true
+    }
+
     fun writeCommand(text: String) {
         // Privileged RGB controls are not available on an unauthenticated link.
         if (!RgbDeviceCommand.allowed(text) ||
