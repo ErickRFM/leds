@@ -16,6 +16,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -30,6 +31,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleManager
+import kotlinx.coroutines.delay
 
 @Composable
 fun CraneRoboticsScreen(
@@ -43,6 +45,7 @@ fun CraneRoboticsScreen(
     var speed by rememberSaveable { mutableFloatStateOf(60f) }
     var requestId by rememberSaveable { mutableIntStateOf(1) }
     var feedback by remember { mutableStateOf("Sin comandos enviados en esta sesión.") }
+    var remoteControl by rememberSaveable { mutableStateOf(false) }
     val deviceState by bleManager.deviceState.collectAsState()
 
     fun send(action: String): Boolean {
@@ -62,6 +65,25 @@ fun CraneRoboticsScreen(
         if (send(command)) {
             base = safeBase
             arm = safeArm
+            remoteControl = true
+        }
+    }
+
+    // Keep the remote lease alive while this screen owns remote control.
+    // If BLE drops or the screen leaves composition, heartbeats stop and the
+    // ESP32 cancels motion and safely returns control to the physical joystick.
+    LaunchedEffect(remoteControl, authorized, moduleActive) {
+        if (remoteControl && authorized && moduleActive) {
+            while (true) {
+                delay(500L)
+                val id = requestId
+                requestId = if (requestId >= 65535) 1 else requestId + 1
+                if (!bleManager.writeCraneCommand("CRN,$id,GET")) {
+                    remoteControl = false
+                    feedback = "Se perdió el canal de control remoto."
+                    break
+                }
+            }
         }
     }
 
@@ -170,7 +192,7 @@ fun CraneRoboticsScreen(
                         ) { Text("$angle°") }
                     }
                     OutlinedButton(
-                        onClick = { send("HOME"); base = 90f; arm = 90f },
+                        onClick = { if (send("HOME")) { base = 90f; arm = 90f; remoteControl = true } },
                         enabled = authorized && moduleActive,
                         modifier = Modifier.weight(1f).testTag("crane_home")
                     ) { Text("HOME") }
@@ -215,12 +237,12 @@ fun CraneRoboticsScreen(
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(
-                onClick = { send("MODE,LOCAL") },
+                onClick = { if (send("MODE,LOCAL")) remoteControl = false },
                 enabled = authorized && moduleActive,
                 modifier = Modifier.weight(1f).testTag("crane_local_mode")
             ) { Text("Control físico") }
             Button(
-                onClick = { send("STOP") },
+                onClick = { if (send("STOP")) remoteControl = false },
                 enabled = authorized && moduleActive,
                 modifier = Modifier.weight(1f).testTag("crane_stop")
             ) { Text("STOP") }
