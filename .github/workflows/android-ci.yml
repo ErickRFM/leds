@@ -51,6 +51,10 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/crane_motion_core_test.cpp -o /tmp/crane_motion_core_test
           /tmp/crane_motion_core_test
+      - name: Compi Robotics BLE protocol parser regressions
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/crane_protocol_test.cpp -o /tmp/crane_protocol_test
+          /tmp/crane_protocol_test
       - name: Host unit tests (no ESP32 required)
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/firmware_core_test.cpp -o /tmp/firmware_core_test
