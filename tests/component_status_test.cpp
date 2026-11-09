@@ -105,7 +105,7 @@ void testPinCountIsClampedToEight() {
 
   char buffer[256] = {};
   assert(encodeComponentStatus(&entry, 1, buffer, sizeof(buffer)));
-  assert(std::strstr(buffer, "\"pins\":[10,11,12]") != nullptr);
+  assert(std::strstr(buffer, "\"pins\":[10,11,12,13,14,15,16,17]") != nullptr);
 }
 
 void testTruncationReturnsFalseNotPartialJson() {
