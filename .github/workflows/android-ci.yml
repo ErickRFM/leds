@@ -43,6 +43,10 @@ jobs:
         run: python3 scripts/check-ble-write-path.py
       - name: Contract regression (BLE RGB V1 + V2 core)
         run: python3 scripts/check-contracts.py
+      - name: Compi Robotics GPIO allocation regression
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/crane_pin_map_test.cpp -o /tmp/crane_pin_map_test
+          /tmp/crane_pin_map_test
       - name: Host unit tests (no ESP32 required)
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/firmware_core_test.cpp -o /tmp/firmware_core_test
