@@ -949,7 +949,7 @@ bool collectComponentTelemetry(char* output, size_t capacity, void*) {
 // report exposes the exact pins currently leased by each started module and its
 // lifecycle, so clients never infer GPIO ownership from their local config.
 bool collectComponentStatus(char* output, size_t capacity, void*) {
-  esp32core::ComponentStatusEntry entries[8];
+  esp32core::ComponentStatusEntry entries[10];
   size_t count = 0;
 
   {
@@ -1055,6 +1055,31 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
     entry.pinCount = 2;
     entry.state = entry.active ? esp32core::ComponentState::Active :
         esp32core::ComponentState::Error;
+  }
+#endif
+
+#if COMPI_BUILD_CRANE_ROBOTICS
+  {
+    esp32core::ComponentStatusEntry& entry = entries[count++];
+    entry = {};
+    entry.id = craneRoboticsModule.id();
+    entry.type = esp32core::ComponentType::Controller;
+    entry.interfaceType = esp32core::HardwareInterface::Pwm;
+    entry.pins[0] = esp32core::crane::kServoBasePin;
+    entry.pins[1] = esp32core::crane::kServoArmPin;
+    entry.pins[2] = esp32core::crane::kJoystickUpPin;
+    entry.pins[3] = esp32core::crane::kJoystickDownPin;
+    entry.pins[4] = esp32core::crane::kJoystickLeftPin;
+    entry.pins[5] = esp32core::crane::kJoystickRightPin;
+    entry.pins[6] = esp32core::crane::kJoystickMidPin;
+    entry.active = craneRoboticsModule.ready();
+    entry.pinCount = entry.active ? 7 : 0;
+    entry.state = entry.active ? esp32core::ComponentState::Active :
+#if COMPI_ENABLE_CRANE_ROBOTICS
+        esp32core::ComponentState::Error;
+#else
+        esp32core::ComponentState::Catalog;
+#endif
   }
 #endif
 
