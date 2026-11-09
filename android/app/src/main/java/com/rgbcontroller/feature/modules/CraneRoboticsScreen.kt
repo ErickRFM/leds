@@ -58,7 +58,7 @@ fun CraneRoboticsScreen(
         if (!authorized || !moduleActive) return
         val safeBase = nextBase.coerceIn(10f, 170f)
         val safeArm = nextArm.coerceIn(10f, 170f)
-        val command = "TARGET,\${safeBase.toInt()},\${safeArm.toInt()},\${speed.toInt()}"
+        val command = "TARGET,${safeBase.toInt()},${safeArm.toInt()},${speed.toInt()}"
         if (send(command)) {
             base = safeBase
             arm = safeArm
@@ -117,7 +117,7 @@ fun CraneRoboticsScreen(
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Ejes · ángulo ordenado", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text("Base · \${base.toInt()}°", style = MaterialTheme.typography.labelLarge)
+                Text("Base · ${base.toInt()}°", style = MaterialTheme.typography.labelLarge)
                 Slider(
                     value = base,
                     onValueChange = { base = it },
@@ -125,7 +125,7 @@ fun CraneRoboticsScreen(
                     enabled = authorized && moduleActive,
                     modifier = Modifier.testTag("crane_base_slider")
                 )
-                Text("Brazo · \${arm.toInt()}°", style = MaterialTheme.typography.labelLarge)
+                Text("Brazo · ${arm.toInt()}°", style = MaterialTheme.typography.labelLarge)
                 Slider(
                     value = arm,
                     onValueChange = { arm = it },
@@ -133,7 +133,7 @@ fun CraneRoboticsScreen(
                     enabled = authorized && moduleActive,
                     modifier = Modifier.testTag("crane_arm_slider")
                 )
-                Text("Velocidad · \${speed.toInt()}°/s", style = MaterialTheme.typography.labelLarge)
+                Text("Velocidad · ${speed.toInt()}°/s", style = MaterialTheme.typography.labelLarge)
                 Slider(
                     value = speed,
                     onValueChange = { speed = it },
