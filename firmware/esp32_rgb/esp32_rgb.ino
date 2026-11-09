@@ -1418,7 +1418,8 @@ void processBleCommands() {
       bool applied = false;
       switch (craneCommand.type) {
         case esp32core::crane::CommandType::Get:
-          applied = true;
+          applied = craneRoboticsModule.touchRemoteLease(commandAt) ||
+              craneRoboticsModule.controlMode() == esp32core::crane::ControlMode::Local;
           break;
         case esp32core::crane::CommandType::Mode:
           applied = craneRoboticsModule.setRemoteMode(craneCommand.mode, commandAt);
