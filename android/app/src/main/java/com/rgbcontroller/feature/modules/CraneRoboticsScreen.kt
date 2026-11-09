@@ -116,7 +116,7 @@ fun CraneRoboticsScreen(
                         color = if (moduleActive) MaterialTheme.colorScheme.primaryContainer
                             else MaterialTheme.colorScheme.surfaceVariant
                     ) {
-                        Text(if (moduleActive) "Módulo activo" else "Módulo no confirmado",
+                        Text(if (moduleActive) "Firmware listo" else "Firmware no confirmado",
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                             style = MaterialTheme.typography.labelMedium)
                     }
