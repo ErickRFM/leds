@@ -51,11 +51,11 @@ inline bool parseCraneCommand(const char* input, ProtocolCommand& out) {
   char buffer[65] = {};
   std::memcpy(buffer, input, length);
   char* save = nullptr;
-  char* token = std::strtok_r(buffer, ",", &save);
+  char* token = strtok_r(buffer, ",", &save);
   if (!token || std::strcmp(token, "CRN") != 0) return false;
-  token = std::strtok_r(nullptr, ",", &save);
+  token = strtok_r(nullptr, ",", &save);
   if (!parseUnsigned16(token, out.requestId)) return false;
-  token = std::strtok_r(nullptr, ",", &save);
+  token = strtok_r(nullptr, ",", &save);
   if (!token) return false;
 
   if (std::strcmp(token, "GET") == 0) {
@@ -65,17 +65,17 @@ inline bool parseCraneCommand(const char* input, ProtocolCommand& out) {
   } else if (std::strcmp(token, "HOME") == 0) {
     out.type = CommandType::Home;
   } else if (std::strcmp(token, "MODE") == 0) {
-    token = std::strtok_r(nullptr, ",", &save);
-    if (!token || std::strtok_r(nullptr, ",", &save)) return false;
+    token = strtok_r(nullptr, ",", &save);
+    if (!token || strtok_r(nullptr, ",", &save)) return false;
     if (std::strcmp(token, "LOCAL") == 0) out.mode = ControlMode::Local;
     else if (std::strcmp(token, "REMOTE") == 0) out.mode = ControlMode::Remote;
     else return false;
     out.type = CommandType::Mode;
   } else if (std::strcmp(token, "TARGET") == 0) {
-    char* base = std::strtok_r(nullptr, ",", &save);
-    char* arm = std::strtok_r(nullptr, ",", &save);
-    char* speed = std::strtok_r(nullptr, ",", &save);
-    if (std::strtok_r(nullptr, ",", &save) ||
+    char* base = strtok_r(nullptr, ",", &save);
+    char* arm = strtok_r(nullptr, ",", &save);
+    char* speed = strtok_r(nullptr, ",", &save);
+    if (strtok_r(nullptr, ",", &save) ||
         !parseFloatStrict(base, out.baseDeg) ||
         !parseFloatStrict(arm, out.armDeg) ||
         !parseFloatStrict(speed, out.speedDegPerSecond) ||
@@ -84,10 +84,10 @@ inline bool parseCraneCommand(const char* input, ProtocolCommand& out) {
         out.speedDegPerSecond < 1.0f || out.speedDegPerSecond > 180.0f) return false;
     out.type = CommandType::Target;
   } else if (std::strcmp(token, "AXIS") == 0) {
-    char* axis = std::strtok_r(nullptr, ",", &save);
-    char* angle = std::strtok_r(nullptr, ",", &save);
-    char* speed = std::strtok_r(nullptr, ",", &save);
-    if (std::strtok_r(nullptr, ",", &save) || !axis ||
+    char* axis = strtok_r(nullptr, ",", &save);
+    char* angle = strtok_r(nullptr, ",", &save);
+    char* speed = strtok_r(nullptr, ",", &save);
+    if (strtok_r(nullptr, ",", &save) || !axis ||
         !parseFloatStrict(angle, out.angleDeg) ||
         !parseFloatStrict(speed, out.speedDegPerSecond) ||
         out.angleDeg < 0.0f || out.angleDeg > 180.0f ||
@@ -103,7 +103,7 @@ inline bool parseCraneCommand(const char* input, ProtocolCommand& out) {
   // No unconsumed fields are accepted for simple commands.
   if (out.type == CommandType::Get || out.type == CommandType::Stop ||
       out.type == CommandType::Home) {
-    if (std::strtok_r(nullptr, ",", &save)) return false;
+    if (strtok_r(nullptr, ",", &save)) return false;
   }
   return true;
 }
