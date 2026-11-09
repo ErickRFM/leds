@@ -93,12 +93,12 @@ void testMultipleEntriesAreOrderedAndSeparated() {
   assert(json.find("},") != std::string::npos);
 }
 
-void testPinCountIsClampedToThree() {
+void testPinCountIsClampedToEight() {
   ComponentStatusEntry entry = {};
   entry.id = "over.count";
   entry.type = ComponentType::Sensor;
   entry.interfaceType = HardwareInterface::Gpio;
-  for (uint8_t i = 0; i < 3; ++i) entry.pins[i] = static_cast<uint8_t>(10 + i);
+  for (uint8_t i = 0; i < 8; ++i) entry.pins[i] = static_cast<uint8_t>(10 + i);
   entry.pinCount = 9;
   entry.active = true;
   entry.state = ComponentState::Active;
@@ -169,7 +169,7 @@ int main() {
   testSingleRgbEntryReportsResolvedPins();
   testInactiveEntryNeverClaimsActive();
   testMultipleEntriesAreOrderedAndSeparated();
-  testPinCountIsClampedToThree();
+  testPinCountIsClampedToEight();
   testTruncationReturnsFalseNotPartialJson();
   testFirmwareIsFinalGpioAuthority();
   testDhtDiagnosticNeverClaimsPhysicalPresence();
