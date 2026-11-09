@@ -152,6 +152,9 @@
 #ifndef COMPI_REPORT_BUTTON_PIN
 #define COMPI_REPORT_BUTTON_PIN 23
 #endif
+#if COMPI_ENABLE_CRANE_ROBOTICS && COMPI_REPORT_BUTTON_PIN == 18
+#error "Compi Robotics uses GPIO18 for the base servo; move the voice-report button to GPIO23 before enabling the crane"
+#endif
 #if COMPI_REPORT_BUTTON_PIN != 23 && COMPI_REPORT_BUTTON_PIN != 18
 #error "Compi report button: choose GPIO23 or GPIO18 (GPIO35 has no internal pull-up)"
 #endif
