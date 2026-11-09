@@ -4,12 +4,12 @@
 #include "../core/ModuleRegistry.h"
 #include "../core/CranePinMap.h"
 #include "../core/CraneMotionCore.h"
+#include "../core/CraneProtocol.h"
 
 namespace esp32core {
 
-// Optional local-first robotics module. Remote commands are deliberately not
-// accepted here yet; they will be added only through the authenticated BLE
-// owner-session path after protocol tests are in place.
+// Optional local-first robotics module. Remote commands are invoked only by
+// the main loop after the existing BLE owner-session authorization gate.
 class CraneRoboticsModule final : public IModule {
  public:
   const char* id() const override { return "robotics.crane.2axis"; }
@@ -35,7 +35,6 @@ class CraneRoboticsModule final : public IModule {
         releaseClaims(*acquired);
         return false;
       }
-      ++claimed;
     }
 
     // GPIO34/35/36/39 have no internal pull-ups. All five contacts require
