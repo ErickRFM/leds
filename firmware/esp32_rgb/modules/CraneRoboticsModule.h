@@ -18,7 +18,6 @@ class CraneRoboticsModule final : public IModule {
   bool begin(PinManager& manager) override {
     if (ready_) return false;
     PinManager* acquired = &manager;
-    size_t claimed = 0;
     const uint8_t outputs[] = {crane::kServoBasePin, crane::kServoArmPin};
     const uint8_t inputs[] = {
         crane::kJoystickUpPin, crane::kJoystickDownPin,
@@ -30,7 +29,6 @@ class CraneRoboticsModule final : public IModule {
         releaseClaims(*acquired);
         return false;
       }
-      ++claimed;
     }
     for (uint8_t pin : inputs) {
       if (!acquired->acquire(pin, id(), PinFunction::DigitalInput)) {
