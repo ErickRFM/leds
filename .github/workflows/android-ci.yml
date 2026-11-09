@@ -47,6 +47,10 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/crane_pin_map_test.cpp -o /tmp/crane_pin_map_test
           /tmp/crane_pin_map_test
+      - name: Compi Robotics motion and joystick host regressions
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/crane_motion_core_test.cpp -o /tmp/crane_motion_core_test
+          /tmp/crane_motion_core_test
       - name: Host unit tests (no ESP32 required)
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/firmware_core_test.cpp -o /tmp/firmware_core_test
