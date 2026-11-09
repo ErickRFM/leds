@@ -180,7 +180,7 @@ fun ModuleWorkspaceScreen(
                      else ComponentCatalog.get(id)?.name ?: id,
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.weight(1f))
-                if (id != "compi_dfplayer" && id != "compi_station") {
+                if (id !in setOf("compi_dfplayer", "compi_station", "robotics_crane")) {
                     TextButton(
                         onClick = { editingId = if (id == ModuleWorkspaceGrouping.ENVIRONMENT) environmentSensor else id },
                         modifier = Modifier.testTag("module_edit_pins")
@@ -426,6 +426,15 @@ fun ModuleWorkspaceScreen(
                             }
                         }
                     }
+                }
+            } else if (id == "robotics_crane") {
+                Box(Modifier.weight(1f)) {
+                    CraneRoboticsScreen(
+                        bleManager = bleManager,
+                        authorized = bleAuthorized,
+                        moduleActive = currentlyVerified && runtime("robotics_crane")?.active == true,
+                        modifier = Modifier.testTag("compi_robotics_crane_screen")
+                    )
                 }
             } else if (id == "led_rgb") {
                 // Reuse the *real* V16 BLE/Wi-Fi control path; no fake RGB widget.
