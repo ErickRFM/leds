@@ -88,6 +88,9 @@ class BleManager(private val context: Context) {
     private val _gpioPins = MutableStateFlow<List<BleGpioPin>?>(null)
     /** Optional firmware lease snapshot, read-only, and never a GPIO permission. */
     val gpioPins: StateFlow<List<BleGpioPin>?> = _gpioPins.asStateFlow()
+    private val _craneReply = MutableStateFlow<CraneControlReply?>(null)
+    /** Last owner-authorized CRN confirmation; null until the firmware replies. */
+    val craneReply: StateFlow<CraneControlReply?> = _craneReply.asStateFlow()
 
     private val _securityState = MutableStateFlow(BleSecurityState.Disconnected)
     /** Firmware-confirmed owner authorization; bonding alone is never Authorized. */
@@ -777,6 +780,14 @@ class BleManager(private val context: Context) {
 
     private fun acceptState(bytes: ByteArray?) {
         val text = bytes?.toString(Charsets.UTF_8) ?: return
+        if (text.startsWith(CraneControlProtocol.PREFIX)) {
+            // Unauthenticated notifications must never look like confirmations.
+            if (_connectionState.value == BleConnectionState.Ready &&
+                _securityState.value == BleSecurityState.Authorized) {
+                CraneControlProtocol.parse(text)?.let { _craneReply.value = it }
+            }
+            return
+        }
         if (text.startsWith("PIN,")) {
             val receipt = BleSensorPinProtocol.receipt(text) ?: return
             if (_connectionState.value == BleConnectionState.Ready &&
@@ -1193,6 +1204,7 @@ class BleManager(private val context: Context) {
         snapshotAssembler.reset()
         _environmentalRgbEnabled.value = null
         _environmentalRgbMessage.value = "Sin sesión BLE autenticada."
+        _craneReply.value = null
         mtuReady = false
         _connectedAddress.value = null
         // Closing the link revokes authorization; the firmware does the same.

@@ -433,6 +433,7 @@ fun ModuleWorkspaceScreen(
                         bleManager = bleManager,
                         authorized = bleAuthorized,
                         moduleActive = currentlyVerified && runtime("robotics_crane")?.active == true,
+                        onOpenConnect = onConnect,
                         modifier = Modifier.testTag("compi_robotics_crane_screen")
                     )
                 }
