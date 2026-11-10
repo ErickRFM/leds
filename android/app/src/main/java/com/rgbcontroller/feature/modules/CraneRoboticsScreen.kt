@@ -1,9 +1,10 @@
 package com.rgbcontroller.feature.modules
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,6 +18,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
@@ -65,6 +67,7 @@ private const val CONFIRM_TIMEOUT_MS = 2500L
 private val MutedText = Color(0xFF94A3B8)
 private val StrongText = Color(0xFFE8ECF8)
 private val SliderLabel = Color(0xFFC7D2FE)
+private val DisabledText = Color(0xFF8A94A8)
 
 @Composable
 fun CraneRoboticsScreen(
@@ -295,6 +298,7 @@ fun CraneRoboticsScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CraneStatusHeader(
     authorized: Boolean,
@@ -321,9 +325,9 @@ private fun CraneStatusHeader(
                 style = MaterialTheme.typography.bodySmall,
                 color = MutedText
             )
-            Row(
+            FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 CompiBadge(
                     label = if (authorized) "BLE autorizado" else "BLE sin sesión",
@@ -444,24 +448,24 @@ private fun AxesCard(
                         stateDescription = "${speed.toInt()} grados por segundo"
                     }
             )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                listOf(20, 45, 60, 90, 120).forEach { preset ->
+            CraneChipRow {
+                listOf(20, 45, 90, 120).forEach { preset ->
                     FilterChip(
                         selected = speed.toInt() == preset,
                         onClick = { onSpeedChange(preset.toFloat()) },
                         enabled = enabled,
-                        label = { Text("$preset°/s", fontSize = 12.sp) }
+                        label = { Text("$preset°/s", fontSize = 12.sp) },
+                        colors = craneChipColors()
                     )
                 }
             }
             Button(
                 onClick = onApply,
                 enabled = enabled,
+                colors = ButtonDefaults.buttonColors(
+                    disabledContainerColor = CompiTokens.Colors.SurfaceVariant,
+                    disabledContentColor = DisabledText
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
@@ -528,28 +532,28 @@ private fun PresetsCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MutedText
             )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            CraneChipRow {
                 listOf(10, 45, 90, 135, 170).forEach { angle ->
                     FilterChip(
                         selected = false,
                         onClick = { onAngle(angle.toFloat()) },
                         enabled = enabled,
-                        label = { Text("$angle°") }
+                        label = { Text("$angle°") },
+                        colors = craneChipColors()
                     )
                 }
-                FilterChip(
-                    selected = false,
-                    onClick = onHome,
-                    enabled = enabled,
-                    label = { Text("HOME") },
-                    modifier = Modifier.testTag("crane_home")
-                )
             }
+            OutlinedButton(
+                onClick = onHome,
+                enabled = enabled,
+                colors = ButtonDefaults.outlinedButtonColors(
+                    disabledContentColor = DisabledText
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .testTag("crane_home")
+            ) { Text("HOME · volver a 90° / 90°") }
         }
     }
 }
@@ -617,6 +621,9 @@ private fun JoystickCard(
             OutlinedButton(
                 onClick = onCenter,
                 enabled = enabled,
+                colors = ButtonDefaults.outlinedButtonColors(
+                    disabledContentColor = DisabledText
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
@@ -638,6 +645,9 @@ private fun NudgeButton(
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
+        colors = ButtonDefaults.outlinedButtonColors(
+            disabledContentColor = DisabledText
+        ),
         modifier = modifier
             .heightIn(min = 48.dp)
             .testTag(testTag)
@@ -734,6 +744,9 @@ private fun CommandBar(
             OutlinedButton(
                 onClick = onLocal,
                 enabled = enabled && remoteControl,
+                colors = ButtonDefaults.outlinedButtonColors(
+                    disabledContentColor = DisabledText
+                ),
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(min = 52.dp)
@@ -744,7 +757,9 @@ private fun CommandBar(
                 enabled = enabled,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = CompiTokens.Colors.ErrorRed,
-                    contentColor = Color.White
+                    contentColor = Color.White,
+                    disabledContainerColor = CompiTokens.Colors.ErrorRed.copy(alpha = 0.25f),
+                    disabledContentColor = Color.White.copy(alpha = 0.7f)
                 ),
                 modifier = Modifier
                     .weight(1.2f)
@@ -757,6 +772,21 @@ private fun CommandBar(
         }
     }
 }
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CraneChipRow(content: @Composable () -> Unit) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) { content() }
+}
+
+@Composable
+private fun craneChipColors() = FilterChipDefaults.filterChipColors(
+    disabledLabelColor = DisabledText
+)
 
 private fun formatAngle(value: Float?): String =
     value?.let { String.format(Locale.ROOT, "%.1f°", it) } ?: "—"
