@@ -139,9 +139,8 @@ fun CraneRoboticsScreen(
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
         if (send("STOP")) {
             remoteControl = false
-            // STOP is the safety action: never leave it looking unconfirmed.
-            pendingId = null
-            timedOut = false
+            // Keep the request pending so the firmware reply replaces any stale
+            // "moving" confirmation instead of leaving it on screen.
         }
     }
 
