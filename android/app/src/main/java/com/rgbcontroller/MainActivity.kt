@@ -19,12 +19,17 @@ import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.rgbcontroller.core.wifi.CompiLabSession
+import com.rgbcontroller.core.wifi.WifiRouteMonitor
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -135,6 +140,24 @@ fun MainAppNavHost(
             ComponentDashboardViewModel.factory(context.applicationContext, session, bleManager)
         }
     )
+    // Android never validates the Internet-less SoftAP as the default network, so
+    // route evidence must come from an explicit Wi-Fi transport request. Feed that
+    // evidence into the shared session exactly once, outside navigation.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(session, lifecycleOwner) {
+        val routeMonitor = WifiRouteMonitor(context.applicationContext) { available ->
+            session.updateNetworkRouteAvailable(available)
+        }
+        routeMonitor.start()
+        val expiryObserver = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_DESTROY) routeMonitor.stop()
+        }
+        lifecycleOwner.lifecycle.addObserver(expiryObserver)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(expiryObserver)
+            routeMonitor.stop()
+        }
+    }
     val theme by preferencesRepository.themeMode.collectAsState(initial = "SYSTEM")
     val verifiedAddress by bleManager.connectedAddress.collectAsState()
     // Persist the successful connection regardless of which Compi module is visible.

@@ -29,6 +29,9 @@ __pycache__/
 # local Windows build distribution
 android/.tools/
 
+# Firmware bench packages are delivered on download/* branches, never from main.
+compi-*firmware.zip
+
 # V4 private factory provisioning: NEVER commit per-device credentials or QR kits.
 firmware/esp32_rgb/config/FactoryProvisioning.h
 local-validation/
