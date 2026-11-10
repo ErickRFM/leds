@@ -135,6 +135,12 @@ Integrar dentro de la navegación y el workspace existentes, sin una app paralel
 6. CI completa, revisión de diff y PR draft; no merge sin CI verde.
 7. Prueba de hardware supervisada y actualización de documentación/aceptación.
 
-## 10. Bloqueos y estado honesto
+## 10. Estado de validación y bloqueos
 
-Esta rama parte de una auditoría de archivos/documentación de `main`; todavía no hay prueba de conexión física de los SG90/joystick ni de una APK que controle la grúa. No flashear el dispositivo durante esta fase. La primera iteración solo podrá considerarse lista para prueba de laboratorio cuando CI esté verde y el cableado haya sido verificado; producción requiere además QA física y seguridad BLE completa.
+Actualizado: 2026-11-09.
+
+- Rama `feat/compi-robotics-servo-crane`, PR #296 en draft; `main` sin cambios.
+- CI verde sobre el SHA `6b5856f7`: jobs `android`, `firmware`, `firmware-core-tests`, `windows-board-profile` y emuladores `mobile-ux-emulator (30|35)`.
+- Compilación local con `COMPI_ENABLE_CRANE_ROBOTICS=1`: 1.873.133 bytes (95 %). Presupuesto OTA con perfil completo + grúa: 1.879.728 bytes y 86.352 bytes de margen sobre el mínimo de 65.536 → PASS.
+- Artefactos del run `42716723468` (merge commit `307c74ce`, que corresponde al head `6b5856f7`): APK debug `6f2de5fa…` y firmware `1acbbbd…`; hashes completos en el `SHA256SUMS.txt` de cada artefacto.
+- Sigue sin haber prueba física de los SG90, joystick, montaje, ni pérdida/reconexión BLE. No flashear ni habilitar en producción hasta completar las pruebas de hardware de la sección 8.
