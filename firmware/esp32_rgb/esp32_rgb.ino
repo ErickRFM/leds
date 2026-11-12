@@ -51,6 +51,8 @@
 #include "modules/SoilMoistureModule.h"
 #include "modules/LdrLightModule.h"
 #include "modules/OledSsd1306Module.h"
+#include "modules/CraneRoboticsModule.h"
+#include "core/CraneProtocol.h"
 
 // ---------------------------------------------------------------------------
 // Optional modular hardware components.
@@ -66,6 +68,13 @@
 // DFPlayer and suitable 3W/4ohm speaker. Default 0 preserves safe rollout.
 #ifndef COMPI_FULL_LAB_PROFILE
 #define COMPI_FULL_LAB_PROFILE 0
+#endif
+#ifndef COMPI_BUILD_CRANE_ROBOTICS
+#define COMPI_BUILD_CRANE_ROBOTICS 1
+#endif
+#ifndef COMPI_ENABLE_CRANE_ROBOTICS
+// Physical servos/joystick remain opt-in until the external 5 V supply and wiring are verified.
+#define COMPI_ENABLE_CRANE_ROBOTICS 0
 #endif
 #ifndef COMPI_BUILD_DHT11
 #define COMPI_BUILD_DHT11 1
@@ -142,6 +151,9 @@
 #endif
 #ifndef COMPI_REPORT_BUTTON_PIN
 #define COMPI_REPORT_BUTTON_PIN 23
+#endif
+#if COMPI_ENABLE_CRANE_ROBOTICS && COMPI_REPORT_BUTTON_PIN == 18
+#error "Compi Robotics uses GPIO18 for the base servo; move the voice-report button to GPIO23 before enabling the crane"
 #endif
 #if COMPI_REPORT_BUTTON_PIN != 23 && COMPI_REPORT_BUTTON_PIN != 18
 #error "Compi report button: choose GPIO23 or GPIO18 (GPIO35 has no internal pull-up)"
@@ -692,13 +704,15 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
     esp32core::BleLdrCalibration calibration{};
     esp32core::MediaCommand media{};
     esp32core::BleSensorPinRequest pinRequest{};
+    esp32core::crane::ProtocolCommand craneCommand{};
     const bool valid = esp32core::parseRgbCommand(command.c_str(), parsed) ||
                        esp32core::parseMediaCommand(command.c_str(), media) ||
                        esp32core::parseBleSensorPinRequest(command.c_str(), pinRequest) ||
                        esp32core::isBleEnvironmentalCommand(command.c_str()) ||
                        esp32core::parseBleSnapshotRequest(command.c_str(),
                                                          kind, requestId) ||
-                       esp32core::parseBleLdrCalibration(command.c_str(), calibration);
+                       esp32core::parseBleLdrCalibration(command.c_str(), calibration) ||
+                       esp32core::crane::parseCraneCommand(command.c_str(), craneCommand);
     portENTER_CRITICAL(&bleInboxMux);
     const bool accepted = valid && bleInbox.push(command.c_str());
     if (!accepted && bleRejected < 65535) ++bleRejected;
@@ -745,6 +759,9 @@ void renderEffect(uint32_t now) {
 esp32core::DeviceIdentity deviceIdentity;
 esp32core::PinManager pinManager;
 esp32core::ModuleRegistry moduleRegistry;
+#if COMPI_BUILD_CRANE_ROBOTICS
+esp32core::CraneRoboticsModule craneRoboticsModule;
+#endif
 esp32core::LedRgbModule rgbModule(
     LED_R, LED_G, LED_B, COMMON_ANODE,
     renderStatic, renderEffect,
@@ -938,7 +955,7 @@ bool collectComponentTelemetry(char* output, size_t capacity, void*) {
 // report exposes the exact pins currently leased by each started module and its
 // lifecycle, so clients never infer GPIO ownership from their local config.
 bool collectComponentStatus(char* output, size_t capacity, void*) {
-  esp32core::ComponentStatusEntry entries[8];
+  esp32core::ComponentStatusEntry entries[10];
   size_t count = 0;
 
   {
@@ -1044,6 +1061,31 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
     entry.pinCount = 2;
     entry.state = entry.active ? esp32core::ComponentState::Active :
         esp32core::ComponentState::Error;
+  }
+#endif
+
+#if COMPI_BUILD_CRANE_ROBOTICS
+  {
+    esp32core::ComponentStatusEntry& entry = entries[count++];
+    entry = {};
+    entry.id = craneRoboticsModule.id();
+    entry.type = esp32core::ComponentType::Controller;
+    entry.interfaceType = esp32core::HardwareInterface::Pwm;
+    entry.pins[0] = esp32core::crane::kServoBasePin;
+    entry.pins[1] = esp32core::crane::kServoArmPin;
+    entry.pins[2] = esp32core::crane::kJoystickUpPin;
+    entry.pins[3] = esp32core::crane::kJoystickDownPin;
+    entry.pins[4] = esp32core::crane::kJoystickLeftPin;
+    entry.pins[5] = esp32core::crane::kJoystickRightPin;
+    entry.pins[6] = esp32core::crane::kJoystickMidPin;
+    entry.active = craneRoboticsModule.ready();
+    entry.pinCount = entry.active ? 7 : 0;
+    entry.state = entry.active ? esp32core::ComponentState::Active :
+#if COMPI_ENABLE_CRANE_ROBOTICS
+        esp32core::ComponentState::Error;
+#else
+        esp32core::ComponentState::Catalog;
+#endif
   }
 #endif
 
@@ -1345,14 +1387,17 @@ void processBleCommands() {
     const bool mediaRequest=esp32core::parseMediaCommand(buffer,media);
     esp32core::BleSensorPinRequest pinRequest{};
     const bool sensorPinRequest=esp32core::parseBleSensorPinRequest(buffer,pinRequest);
+    esp32core::crane::ProtocolCommand craneCommand{};
+    const bool craneRequest=esp32core::crane::parseCraneCommand(buffer,craneCommand);
     esp32core::RgbCommand parsed{};
     if (!snapshotRequest && !calibrationRequest && !mediaRequest && !sensorPinRequest &&
-        environmental == esp32core::BleEnvironmentalAction::Invalid &&
+        !craneRequest && environmental == esp32core::BleEnvironmentalAction::Invalid &&
         !esp32core::parseRgbCommand(buffer, parsed)) {
       reject();
       continue;
     }
     const bool isStop =
+        (craneRequest && craneCommand.type == esp32core::crane::CommandType::Stop) ||
         environmental == esp32core::BleEnvironmentalAction::Stop ||
         (!mediaRequest && !sensorPinRequest && environmental == esp32core::BleEnvironmentalAction::Invalid &&
          (parsed.action == esp32core::RgbAction::StopEffect ||
@@ -1363,6 +1408,59 @@ void processBleCommands() {
       reject();
       continue;
     }
+#if COMPI_BUILD_CRANE_ROBOTICS
+    if (craneRequest) {
+      if (!craneRoboticsModule.ready()) {
+        char reply[64] = {};
+        std::snprintf(reply, sizeof(reply), "CRN,%u,ERR,UNAVAILABLE",
+                      static_cast<unsigned>(craneCommand.requestId));
+        publishControlReply(reply);
+        continue;
+      }
+      const uint32_t commandAt = millis();
+      bool applied = false;
+      switch (craneCommand.type) {
+        case esp32core::crane::CommandType::Get:
+          applied = craneRoboticsModule.touchRemoteLease(commandAt) ||
+              craneRoboticsModule.controlMode() == esp32core::crane::ControlMode::Local;
+          break;
+        case esp32core::crane::CommandType::Mode:
+          applied = craneRoboticsModule.setRemoteMode(craneCommand.mode, commandAt);
+          break;
+        case esp32core::crane::CommandType::Target:
+          applied = craneRoboticsModule.applyRemoteTargets(
+              craneCommand.baseDeg, craneCommand.armDeg,
+              craneCommand.speedDegPerSecond, commandAt);
+          break;
+        case esp32core::crane::CommandType::Axis:
+          applied = craneRoboticsModule.applyRemoteAxis(
+              craneCommand.baseAxis, craneCommand.angleDeg,
+              craneCommand.speedDegPerSecond, commandAt);
+          break;
+        case esp32core::crane::CommandType::Home:
+          applied = craneRoboticsModule.homeRemote(commandAt);
+          break;
+        case esp32core::crane::CommandType::Stop:
+          applied = craneRoboticsModule.stopRemote(commandAt);
+          break;
+        default:
+          break;
+      }
+      const auto& base = craneRoboticsModule.motion().base().snapshot();
+      const auto& arm = craneRoboticsModule.motion().arm().snapshot();
+      char reply[96] = {};
+      std::snprintf(reply, sizeof(reply),
+          "CRN,%u,%s,%.1f,%.1f,%s,%u",
+          static_cast<unsigned>(craneCommand.requestId),
+          applied ? "OK" : "ERR,REJECTED",
+          static_cast<double>(base.targetDeg),
+          static_cast<double>(arm.targetDeg),
+          esp32core::crane::controlModeName(craneRoboticsModule.controlMode()),
+          static_cast<unsigned>((base.moving || arm.moving) ? 1 : 0));
+      publishControlReply(reply);
+      continue;
+    }
+#endif
     if(sensorPinRequest) {
       const auto result=wifiLab.applySingleSensorPinBle(pinRequest);
       const char* outcome=result==esp32core::BlePinApplyResult::Applied ? "APPLIED" :
@@ -1623,6 +1721,9 @@ void setup() {
 #endif
 #if COMPI_ENABLE_OLED && COMPI_OLED_LIBRARY
   moduleRegistry.add(oledModule);
+#endif
+#if COMPI_ENABLE_CRANE_ROBOTICS && COMPI_BUILD_CRANE_ROBOTICS
+  moduleRegistry.add(craneRoboticsModule);
 #endif
   // RGB is the single required module. A missing optional OLED or sensor
   // must not suppress SoftAP/BLE or trap the board in an unrecoverable loop.

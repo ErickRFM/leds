@@ -16,6 +16,7 @@ constexpr uint16_t kCapSoilMoisture = 1u << 2;
 constexpr uint16_t kCapRgb = 1u << 3;
 constexpr uint16_t kCapDisplay = 1u << 4;
 constexpr uint16_t kCapAmbientLight = 1u << 5;
+constexpr uint16_t kCapRobotics = 1u << 6;
 
 struct ComponentCatalogEntry {
   const char* id;

@@ -95,13 +95,23 @@ object ComponentCatalog {
             category = "actuators"
         ),
         HardwareComponentDescriptor(
+            id = "robotics_crane",
+            name = "Compi Robotics · Grúa de dos ejes",
+            type = ComponentType.CONTROLLER,
+            interfaces = setOf(HardwareInterface.PWM, HardwareInterface.DIGITAL, HardwareInterface.GPIO),
+            capabilities = setOf("robotics", "servo", "dual_axis", "digital_joystick", "bluetooth_control"),
+            requiredPins = setOf(18, 19, 34, 35, 36, 39, 17),
+            description = "Dos servomotores SG90 y joystick digital de cinco direcciones; requiere fuente externa de 5 V y pull-ups externos en las entradas.",
+            category = "robotics"
+        ),
+        HardwareComponentDescriptor(
             id = "dfplayer_mp3",
             name = "Reproductor MP3 DFPlayer Mini",
             type = ComponentType.ACTUATOR,
             interfaces = setOf(HardwareInterface.GPIO, HardwareInterface.DIGITAL),
             capabilities = setOf("audio", "mp3", "voice", "uart"),
-            requiredPins = setOf(17, 18),
-            description = "Módulo reproductor MP3 DFPlayer Mini por UART (TX GPIO17, RX GPIO18)",
+            requiredPins = setOf(13, 14),
+            description = "Módulo reproductor MP3 DFPlayer Mini por UART2 (ESP32 RX GPIO13, TX GPIO14)",
             category = "audio"
         )
     )
@@ -123,6 +133,7 @@ object ComponentCatalog {
         "led.rgb" -> "led_rgb"
         "display.ssd1306" -> "ssd1306_oled"
         "audio.dfplayer" -> "dfplayer_mp3"
+        "robotics.crane.2axis" -> "robotics_crane"
         else -> firmwareId
     }
 }

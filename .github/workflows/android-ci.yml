@@ -43,6 +43,18 @@ jobs:
         run: python3 scripts/check-ble-write-path.py
       - name: Contract regression (BLE RGB V1 + V2 core)
         run: python3 scripts/check-contracts.py
+      - name: Compi Robotics GPIO allocation regression
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/crane_pin_map_test.cpp -o /tmp/crane_pin_map_test
+          /tmp/crane_pin_map_test
+      - name: Compi Robotics motion and joystick host regressions
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/crane_motion_core_test.cpp -o /tmp/crane_motion_core_test
+          /tmp/crane_motion_core_test
+      - name: Compi Robotics BLE protocol parser regressions
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/crane_protocol_test.cpp -o /tmp/crane_protocol_test
+          /tmp/crane_protocol_test
       - name: Host unit tests (no ESP32 required)
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/firmware_core_test.cpp -o /tmp/firmware_core_test
@@ -271,6 +283,16 @@ jobs:
         run: |
           . ./config/esp32-board.env
           arduino-cli compile --fqbn "$ARDUINO_FQBN" --output-dir build/firmware firmware/esp32_rgb
+      - name: Compile crane-enabled firmware (compile-only, no flash)
+        run: |
+          . ./config/esp32-board.env
+          mkdir -p build/crane-sketch
+          cp -a firmware/esp32_rgb build/crane-sketch/esp32_rgb
+          sed -i "s/^#define COMPI_ENABLE_CRANE_ROBOTICS .*/#define COMPI_ENABLE_CRANE_ROBOTICS 1/" build/crane-sketch/esp32_rgb/esp32_rgb.ino
+          grep -q "^#define COMPI_ENABLE_CRANE_ROBOTICS 1$" build/crane-sketch/esp32_rgb/esp32_rgb.ino
+          arduino-cli compile --fqbn "$ARDUINO_FQBN" --output-dir build/firmware-crane build/crane-sketch/esp32_rgb
+          python3 scripts/check-firmware-budget.py build/firmware-crane
+          echo "Compile-only: crane enabled to verify integration; never package or flash this CI image."
       - name: Compile connected full-lab firmware (DHT11 + LDR + OLED + DFPlayer)
         run: |
           . ./config/esp32-board.env
