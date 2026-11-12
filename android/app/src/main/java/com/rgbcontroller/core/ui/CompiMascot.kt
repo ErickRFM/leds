@@ -84,7 +84,7 @@ fun CompiMascot(
             speechText?.let { text ->
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = Color(0xFF222B3F),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
                     shadowElevation = 4.dp,
                     modifier = Modifier.padding(bottom = 6.dp)
                 ) {
@@ -94,7 +94,7 @@ fun CompiMascot(
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         ),
-                        color = Color(0xFFE2E8F0),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                     )
                 }

@@ -182,7 +182,7 @@ fun HardwareLabScreen(
         }
     ) { padding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding)
+            modifier = Modifier.fillMaxSize().padding(padding).imePadding()
                 .padding(horizontal = 16.dp).testTag("component_dashboard_list"),
             state = listState,
             contentPadding = PaddingValues(top = 10.dp, bottom = 28.dp),

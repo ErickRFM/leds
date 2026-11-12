@@ -85,7 +85,6 @@ import com.rgbcontroller.core.components.status.ComponentStatusFreshness
 import com.rgbcontroller.core.components.telemetry.TelemetrySample
 import com.rgbcontroller.core.ui.CompiBadge
 import com.rgbcontroller.core.ui.CompiBadgeType
-import com.rgbcontroller.core.ui.CompiHaptics
 import com.rgbcontroller.core.ui.CompiMascot
 import com.rgbcontroller.core.ui.CompiMascotState
 import com.rgbcontroller.core.ui.CompiTokens

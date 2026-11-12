@@ -118,7 +118,7 @@ fun ConnectionCenterScreen(
         else wifiScanError = "Se necesita permiso de ubicación únicamente para buscar redes Wi-Fi."
     }
 
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().imePadding()) {
         Spacer(Modifier.height(12.dp))
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp),

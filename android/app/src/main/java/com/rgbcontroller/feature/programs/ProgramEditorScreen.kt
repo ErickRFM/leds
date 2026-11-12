@@ -294,7 +294,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
     }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding()
             .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {

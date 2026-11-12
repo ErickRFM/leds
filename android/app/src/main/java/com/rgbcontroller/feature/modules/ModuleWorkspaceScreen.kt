@@ -163,7 +163,7 @@ fun ModuleWorkspaceScreen(
     if (openedId != null) {
         // Hardware DFPlayer and Music always share a single player route.
         val id = if (openedId == "dfplayer_mp3") "compi_dfplayer" else openedId!!
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().imePadding()) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -379,7 +379,7 @@ fun ModuleWorkspaceScreen(
             } else if (id == "compi_dfplayer") {
                 var showWiring by rememberSaveable(id) { mutableStateOf(false) }
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize().testTag("dfplayer_module_detail"),
+                    modifier = Modifier.fillMaxSize().testTag("dfplayer_module_detail").imePadding(),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 40.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -604,7 +604,7 @@ fun ModuleWorkspaceScreen(
         }
     } else {
         LazyColumn(
-            modifier = Modifier.fillMaxSize().testTag("module_workspace_list"),
+            modifier = Modifier.fillMaxSize().testTag("module_workspace_list").imePadding(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
