@@ -45,6 +45,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ui.CompiBadge
@@ -260,14 +264,27 @@ fun RgbLightingPanel(
                         presets.forEach { (color, label) ->
                             Box(
                                 modifier = Modifier
-                                    .size(36.dp)
+                                    .size(48.dp)
                                     .clip(CircleShape)
                                     .background(color)
+                                    .semantics {
+                                        role = Role.Button
+                                        contentDescription = if (isAuthorized) {
+                                            "Preset de color $label"
+                                        } else {
+                                            "Preset de color $label, deshabilitado sin sesión autorizada"
+                                        }
+                                    }
                                     .clickable(enabled = isAuthorized) {
                                         selectedColor = color
                                         onColorChanged(color)
                                     }
-                                    .border(2.dp, if (selectedColor == color) Color.White else Color.Transparent, CircleShape)
+                                    .border(
+                                        2.dp,
+                                        if (selectedColor == color) MaterialTheme.colorScheme.onSurface
+                                        else MaterialTheme.colorScheme.outline,
+                                        CircleShape
+                                    )
                             )
                         }
                     }

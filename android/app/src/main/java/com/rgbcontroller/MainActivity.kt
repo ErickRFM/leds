@@ -87,7 +87,7 @@ private sealed class Screen(
     data object Devices : Screen("devices", "Equipos", Icons.Default.Bluetooth)
     data object Connect : Screen("connect", "Conectar", Icons.Default.Bluetooth)
     data object Hub : Screen("hub", "Laboratorio", Icons.Default.Memory)
-    data object LabTools : Screen("lab-tools", "Laboratorio", Icons.Default.Memory)
+    data object LabTools : Screen("lab-tools", "Lab avanzado", Icons.Default.Memory)
 }
 
 /**

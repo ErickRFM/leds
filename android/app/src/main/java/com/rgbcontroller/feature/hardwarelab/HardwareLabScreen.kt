@@ -5,6 +5,8 @@ import com.rgbcontroller.core.wifi.LocalLabClient
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -71,7 +73,7 @@ private enum class HardwareSection(val label: String) {
     AUTOMATION("Automatización"), PROJECT("Proyecto")
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun HardwareLabScreen(
     session: CompiLabSession? = null,
@@ -174,6 +176,7 @@ fun HardwareLabScreen(
                         },
                         label = { Text(target.label) },
                         modifier = Modifier.testTag("hardware_tab_${target.name.lowercase()}")
+                            .heightIn(min = 48.dp)
                     )
                 }
             }
@@ -283,7 +286,7 @@ fun HardwareLabScreen(
                     item(key = "hardware_sensor_more") {
                         TextButton(
                             onClick = { showSensorDetails = !showSensorDetails },
-                            modifier = Modifier.testTag("component_advanced_toggle")
+                            modifier = Modifier.testTag("component_sensor_details_toggle")
                         ) { Text(if (showSensorDetails) "Ocultar gráficas e historial" else "Ver gráficas e historial") }
                     }
                     if (showSensorDetails) {
@@ -339,7 +342,7 @@ fun HardwareLabScreen(
                     }
                     item(key = "hardware_templates_toggle") {
                         TextButton(onClick = { showPinTemplates = !showPinTemplates },
-                            modifier = Modifier.testTag("component_advanced_toggle")) {
+                            modifier = Modifier.testTag("component_templates_toggle")) {
                             Text(if (showPinTemplates) "Ocultar plantillas" else "Ver plantillas no detectadas")
                         }
                     }
@@ -724,6 +727,7 @@ private fun SoilCalibrationCard(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OledStatusCard(state: ComponentDashboardState, session: CompiLabSession?) {
     val context = LocalContext.current
@@ -785,7 +789,9 @@ private fun OledStatusCard(state: ComponentDashboardState, session: CompiLabSess
             textInput.isNotBlank() && textInput.all { it.code in 32..126 },
             onClick = { transmit("text", textInput) },
             modifier = Modifier.testTag("oled_send_text")) { Text("Mostrar mensaje") }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        // FlowRow keeps the four face actions reachable on 320 dp screens where
+        // a single Row overflows and clips "Sorpresa".
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("happy" to "Feliz", "sleepy" to "Sueño",
                 "angry" to "Enojo", "surprised" to "Sorpresa").forEach { (code, label) ->
                 OutlinedButton(enabled = canSend && !sending,

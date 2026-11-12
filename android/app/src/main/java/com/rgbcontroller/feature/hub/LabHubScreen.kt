@@ -17,6 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.data.PreferencesRepository
@@ -188,7 +190,8 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding()
         .padding(horizontal = 18.dp, vertical = 20.dp)) {
-        Text("Hardware Lab", style = MaterialTheme.typography.headlineLarge, color = CompiV9.title)
+        // The route-level TopAppBar already titles this screen ("Laboratorio
+        // avanzado"); an internal headline duplicated it with a different name.
         Spacer(Modifier.height(12.dp))
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
@@ -629,7 +632,10 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
             Text("Muestras: " + adcHistory.size + " · min: " + minValue + " · max: " + maxValue,
                 style = MaterialTheme.typography.bodySmall)
             val graphColor = MaterialTheme.colorScheme.primary
-            Canvas(modifier = Modifier.fillMaxWidth().height(150.dp)) {
+            Canvas(modifier = Modifier.fillMaxWidth().height(150.dp).semantics {
+                contentDescription = "Gráfica de " + adcHistory.size + " muestras ADC, min " +
+                    minValue + ", max " + maxValue
+            }) {
                 val samples = adcHistory
                 if (samples.size >= 2) {
                     for (i in 1 until samples.size) {

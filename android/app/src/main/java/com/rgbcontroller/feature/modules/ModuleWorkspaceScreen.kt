@@ -200,7 +200,8 @@ fun ModuleWorkspaceScreen(
                             FilterChip(
                                 selected = stationSection == sec,
                                 onClick = { stationSection = sec },
-                                label = { Text(sec, fontSize = 12.sp, maxLines = 1, softWrap = false) }
+                                label = { Text(sec, fontSize = 12.sp, maxLines = 1, softWrap = false) },
+                                modifier = Modifier.heightIn(min = 48.dp)
                             )
                         }
                     }
@@ -736,12 +737,12 @@ fun ModuleWorkspaceScreen(
                     FilterChip(
                         selected = !showLibrary, onClick = { showLibrary = false },
                         label = { Text("Mis módulos") },
-                        modifier = Modifier.testTag("modules_tab_mine")
+                        modifier = Modifier.testTag("modules_tab_mine").heightIn(min = 48.dp)
                     )
                     FilterChip(
                         selected = showLibrary, onClick = { showLibrary = true },
                         label = { Text("Biblioteca") },
-                        modifier = Modifier.testTag("modules_tab_catalog")
+                        modifier = Modifier.testTag("modules_tab_catalog").heightIn(min = 48.dp)
                     )
                 }
             }
