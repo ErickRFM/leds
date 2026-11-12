@@ -36,6 +36,13 @@ fun SettingsScreen(
     val theme by preferencesRepository.themeMode.collectAsState(initial = "SYSTEM")
     val scope = rememberCoroutineScope()
     var showTechnical by rememberSaveable { mutableStateOf(false) }
+    var querySent by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(querySent) {
+        if (querySent) {
+            kotlinx.coroutines.delay(2_500)
+            querySent = false
+        }
+    }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
@@ -79,9 +86,23 @@ fun SettingsScreen(
                     CompiInlineMessage((connection as BleConnectionState.Error).message, isError = true)
                 }
                 OutlinedButton(
-                    enabled = connection == BleConnectionState.Ready && security == BleSecurityState.Authorized,
-                    onClick = { bleManager.writeCommand("GET") }
-                ) { Text("Consultar estado actual") }
+                    enabled = connection == BleConnectionState.Ready &&
+                        security == BleSecurityState.Authorized && !querySent,
+                    onClick = {
+                        bleManager.writeCommand("GET")
+                        querySent = true
+                    },
+                    modifier = Modifier.testTag("settings_query_state")
+                ) {
+                    if (querySent) CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp), strokeWidth = 2.dp
+                    )
+                    Text(if (querySent) "Esperando trama…" else "Consultar estado actual")
+                }
+                if (querySent) {
+                    CompiInlineMessage("Comando GET enviado; el estado real llega por la " +
+                        "notificación BLE del ESP32. Revisa \"Última trama\" en los detalles.")
+                }
                 TextButton(onClick = { showTechnical = !showTechnical }) {
                     Text(if (showTechnical) "Ocultar detalles técnicos" else "Ver detalles técnicos")
                 }

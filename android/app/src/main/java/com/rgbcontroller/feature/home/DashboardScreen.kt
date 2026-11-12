@@ -1,6 +1,5 @@
 package com.rgbcontroller.feature.home
 
-import android.os.SystemClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Canvas
@@ -93,9 +92,7 @@ import com.rgbcontroller.core.ui.CompiTokens
 import com.rgbcontroller.core.wifi.CompiLabSession
 import com.rgbcontroller.core.wifi.LabConnectionState
 import com.rgbcontroller.core.wifi.LabTransport
-import com.rgbcontroller.core.wifi.LocalLabClient
 import com.rgbcontroller.feature.hardwarelab.ComponentDashboardViewModel
-import kotlinx.coroutines.CancellationException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -136,32 +133,6 @@ fun DashboardScreen(
             it.connectionState == LabConnectionState.AUTHORIZED && it.wifiReady
     } == true
     val ready = bleReady || wifiReady
-
-    var wifiStats by remember { mutableStateOf<HomeDeviceStats?>(null) }
-    LaunchedEffect(wifiReady, session?.revision) {
-        wifiStats = null
-        if (wifiReady && session != null) {
-            val revision = session.revision
-            try {
-                val client = LocalLabClient(context.applicationContext)
-                val result = session.serialized {
-                    check(session.revision == revision && session.wifiReady)
-                    val started = SystemClock.elapsedRealtime()
-                    val diagnostics = client.diagnostics(session.key)
-                    val duration = SystemClock.elapsedRealtime() - started
-                    val firmware = client.firmwareInfo(session.key)
-                    HomeDeviceStats(
-                        wifiDbm = diagnostics.optInt("wifiRssi", 0).takeIf { it != 0 },
-                        latencyMs = duration.coerceAtLeast(0),
-                        firmware = firmware.optString("firmwareVersion").takeIf { it.isNotBlank() },
-                        freeHeap = diagnostics.optLong("freeHeap", -1).takeIf { it >= 0 }
-                    )
-                }
-                if (session.revision == revision && session.wifiReady) wifiStats = result
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { wifiStats = null }
-        }
-    }
 
     val telemetryLive = moduleState.telemetryFreshness == ComponentStatusFreshness.LIVE && ready
     val readings = if (telemetryLive) moduleState.authoritativeTelemetry.orEmpty() else emptyList()
@@ -528,7 +499,8 @@ private fun TelemetryChartSection(
                     Text(
                         text = touchedSample?.let {
                             "%.1f °C · %s".format(Locale.ROOT, it.value, formatHourMinute(it.recordedAtMs))
-                        } ?: "Historial en tiempo real",
+                        } ?: if (live) "En vivo · lectura reciente del firmware"
+                             else "Historial local · sin lectura en vivo",
                         style = MaterialTheme.typography.labelSmall,
                         color = CompiTokens.Colors.PrimaryViolet
                     )
@@ -638,13 +610,6 @@ private fun TelemetryChartSection(
         }
     }
 }
-
-private data class HomeDeviceStats(
-    val wifiDbm: Int?,
-    val latencyMs: Long,
-    val firmware: String?,
-    val freeHeap: Long?
-)
 
 private fun formatHourMinute(epochMs: Long): String {
     if (epochMs <= 0) return "—"

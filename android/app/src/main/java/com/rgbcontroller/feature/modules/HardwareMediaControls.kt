@@ -38,7 +38,16 @@ class HardwareMediaControls(
 
     suspend fun command(module: String, verb: String, value: String? = null) {
         val manual = verb != "GET"
-        if (manual && busy) return
+        if (manual && busy) {
+            // A discarded tap must never be silent: the user needs to know why
+            // the command did not travel, instead of guessing the module froze.
+            if (module == "AUD") {
+                audioMessage = "Hay una orden en curso; espera la confirmación del DFPlayer."
+            } else {
+                oledMessage = "Hay una orden en curso; espera la confirmación del OLED."
+            }
+            return
+        }
         if (!manual && (busy || mediaMutex.isLocked)) return
         if (manual) busy = true
         var locked = false

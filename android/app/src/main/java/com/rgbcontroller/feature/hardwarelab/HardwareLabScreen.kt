@@ -13,6 +13,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -85,6 +87,7 @@ fun HardwareLabScreen(
         }
     )
     val state by viewModel.uiState.collectAsState()
+    val refreshing by viewModel.isRefreshing.collectAsState()
     var showCatalog by rememberSaveable { mutableStateOf(false) }
     var showAlertEditor by rememberSaveable { mutableStateOf(false) }
     var showAutomationEditor by rememberSaveable { mutableStateOf(false) }
@@ -94,7 +97,6 @@ fun HardwareLabScreen(
     var showPinTemplates by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
     var section by rememberSaveable { mutableStateOf(HardwareSection.STATUS) }
-    var syncMessage by remember { mutableStateOf<String?>(null) }
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
@@ -118,10 +120,6 @@ fun HardwareLabScreen(
     LaunchedEffect(Unit) { viewModel.loadPersisted() }
     LaunchedEffect(sessionConnection, bleConnection, bleSecurity, session?.transport) {
         viewModel.onConnectionChanged()
-        syncMessage = if (authorized && viewModel.uiState.value.freshness == ComponentStatusFreshness.LIVE)
-            "Estado sincronizado desde el firmware."
-        else if (authorized) "Enlace autorizado; esperando respuesta del firmware."
-        else "Sin conexión autorizada: se muestra el último estado confirmado."
     }
 
     val liveRawAdc = SoilLiveCapturePolicy.currentRawAdc(state, authorized)
@@ -131,6 +129,14 @@ fun HardwareLabScreen(
     val freshness = state.freshness
     val knownIds = state.confirmedCatalogIds
     val missingTemplates = ComponentCatalog.components.filter { it.id !in knownIds }
+    // Derived from reactive state, never from a captured LaunchedEffect snapshot:
+    // a message written once goes stale the moment the firmware answers.
+    val syncMessage = when {
+        !authorized -> "Sin conexión autorizada: se muestra el último estado confirmado."
+        refreshing -> "Actualizando estado desde el firmware…"
+        freshness == ComponentStatusFreshness.LIVE -> "Estado sincronizado desde el firmware."
+        else -> "Enlace autorizado; esperando respuesta del firmware."
+    }
 
     Scaffold(
         topBar = {
@@ -144,10 +150,17 @@ fun HardwareLabScreen(
                                 viewModel.refresh()
                             }
                         },
+                        enabled = !refreshing,
                         modifier = Modifier.testTag("component_refresh")
                     ) { Icon(Icons.Default.Refresh, contentDescription = "Actualizar estado") }
                 }
             )
+            if (refreshing) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                        .semantics { contentDescription = "Consultando el estado actual del ESP32" }
+                )
+            }
             LazyRow(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).testTag("hardware_tabs"),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -223,11 +236,9 @@ fun HardwareLabScreen(
                             }
                         }
                     }
-                    syncMessage?.let { message ->
-                        item(key = "hardware_sync_message") {
-                            Text(message, style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                    item(key = "hardware_sync_message") {
+                        Text(syncMessage, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     item(key = "hardware_shortcuts") {
                         Card(Modifier.fillMaxWidth().testTag("hardware_quick_actions")) {

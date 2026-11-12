@@ -34,7 +34,9 @@ import com.rgbcontroller.core.wifi.CompiLabSession
 import com.rgbcontroller.core.wifi.LabConnectionState
 import com.rgbcontroller.core.wifi.LabTransport
 import com.rgbcontroller.core.wifi.LocalLabClient
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.coroutines.cancellation.CancellationException
@@ -62,6 +64,10 @@ class ComponentDashboardViewModel(
     val uiState: StateFlow<ComponentDashboardState> = repository.state
     private val refreshMutex = Mutex()
 
+    /** UI-only progress signal: a refresh is talking to the firmware right now. */
+    private val refreshingFlow = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = refreshingFlow.asStateFlow()
+
     suspend fun loadPersisted() = repository.loadPersisted()
 
     /** Re-evaluate connection and refresh authoritative status when authorized. */
@@ -84,6 +90,8 @@ class ComponentDashboardViewModel(
 
     suspend fun refresh() {
         refreshMutex.withLock {
+        refreshingFlow.value = true
+        try {
         repository.setDevice(currentDeviceId())
         if (!isLinkAuthorized()) {
             repository.setConnected(false)
@@ -125,6 +133,9 @@ class ComponentDashboardViewModel(
             repository.runAutomations(automationSink, isLinkAuthorized())
         } else {
             repository.invalidateLiveTelemetry("El firmware entregó telemetría inválida.")
+        }
+        } finally {
+            refreshingFlow.value = false
         }
         }
     }
