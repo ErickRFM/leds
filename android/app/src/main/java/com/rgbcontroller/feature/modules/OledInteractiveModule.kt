@@ -51,7 +51,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import kotlin.math.roundToInt
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rgbcontroller.core.ui.CompiBadge
@@ -318,7 +321,9 @@ fun OledInteractiveModule(
                         onValueChange = { contrastLevel = it },
                         valueRange = 8f..255f,
                         enabled = canControl,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f).semantics {
+                            stateDescription = "${contrastLevel.roundToInt()}/255"
+                        }
                     )
                     Spacer(Modifier.width(10.dp))
                     Button(

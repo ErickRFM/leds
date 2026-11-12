@@ -12,6 +12,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.components.model.ComponentMeasurement
@@ -188,7 +191,8 @@ internal fun ModuleReadings(
                             modifier = Modifier.fillMaxWidth().testTag("ldr_apply_calibration")
                         ) { Text("Guardar calibración en ESP32") }
                         if (calibrationMessage != null) {
-                            Text(calibrationMessage, style = MaterialTheme.typography.bodySmall)
+                            Text(calibrationMessage, style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                         }
                     }
                 }

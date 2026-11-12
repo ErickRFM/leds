@@ -5,7 +5,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import kotlin.math.roundToInt
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
@@ -170,14 +178,28 @@ fun CompiAudioPlayerCard(
             HorizontalDivider()
             Text("Volumen del módulo · ${hardware?.volume?.takeIf { it >= 0 } ?: "—"}/30", style = MaterialTheme.typography.titleSmall)
             Slider(value = volume, onValueChange = { volume = it }, valueRange = 0f..30f,
-                enabled = moduleReady, modifier = Modifier.testTag("dfplayer_volume"))
+                enabled = moduleReady,
+                modifier = Modifier.testTag("dfplayer_volume").semantics {
+                    contentDescription = "Volumen del módulo"
+                    stateDescription = "${volume.roundToInt()} de 30"
+                })
             OutlinedButton(onClick = { onCommand("VOLUME", volume.toInt().toString()) }, enabled = moduleReady) {
                 Text("Aplicar volumen ${volume.toInt()}")
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .toggleable(
+                        value = hardware?.voiceEnabled == true,
+                        role = Role.Switch,
+                        enabled = authorized && hardware?.fresh == true && !busy,
+                        onValueChange = { onCommand("VOICE", if (it) "1" else "0") }
+                    ),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
                 Text("Avisos ambientales", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                 Switch(checked = hardware?.voiceEnabled == true,
-                    onCheckedChange = { onCommand("VOICE", if (it) "1" else "0") },
+                    onCheckedChange = null,
                     enabled = authorized && hardware?.fresh == true && !busy,
                     modifier = Modifier.testTag("dfplayer_voice"))
             }
@@ -186,7 +208,10 @@ fun CompiAudioPlayerCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (advancedHelp) Text("La microSD se administra desde el módulo; el teléfono no transfiere pistas por UART.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            feedback?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            feedback?.let { Text(
+                it, style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+            ) }
             OutlinedButton(onClick = { onCommand("GET", null) }, enabled = authorized && !busy, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Filled.Refresh, contentDescription = null)
                 Spacer(Modifier.width(8.dp))

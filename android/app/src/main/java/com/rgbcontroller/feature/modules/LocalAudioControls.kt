@@ -13,6 +13,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.audio.AndroidLocalAudioPlayer
 import com.rgbcontroller.core.audio.AudioPlaylistQueue
@@ -151,8 +155,14 @@ fun LocalAudioControls() {
                 TextButton(onClick = { player.stop(); queue.remove(queue.currentIndex); persist() }, enabled = tracks.isNotEmpty()) { Text("Quitar") }
             }
             Text("Volumen", style = MaterialTheme.typography.labelMedium)
-            Slider(value = volume, onValueChange = { volume = it; player.setVolume(it) }, modifier = Modifier.testTag("phone_audio_volume"))
-            message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            Slider(value = volume, onValueChange = { volume = it; player.setVolume(it) },
+                modifier = Modifier.testTag("phone_audio_volume").semantics {
+                    stateDescription = "%.0f%%".format(volume * 100f)
+                })
+            message?.let { Text(
+                it, style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+            ) }
         }
     }
 }

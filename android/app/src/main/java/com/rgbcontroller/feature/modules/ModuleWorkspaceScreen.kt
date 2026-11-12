@@ -35,6 +35,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -1075,7 +1078,8 @@ private fun ModulePinWizard(
                         color = if (applyMessage.startsWith("Rechazado") ||
                             applyMessage.startsWith("Sin confirmar")) MaterialTheme.colorScheme.error
                             else MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.testTag("module_apply_result"))
+                        modifier = Modifier.testTag("module_apply_result")
+                            .semantics { liveRegion = LiveRegionMode.Polite })
                 }
                 if (onRemove != null) {
                     TextButton(onClick = onRemove, modifier = Modifier.testTag("module_pin_remove")) {

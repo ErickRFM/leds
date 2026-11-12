@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +50,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ui.CompiBadge
@@ -137,7 +139,12 @@ fun RgbLightingPanel(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier = Modifier.padding(14.dp),
+                    modifier = Modifier.padding(14.dp).toggleable(
+                        value = isEnvironmentalMode,
+                        role = Role.Switch,
+                        enabled = isAuthorized,
+                        onValueChange = onEnvironmentalModeToggled
+                    ),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -156,7 +163,7 @@ fun RgbLightingPanel(
                     }
                     Switch(
                         checked = isEnvironmentalMode,
-                        onCheckedChange = onEnvironmentalModeToggled,
+                        onCheckedChange = null,
                         enabled = isAuthorized
                     )
                 }
@@ -240,11 +247,15 @@ fun RgbLightingPanel(
                         }
                         Slider(
                             value = currentBrightness,
-                            onValueChange = {
-                                currentBrightness = it
-                                onBrightnessChanged(it)
-                            },
-                            enabled = isAuthorized
+                            onValueChange = { currentBrightness = it },
+                            // Flood-limiting: one BLE/HTTP write per drag release,
+                            // instead of one per pixel while the thumb moves.
+                            onValueChangeFinished = { onBrightnessChanged(currentBrightness) },
+                            enabled = isAuthorized,
+                            modifier = Modifier.semantics {
+                                contentDescription = "Brillo"
+                                stateDescription = "%.0f%%".format(currentBrightness * 100f)
+                            }
                         )
                     }
 
