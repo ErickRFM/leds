@@ -81,6 +81,18 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
     var ssid by remember { mutableStateOf("") }
     var wifiPassword by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("Conéctate a ESP32-Control-Lab para comenzar.") }
+    // Explicit severity from the producer; never guessed from the message text.
+    var messageIsError by remember { mutableStateOf(false) }
+    // Age stamps for every ESP32-confirmed reading shown on this screen: data
+    // older than a few seconds can no longer be presented as current state.
+    var statusAt by remember { mutableLongStateOf(0L) }
+    var qaAt by remember { mutableLongStateOf(0L) }
+    var diagnosticsAt by remember { mutableLongStateOf(0L) }
+    var firmwareAt by remember { mutableLongStateOf(0L) }
+    var networksAt by remember { mutableLongStateOf(0L) }
+    var automationAt by remember { mutableLongStateOf(0L) }
+    var adcAt by remember { mutableLongStateOf(0L) }
+
     var busy by remember { mutableStateOf(false) }
     var selectedPin by remember { mutableIntStateOf(18) }
     var gpioSnapshot by remember { mutableStateOf<JSONObject?>(null) }
@@ -95,12 +107,8 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
     var nextDuration by remember { mutableStateOf("500") }
     var projectName by remember { mutableStateOf("") }
     var section by rememberSaveable { mutableStateOf(LabSection.CONNECTION) }
-    val snackbar = remember { SnackbarHostState() }
-    LaunchedEffect(message) {
-        if (message != "Conéctate a ESP32-Control-Lab para comenzar.") {
-            snackbar.showSnackbar(message, duration = SnackbarDuration.Short)
-        }
-    }
+    // One feedback surface only: the inline message already carries a polite
+    // liveRegion, so a snackbar would double-announce every action (M7).
 
     // Sampling belongs to this Composable lifecycle; navigation away cancels the job.
     // No GPS, no background process, no unbounded retention and no device secrets in CSV.
@@ -119,10 +127,12 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
                 adcValue = reading
                 delay(500L)
             }
+            messageIsError = false
             message = "Muestreo ADC1 finalizado. Valores brutos sin calibrar."
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
+            messageIsError = true
             message = error.message ?: "Muestreo ADC1 interrumpido."
         } finally {
             samplingAdc = false
@@ -180,9 +190,13 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
         if (!debug || busy) return
         busy = true
         scope.launch {
+            messageIsError = false
             try { labSession.userOperation("Hardware Lab") { block() } }
             catch (cancelled: CancellationException) { throw cancelled }
-            catch (e: Exception) { message = e.message ?: "No hay respuesta del ESP32." }
+            catch (e: Exception) {
+                messageIsError = true
+                message = e.message ?: "No hay respuesta del ESP32."
+            }
             finally { busy = false }
         }
     }
@@ -214,10 +228,7 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        CompiInlineMessage(message, isError =
-            message.startsWith("Error", ignoreCase = true) ||
-            message.startsWith("No hay", ignoreCase = true) ||
-            message.contains("rechazó", ignoreCase = true))
+        CompiInlineMessage(message, isError = messageIsError)
         if (section != LabSection.CONNECTION && !LocalLabClient.validKey(secret)) {
             CompiInlineMessage("Configura primero la clave local del ESP32 en Conexión. " +
                 "Puedes explorar estas herramientas sin conectarte.")
@@ -252,6 +263,7 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
                     action {
                         val fresh = client.status(secret)
                         status = fresh
+                        statusAt = System.currentTimeMillis()
                         message = "Estado recibido del ESP32."
                     }
                 }, enabled = debug && !busy && LocalLabClient.validKey(secret)) {
@@ -266,6 +278,7 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
                     Text("RGB: " + data.optString("rgb"), style = MaterialTheme.typography.bodySmall)
                     Text("Recursos ocupados: " + data.optInt("leasedPins"))
                     Text("Experimento: " + if (data.optBoolean("experimentActive")) "Activo" else "Inactivo")
+                    DataAgeStamp(statusAt)
                 }
             }
         }
@@ -289,6 +302,7 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
                 message = if (deviceIdentity?.validId == true) {
                     "Identidad V4 recibida desde el ESP32; comprueba seguridad antes de vincular."
                 } else "El firmware no devolvió una identidad V4 válida."
+                messageIsError = deviceIdentity?.validId != true
             } }) { Text("Consultar identidad V4") }
         deviceIdentity?.let { identity ->
             Text("ID de este equipo: " +
@@ -326,9 +340,11 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
                     otaUploadEnabled = f.optBoolean("otaUploadEnabled", true)
                 ))
                 message = "Autodiagnóstico recibido; revisa PASS/FALLO antes de probar GPIO."
+                qaAt = System.currentTimeMillis()
             } }) { Text("Ejecutar autodiagnóstico (solo lectura)") }
         qaReport?.let { report ->
             Text(report, style = MaterialTheme.typography.bodySmall)
+            DataAgeStamp(qaAt)
             OutlinedButton(onClick = {
                 val share = Intent(Intent.ACTION_SEND).apply {
                     type = "text/plain"
@@ -344,6 +360,7 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
         OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
             onClick = { action {
                 diagnostics = client.diagnostics(secret)
+                diagnosticsAt = System.currentTimeMillis()
                 message = "Diagnóstico actualizado desde el ESP32."
             } }) { Text("Consultar diagnóstico") }
         diagnostics?.let { info ->
@@ -354,6 +371,7 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
             Text("Reinicio (código): " + info.optInt("resetReason"))
             Text("Wi-Fi RSSI: " + info.optInt("wifiRssi") + " dBm (0 = sin conexión)")
             Text("GPIO reservados: " + info.optInt("leasedPins"))
+            DataAgeStamp(diagnosticsAt)
         }
         Spacer(Modifier.height(20.dp))
         Text("Diagnóstico de firmware", style = MaterialTheme.typography.titleMedium)
@@ -362,6 +380,7 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
         OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
             onClick = { action {
                 firmware = client.firmwareInfo(secret)
+                firmwareAt = System.currentTimeMillis()
                 message = "Particiones leídas directamente desde el ESP32."
             } }) { Text("Comprobar espacio para OTA") }
         firmware?.let { data ->
@@ -372,6 +391,7 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
                 " · " + data.optLong("nextSize") + " bytes")
             Text("Partición candidata: " + if (data.optBoolean("otaSlotPresent")) "Sí" else "No")
             Text("Subir firmware OTA: DESHABILITADO", color = MaterialTheme.colorScheme.error)
+            DataAgeStamp(firmwareAt)
         }
         }
         if (section == LabSection.CONNECTION) {
@@ -383,6 +403,7 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
         OutlinedButton(enabled = debug && !busy && LocalLabClient.validKey(secret),
             onClick = { action {
                 networks = client.scan(secret).optJSONArray("networks")
+                networksAt = System.currentTimeMillis()
                 message = "Redes disponibles actualizadas."
             } }) { Text("Buscar redes") }
         networks?.let { result ->
@@ -395,6 +416,7 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
                     }
                 }
             }
+            DataAgeStamp(networksAt)
         }
         OutlinedTextField(value = ssid, onValueChange = { ssid = it.take(32) },
             label = { Text("SSID") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
@@ -590,6 +612,7 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
                     onClick = { action {
                         automationStatus = client.automationStatus(secret)
                         automationAvailable = automationStatus?.optInt("version") == 1
+                        automationAt = System.currentTimeMillis()
                         message = "Estado de automatización actualizado."
                     } }
                 ) { Text("Consultar") }
@@ -600,6 +623,7 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
                     else "Automatización inactiva",
                     style = MaterialTheme.typography.bodyMedium
                 )
+                DataAgeStamp(automationAt)
             }
         }
         if (section == LabSection.SENSORS) {
@@ -610,9 +634,10 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
         Button(enabled = debug && !busy && LocalLabClient.validKey(secret),
             onClick = { action {
                 adcValue = client.readAnalog(secret, 34).optInt("raw")
+                adcAt = System.currentTimeMillis()
                 message = "ADC1 leído desde el ESP32."
             } }) { Text("Leer ADC GPIO34") }
-        adcValue?.let { Text("ADC: " + it) }
+        adcValue?.let { Text("ADC: " + it); DataAgeStamp(adcAt) }
         Spacer(Modifier.height(10.dp))
         Text("Telemetría ADC1 (máximo 40 muestras / 20 segundos)",
             style = MaterialTheme.typography.titleSmall)
@@ -724,8 +749,10 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
             }
             OutlinedButton(onClick = { action {
                 val saved = preferences.experimentDraft.first()
-                if (saved == null) message = "No hay borrador guardado."
-                else {
+                if (saved == null) {
+                    messageIsError = true
+                    message = "No hay borrador guardado."
+                } else {
                     steps = saved
                     message = "Borrador local cargado."
                 }
@@ -777,6 +804,29 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
         // RGB Wi-Fi controls live in the LED module. Laboratory stays focused on GPIO, network and sensors.
         Spacer(Modifier.height(30.dp))
     }
-    SnackbarHost(hostState = snackbar, modifier = Modifier.align(Alignment.BottomCenter))
     }
+}
+
+/**
+ * Tells the reader how old the last ESP32-confirmed reading is. Without it a
+ * "current" value could be minutes stale after the connection drops, silently
+ * presenting obsolete hardware state (audit M4).
+ */
+@Composable
+private fun DataAgeStamp(fetchedAt: Long) {
+    if (fetchedAt <= 0L) return
+    var nowMs by remember(fetchedAt) { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(fetchedAt) {
+        while (true) {
+            delay(1000L)
+            nowMs = System.currentTimeMillis()
+        }
+    }
+    val seconds = ((nowMs - fetchedAt) / 1000L).coerceAtLeast(0L)
+    val age = if (seconds < 60) "$seconds s" else "${seconds / 60} min"
+    Text(
+        "Confirmado por el ESP32 hace $age; puede estar desactualizado.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 }

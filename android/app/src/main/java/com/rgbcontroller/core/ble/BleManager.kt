@@ -1114,18 +1114,21 @@ class BleManager(private val context: Context) {
         return true
     }
 
-    fun writeCommand(text: String) {
+    /** Returns false when the policy dropped the command without queueing it;
+     *  callers can surface honest feedback instead of claiming success (M8). */
+    fun writeCommand(text: String): Boolean {
         // Privileged RGB controls are not available on an unauthenticated link.
         if (!RgbDeviceCommand.allowed(text) ||
             !BleRgbControlPolicy.allowed(
                 _connectionState.value, _securityState.value, text
-            )) return
+            )) return false
         synchronized(pending) {
             if (text.startsWith("SET,")) pending.removeAll { it.startsWith("SET,") }
             if (pending.size >= 16) pending.removeFirst()
             pending.addLast(text)
         }
         drainQueue()
+        return true
     }
 
     private fun drainQueue() {

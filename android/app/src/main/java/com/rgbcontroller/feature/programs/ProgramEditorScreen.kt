@@ -64,6 +64,8 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
     var fileName by rememberSaveable { mutableStateOf("Sin archivo") }
     var selected by rememberSaveable { mutableStateOf(ProgramLanguage.LAB_SCRIPT.name) }
     var notice by rememberSaveable { mutableStateOf("Selecciona un archivo o pega tus instrucciones.") }
+    // Explicit severity from the producer; never guessed from the message text.
+    var noticeIsError by rememberSaveable { mutableStateOf(false) }
     val controlKey = labSession.key // Volatile, shared with LED and Hardware Lab.
     val bleConnection = bleManager?.connectionState?.collectAsState()?.value
     var experimentBusy by remember { mutableStateOf(false) }
@@ -101,6 +103,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                     ProgramLanguage.ARDUINO_CPP -> saved.arduinoName
                     ProgramLanguage.LAB_SCRIPT -> if (saved.engine == "RGB") saved.rgbName else saved.gpioName
                 }
+                noticeIsError = false
                 notice = "Borradores locales recuperados. No se enviaron al ESP32."
             }
             draftStatus = if (saved == null) "Guardado automático local activo"
@@ -173,6 +176,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
         laboratoryMode = next
         source = if (next == "RGB") rgbDraft else gpioDraft
         fileName = if (next == "RGB") rgbFileName else gpioFileName
+        noticeIsError = false
         notice = "Borrador ${if (next == "RGB") "RGB" else "GPIO"} restaurado. " +
             "Cada motor conserva su propio código."
     }
@@ -211,6 +215,7 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
         selected = item.language.name
         laboratoryMode = nextMode
         rememberCurrentDraft()
+        noticeIsError = false
         notice = item.notice
     }
 
@@ -251,9 +256,12 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                         text, name, ProgramSourcePolicy.inferLanguage(name, text),
                         "Archivo importado. Revisa su sintaxis antes de ejecutar."
                     ))
-                } else notice = result.explanation
+                } else {
+                    noticeIsError = true
+                    notice = result.explanation
+                }
             } catch (error: Exception) {
-                notice = error.message ?: "No fue posible abrir el archivo."
+                noticeIsError = true; notice = error.message ?: "No fue posible abrir el archivo."
             }
         }
     }
@@ -266,9 +274,10 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                         it.write(source.toByteArray(Charsets.UTF_8))
                     } ?: error("No se pudo guardar el documento.")
                 }
+                noticeIsError = false
                 notice = "Texto exportado. No se ha enviado código al ESP32."
             } catch (error: Exception) {
-                notice = error.message ?: "Error al exportar el documento."
+                noticeIsError = true; notice = error.message ?: "Error al exportar el documento."
             }
         }
     }
@@ -334,8 +343,10 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                     OutlinedButton(onClick = {
                         val copied = clipboard.getText()?.text.orEmpty()
                         if (copied.isBlank()) {
+                            noticeIsError = true
                             notice = "El portapapeles no contiene texto."
                         } else if (ProgramSourcePolicy.inspect(copied).byteCount > ProgramSourcePolicy.MAX_BYTES) {
+                            noticeIsError = true
                             notice = "El texto copiado supera 32 KiB."
                         } else {
                             requestReplacement(PendingEditorReplacement(
@@ -402,7 +413,10 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                 if (value.toByteArray(Charsets.UTF_8).size <= ProgramSourcePolicy.MAX_BYTES) {
                     source = value
                     rememberCurrentDraft()
-                } else notice = "Máximo 32 KiB por archivo en esta versión."
+                } else {
+                    noticeIsError = true
+                    notice = "Máximo 32 KiB por archivo en esta versión."
+                }
             },
             label = { Text("Código fuente") },
             placeholder = { Text("Escribe código o importa un archivo .txt / .ino") },
@@ -430,7 +444,11 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 modifier = Modifier.weight(1f),
-                onClick = { notice = ProgramSourcePolicy.inspect(source).explanation }
+                onClick = {
+                    val inspected = ProgramSourcePolicy.inspect(source)
+                    noticeIsError = !inspected.acceptedForEditing
+                    notice = inspected.explanation
+                }
             ) { Text("Validar") }
             OutlinedButton(
                 modifier = Modifier.weight(1f),
@@ -443,12 +461,11 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
             enabled = inspection.acceptedForEditing,
             onClick = {
                 clipboard.setText(androidx.compose.ui.text.AnnotatedString(source))
+                noticeIsError = false
                 notice = "Código copiado al portapapeles."
             }
         ) { Text("Copiar código") }
-        CompiInlineMessage(notice, isError = notice.startsWith("Error", ignoreCase = true) ||
-            notice.startsWith("No se pudo", ignoreCase = true) ||
-            notice.startsWith("Máximo", ignoreCase = true))
+        CompiInlineMessage(notice, isError = noticeIsError)
 
         CodeProjectsPanel(
             source = source,
@@ -519,12 +536,13 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                                     experimentBusy = true
                                     try {
                                         labSession.userOperation("Secuencia GPIO") { labClient.sequence(controlKey, plan.pin, plan.sequence) }
+                                        noticeIsError = false
                                         notice = "ESP32 aceptó el inicio de la secuencia en GPIO " + plan.pin +
                                             ". Confirmación lógica; revisa el circuito físico."
                                     } catch (cancelled: CancellationException) {
                                         throw cancelled
                                     } catch (error: Exception) {
-                                        notice = error.message ?: "Error al ejecutar en el ESP32."
+                                        noticeIsError = true; notice = error.message ?: "Error al ejecutar en el ESP32."
                                     } finally {
                                         experimentBusy = false
                                     }
@@ -538,11 +556,12 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                                     experimentBusy = true
                                     try {
                                         labSession.userOperation("Detener GPIO") { labClient.stopExperiment(controlKey) }
+                                        noticeIsError = false
                                         notice = "El ESP32 confirmó la orden de detener el experimento."
                                     } catch (cancelled: CancellationException) {
                                         throw cancelled
                                     } catch (error: Exception) {
-                                        notice = error.message ?: "No se pudo detener; revisa la placa."
+                                        noticeIsError = true; notice = error.message ?: "No se pudo detener; revisa la placa."
                                     } finally {
                                         experimentBusy = false
                                     }
@@ -621,10 +640,11 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                                     experimentBusy = true
                                     try {
                                         labSession.userOperation("Script RGB") { labClient.runRgbScript(controlKey, source) }
+                                        noticeIsError = false
                                         notice = "ESP32 aceptó el script RGB. Consulta estado y verifica LED físico."
                                     } catch (cancelled: CancellationException) { throw cancelled
                                     } catch (error: Exception) {
-                                        notice = error.message ?: "Falló la ejecución RGB."
+                                        noticeIsError = true; notice = error.message ?: "Falló la ejecución RGB."
                                     } finally { experimentBusy = false }
                                 }
                             }
@@ -636,10 +656,11 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                                     experimentBusy = true
                                     try {
                                         labSession.userOperation("Detener RGB") { labClient.stopRgbScript(controlKey) }
+                                        noticeIsError = false
                                         notice = "Detención confirmada; el último color se conserva."
                                     } catch (cancelled: CancellationException) { throw cancelled
                                     } catch (error: Exception) {
-                                        notice = error.message ?: "No se pudo detener el RGB script."
+                                        noticeIsError = true; notice = error.message ?: "No se pudo detener el RGB script."
                                     } finally { experimentBusy = false }
                                 }
                             }
@@ -653,12 +674,22 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                     if (bleConnection == BleConnectionState.Ready && bleManager != null) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(onClick = {
-                                bleManager.writeCommand("FX,BREATHE,120")
-                                notice = "Respiración BLE enviada. Comprueba el estado RGB recibido."
+                                if (bleManager.writeCommand("FX,BREATHE,120")) {
+                                    noticeIsError = false
+                                    notice = "Respiración BLE enviada. Comprueba el estado RGB recibido."
+                                } else {
+                                    noticeIsError = true
+                                    notice = "Efecto no enviado: verifica BLE listo, propietario autorizado y cola disponible."
+                                }
                             }) { Text("Respirar por BLE") }
                             TextButton(onClick = {
-                                bleManager.writeCommand("FX,STOP")
-                                notice = "Detención de efecto BLE enviada. Esperando estado."
+                                if (bleManager.writeCommand("FX,STOP")) {
+                                    noticeIsError = false
+                                    notice = "Detención de efecto BLE enviada. Esperando estado."
+                                } else {
+                                    noticeIsError = true
+                                    notice = "Detención no enviada: verifica BLE listo, propietario autorizado y cola disponible."
+                                }
                             }) { Text("Parar BLE") }
                         }
                     }
@@ -669,12 +700,13 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                                 experimentBusy = true
                                 try {
                                     val state = labSession.userOperation("Consultar script RGB") { labClient.rgbScriptStatus(controlKey) }
+                                    noticeIsError = false
                                     notice = if (state.optBoolean("active")) {
                                         "RGB ejecutando paso ${state.optInt("step") + 1} de ${state.optInt("total")}."
                                     } else "RGB sin script en ejecución."
                                 } catch (cancelled: CancellationException) { throw cancelled
                                 } catch (error: Exception) {
-                                    notice = error.message ?: "No se pudo leer el estado RGB."
+                                    noticeIsError = true; notice = error.message ?: "No se pudo leer el estado RGB."
                                 } finally { experimentBusy = false }
                             }
                         }

@@ -91,6 +91,9 @@ fun CraneRoboticsScreen(
     val latestReply by rememberUpdatedState(reply)
     val haptics = LocalHapticFeedback.current
     val sessionReady = authorized && moduleActive
+    // When the last firmware confirmation arrived. Feedback older than a few
+    // seconds must not be presented as the current crane state (audit M4).
+    var replyAt by remember { mutableLongStateOf(0L) }
 
     fun nextRequestId(): Int {
         val id = requestId
@@ -138,7 +141,9 @@ fun CraneRoboticsScreen(
         if (!sessionReady) return
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
         if (send("STOP")) {
-            remoteControl = false
+            // Never optimistic: remoteControl only flips when the firmware
+            // reply confirms the new mode. A rejected STOP must not have the
+            // badge claim "Local" while the crane is still remote (audit M5).
             // Keep the request pending so the firmware reply replaces any stale
             // "moving" confirmation instead of leaving it on screen.
         }
@@ -161,6 +166,7 @@ fun CraneRoboticsScreen(
 
     LaunchedEffect(reply?.requestId) {
         val current = reply ?: return@LaunchedEffect
+        replyAt = System.currentTimeMillis()
         if (current.requestId != pendingId) return@LaunchedEffect
         pendingId = null
         timedOut = false
@@ -237,7 +243,8 @@ fun CraneRoboticsScreen(
                                 reply = reply,
                                 pendingId = pendingId,
                                 timedOut = timedOut,
-                                writeError = writeError
+                                writeError = writeError,
+                                replyAt = replyAt
                             )
                         }
                     }
@@ -269,7 +276,8 @@ fun CraneRoboticsScreen(
                             reply = reply,
                             pendingId = pendingId,
                             timedOut = timedOut,
-                            writeError = writeError
+                            writeError = writeError,
+                            replyAt = replyAt
                         )
                     }
                 }
@@ -287,8 +295,9 @@ fun CraneRoboticsScreen(
             enabled = sessionReady,
             remoteControl = remoteControl,
             onLocal = {
+                // The badge flips to "Local" only when the firmware confirms
+                // MODE,LOCAL; a rejected command keeps the honest state (M5).
                 if (send("MODE,LOCAL")) {
-                    remoteControl = false
                     haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 }
             },
@@ -662,8 +671,24 @@ private fun CommandFeedbackCard(
     reply: CraneControlReply?,
     pendingId: Int?,
     timedOut: Boolean,
-    writeError: String?
+    writeError: String?,
+    replyAt: Long
 ) {
+    // Reply age: a confirmed "moving" state minutes old must not present
+    // itself as current hardware truth (audit M4).
+    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(reply?.requestId, pendingId, timedOut, writeError) {
+        if (reply == null) return@LaunchedEffect
+        while (true) {
+            delay(1000L)
+            nowMs = System.currentTimeMillis()
+        }
+    }
+    val ageSeconds = if (replyAt > 0L) ((nowMs - replyAt) / 1000L).coerceAtLeast(0L) else 0L
+    val ageSuffix = if (ageSeconds > 5L) {
+        " · datos de hace ${if (ageSeconds < 60) "$ageSeconds s" else "${ageSeconds / 60} min"} (pueden haber cambiado)"
+    } else ""
+
     val (title, detail, isError) = when {
         writeError != null -> Triple("Comando no enviado", writeError, true)
         pendingId != null && timedOut -> Triple(
@@ -719,7 +744,7 @@ private fun CommandFeedbackCard(
                 else MaterialTheme.colorScheme.onSurface
             )
             Text(
-                detail,
+                detail + ageSuffix,
                 style = MaterialTheme.typography.bodySmall,
                 color = if (isError) MaterialTheme.colorScheme.onErrorContainer
                 else MaterialTheme.colorScheme.onSurfaceVariant
