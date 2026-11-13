@@ -704,10 +704,12 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
     esp32core::BleLdrCalibration calibration{};
     esp32core::MediaCommand media{};
     esp32core::BleSensorPinRequest pinRequest{};
+    esp32core::BleComponentPinRequest componentPinRequest{};
     esp32core::crane::ProtocolCommand craneCommand{};
     const bool valid = esp32core::parseRgbCommand(command.c_str(), parsed) ||
                        esp32core::parseMediaCommand(command.c_str(), media) ||
                        esp32core::parseBleSensorPinRequest(command.c_str(), pinRequest) ||
+                       esp32core::parseBleComponentPinRequest(command.c_str(), componentPinRequest) ||
                        esp32core::isBleEnvironmentalCommand(command.c_str()) ||
                        esp32core::parseBleSnapshotRequest(command.c_str(),
                                                          kind, requestId) ||
@@ -1420,11 +1422,14 @@ void processBleCommands() {
     const bool mediaRequest=esp32core::parseMediaCommand(buffer,media);
     esp32core::BleSensorPinRequest pinRequest{};
     const bool sensorPinRequest=esp32core::parseBleSensorPinRequest(buffer,pinRequest);
+    esp32core::BleComponentPinRequest componentPinsRequest{};
+    const bool componentPinRequest=esp32core::parseBleComponentPinRequest(buffer,componentPinsRequest);
     esp32core::crane::ProtocolCommand craneCommand{};
     const bool craneRequest=esp32core::crane::parseCraneCommand(buffer,craneCommand);
     esp32core::RgbCommand parsed{};
     if (!snapshotRequest && !calibrationRequest && !mediaRequest && !sensorPinRequest &&
-        !craneRequest && environmental == esp32core::BleEnvironmentalAction::Invalid &&
+        !componentPinRequest && !craneRequest &&
+        environmental == esp32core::BleEnvironmentalAction::Invalid &&
         !esp32core::parseRgbCommand(buffer, parsed)) {
       reject();
       continue;
@@ -1432,7 +1437,8 @@ void processBleCommands() {
     const bool isStop =
         (craneRequest && craneCommand.type == esp32core::crane::CommandType::Stop) ||
         environmental == esp32core::BleEnvironmentalAction::Stop ||
-        (!mediaRequest && !sensorPinRequest && environmental == esp32core::BleEnvironmentalAction::Invalid &&
+        (!mediaRequest && !sensorPinRequest && !componentPinRequest &&
+         environmental == esp32core::BleEnvironmentalAction::Invalid &&
          (parsed.action == esp32core::RgbAction::StopEffect ||
           parsed.action == esp32core::RgbAction::Off));
     const auto channelSource = esp32core::CompiCommandArbiter::mapBleSource(bleAuthState);
@@ -1494,6 +1500,16 @@ void processBleCommands() {
       continue;
     }
 #endif
+    if(componentPinRequest) {
+      const auto result=wifiLab.applyComponentPinsBle(componentPinsRequest);
+      const char* outcome=result==esp32core::BlePinApplyResult::Applied ? "APPLIED" :
+          result==esp32core::BlePinApplyResult::Replayed ? "REPLAYED" :
+          result==esp32core::BlePinApplyResult::Busy ? "BUSY" : "REJECTED";
+      char reply[48]{};
+      std::snprintf(reply,sizeof(reply),"PIN,%s,%s",componentPinsRequest.token,outcome);
+      publishControlReply(reply);
+      continue;
+    }
     if(sensorPinRequest) {
       const auto result=wifiLab.applySingleSensorPinBle(pinRequest);
       const char* outcome=result==esp32core::BlePinApplyResult::Applied ? "APPLIED" :

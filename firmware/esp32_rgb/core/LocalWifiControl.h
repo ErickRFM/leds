@@ -101,6 +101,13 @@ class LocalWifiControl final {
         automation_.active() || environmentalRgbEnabled_ || hasManual());
   }
 
+  // Multi-signal (crane) CAS transaction over the owner BLE channel. Same
+  // busy gate as sensors; running-module refusals stay inside the callback.
+  BlePinApplyResult applyComponentPinsBle(const BleComponentPinRequest& request) {
+    return bleSensorPins_.apply(request,script_.active() || experiment_.active() ||
+        automation_.active() || environmentalRgbEnabled_ || hasManual());
+  }
+
   // One authority for both authorized transports. No duplicate GPIO rules.
   bool calibrateLdr(uint16_t dark, uint16_t bright) {
     if (ldrCalibration_ == nullptr || script_.active() ||

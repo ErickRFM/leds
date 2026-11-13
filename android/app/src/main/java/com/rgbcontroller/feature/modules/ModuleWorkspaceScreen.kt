@@ -925,7 +925,7 @@ fun ModuleWorkspaceScreen(
             componentId = id,
             canApply = currentlyVerified && current != null && (
                 (wifiAuthorized && id in setOf("dht11", "dht22", "soil_moisture", "ldr_light", "ssd1306_oled", "led_rgb", "robotics_crane")) ||
-                (bleAuthorized && id in setOf("dht11", "ldr_light"))),
+                (bleAuthorized && id in setOf("dht11", "ldr_light", "robotics_crane"))),
             applying = applying,
             applyMessage = applyMessage,
             onApply = { pins ->
@@ -937,13 +937,18 @@ fun ModuleWorkspaceScreen(
                         session.userOperation("Aplicar GPIO") {
                             check(session.revision == revision) { "La sesión cambió antes de aplicar GPIO." }
                             if (bleAuthorized) {
-                                check(pins.size == 1) { "Solo DHT11 y LDR admiten esta transacción BLE." }
-                                val sensor = when (id) {
-                                    "dht11" -> com.rgbcontroller.core.ble.BleSensorPinProtocol.Sensor.DHT11
-                                    "ldr_light" -> com.rgbcontroller.core.ble.BleSensorPinProtocol.Sensor.LDR
-                                    else -> error("Este módulo requiere Wi-Fi para reasignar GPIO.")
+                                if (id == "robotics_crane") {
+                                    check(pins.size == 7) { "La grúa aplica sus siete señales por BLE." }
+                                    bleManager.applyCranePinsBle(pins)
+                                } else {
+                                    check(pins.size == 1) { "Solo DHT11 y LDR admiten esta transacción BLE." }
+                                    val sensor = when (id) {
+                                        "dht11" -> com.rgbcontroller.core.ble.BleSensorPinProtocol.Sensor.DHT11
+                                        "ldr_light" -> com.rgbcontroller.core.ble.BleSensorPinProtocol.Sensor.LDR
+                                        else -> error("Este módulo requiere Wi-Fi para reasignar GPIO.")
+                                    }
+                                    bleManager.applySensorPinBle(sensor, pins.single())
                                 }
-                                bleManager.applySensorPinBle(sensor, pins.single())
                             } else {
                                 check(wifiAuthorized) { "Se perdió la autorización Wi-Fi." }
                                 labClient.applyComponentPinsConfirmed(session.key, id, pins)
@@ -1041,7 +1046,7 @@ private fun ModulePinWizard(
             ) {
                 Text("1 · Asigna los GPIO de cada señal",
                     style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Text("Guardar prepara la configuración local; no modifica el ESP32. Aplicar requiere Wi-Fi autorizado y estado vigente del firmware.",
+                Text("Guardar prepara la configuración local; no modifica el ESP32. Aplicar requiere Bluetooth o Wi-Fi autorizado y estado vigente del firmware.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 for ((index, signal) in profile.signals.withIndex()) {

@@ -27,4 +27,22 @@ class BleSensorPinProtocolTest {
             assertNull(BleSensorPinProtocol.receipt(frame))
         }
     }
+    @Test fun `crane component requests keep all seven signals in one frame`() {
+        val from = listOf(18, 19, 34, 35, 36, 39, 17)
+        val to = listOf(18, 19, 34, 35, 21, 22, 17)
+        assertEquals("CPN,0123456789abcdef,C,1818191934343535362139221717",
+            BleSensorPinProtocol.componentRequest("0123456789abcdef", 'C', from, to))
+        // Inactive predecessor: zero from-pins mean "previously unassigned".
+        assertEquals("CPN,0123456789abcdef,C,0018001900340035002100220017",
+            BleSensorPinProtocol.componentRequest("0123456789abcdef", 'C', List(7) { 0 }, to))
+        assertThrows(IllegalArgumentException::class.java) {
+            BleSensorPinProtocol.componentRequest("0123456789abcdef", 'C', from, to + 40)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            BleSensorPinProtocol.componentRequest("0123456789abcdef", 'C', from, to.dropLast(1))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            BleSensorPinProtocol.componentRequest("0123456789abcdeg", 'C', from, to)
+        }
+    }
 }

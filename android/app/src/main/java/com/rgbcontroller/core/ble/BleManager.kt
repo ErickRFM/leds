@@ -986,6 +986,59 @@ class BleManager(private val context: Context) {
             "El recibo fue aceptado pero los GPIO leídos no coinciden.")
     }
 
+    /**
+     * One seven-signal robotics_crane CAS transaction over the owner BLE
+     * channel: same contract as the Wi-Fi path (LIVE snapshot, from == pins
+     * or zero when stopped, APPLIED receipt, independent readback).
+     */
+    suspend fun applyCranePinsBle(target: List<Int>) {
+        require(target.size == 7 && target.distinct().size == 7 && target.all { it in 0..39 }) {
+            "La grúa necesita siete GPIO de entrada/salida distintos."
+        }
+        val generation = connectionGeneration
+        val address = connectedAddress.value ?: error("ESP32 no conectado.")
+        fun verify() {
+            check(connectionGeneration == generation && connectedAddress.value == address &&
+                _connectionState.value == BleConnectionState.Ready &&
+                _securityState.value == BleSecurityState.Authorized) { "La sesión Bluetooth cambió." }
+        }
+        val prior = ComponentStatusCodec.decode(readComponentSnapshot(BleSnapshotAssembler.Kind.STATUS))
+            ?.firstOrNull { it.id == "robotics.crane.2axis" }
+            ?: error("El firmware no incluye el módulo de la grúa.")
+        val from = com.rgbcontroller.core.wifi.ComponentApplyCasPolicy.expected(
+            org.json.JSONObject()
+                .put("active", prior.active)
+                .put("pins", org.json.JSONArray(prior.pins)), 7)
+        val token = UUID.randomUUID().toString().replace("-", "").take(16)
+        val frame = BleSensorPinProtocol.componentRequest(token, 'C', from, target)
+        snapshotMutex.withLock {
+            verify()
+            val deferred = CompletableDeferred<BleSensorPinProtocol.Receipt>()
+            pendingPinToken = token
+            pendingPin = deferred
+            try {
+                check(synchronized(pending) {
+                    if (pending.size >= 16) false else { pending.addLast(frame); true }
+                }) { "La cola BLE está ocupada." }
+                drainQueue()
+                val receipt = withTimeoutOrNull(5_000L) { deferred.await() }
+                    ?: throw com.rgbcontroller.core.wifi.ComponentApplyUnconfirmedException("Sin respuesta BLE; consulta GPIO antes de reintentar.")
+                verify()
+                check(receipt.outcome in setOf(BleSensorPinProtocol.Outcome.APPLIED, BleSensorPinProtocol.Outcome.REPLAYED)) {
+                    "El ESP32 rechazó los GPIO: ${receipt.outcome}."
+                }
+            } finally {
+                synchronized(pending) { pending.remove(frame) }
+                if (pendingPin === deferred) { pendingPin = null; pendingPinToken = null }
+            }
+        }
+        val after = ComponentStatusCodec.decode(readComponentSnapshot(BleSnapshotAssembler.Kind.STATUS))
+            ?.firstOrNull { it.id == "robotics.crane.2axis" && it.active }
+        verify()
+        if (after?.pins != target) throw com.rgbcontroller.core.wifi.ComponentApplyUnconfirmedException(
+            "El recibo fue aceptado pero los GPIO leídos no coinciden.")
+    }
+
     /** Runtime-only LDR calibration over cryptographic owner GATT.
      * True means the firmware acknowledged applying it, not physical lux accuracy.
      */
