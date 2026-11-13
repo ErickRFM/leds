@@ -123,7 +123,7 @@ fun CraneRoboticsScreen(
             base = safeBase
             arm = safeArm
             remoteControl = true
-            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
         }
     }
 
@@ -133,7 +133,7 @@ fun CraneRoboticsScreen(
             base = 90f
             arm = 90f
             remoteControl = true
-            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
         }
     }
 
@@ -298,7 +298,7 @@ fun CraneRoboticsScreen(
                 // The badge flips to "Local" only when the firmware confirms
                 // MODE,LOCAL; a rejected command keeps the honest state (M5).
                 if (send("MODE,LOCAL")) {
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 }
             },
             onStop = ::stopMotion

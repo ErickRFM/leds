@@ -106,6 +106,8 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
     var nextHigh by remember { mutableStateOf(true) }
     var nextDuration by remember { mutableStateOf("500") }
     var projectName by remember { mutableStateOf("") }
+    // Local project pending deletion; confirmed by dialog before erasing (B4).
+    var projectToDelete by remember { mutableStateOf<String?>(null) }
     var section by rememberSaveable { mutableStateOf(LabSection.CONNECTION) }
     // One feedback surface only: the inline message already carries a polite
     // liveRegion, so a snackbar would double-announce every action (M7).
@@ -284,8 +286,8 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
                     Spacer(Modifier.height(10.dp))
                     Text("Wi-Fi del router: " + if (data.optBoolean("wifiConnected")) "Conectado" else "No conectado")
                     Text("IP estación: " + data.optString("stationIp"))
-                    Text("RAM disponible: " + data.optInt("freeHeap") + " B")
-                    Text("Tiempo activo: " + data.optLong("uptimeMs") + " ms")
+                    Text("RAM disponible: " + formatBytes(data.optInt("freeHeap").toLong()))
+                    Text("Tiempo activo: " + formatUptime(data.optLong("uptimeMs")))
                     Text("RGB: " + data.optString("rgb"), style = MaterialTheme.typography.bodySmall)
                     Text("Recursos ocupados: " + data.optInt("leasedPins"))
                     Text("Experimento: " + if (data.optBoolean("experimentActive")) "Activo" else "Inactivo")
@@ -318,7 +320,13 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
         deviceIdentity?.let { identity ->
             Text("ID de este equipo: " +
                 (if (identity.validId) identity.deviceId else "Desconocido"))
-            Text(identity.report, color = MaterialTheme.colorScheme.error,
+            // Red only for real identity problems; a healthy V4 report is not
+            // an error (audit B4).
+            val identityHealthy = identity.validId && identity.secureProvisioning &&
+                !identity.legacyBleWriteUnauthenticated && identity.ownerBound
+            Text(identity.report,
+                color = if (identityHealthy) MaterialTheme.colorScheme.onSurfaceVariant
+                else MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall)
             if (identity.legacyBleWriteUnauthenticated) {
                 Text("BLE V1 sigue aceptando escrituras sin propietario: usar solo en laboratorio.",
@@ -376,9 +384,9 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
             } }) { Text("Consultar diagnóstico") }
         diagnostics?.let { info ->
             Text("Chip: " + info.optString("chip") + " · rev " + info.optInt("chipRevision"))
-            Text("Flash: " + info.optLong("flashBytes") + " bytes")
-            Text("RAM libre: " + info.optLong("freeHeap") + " bytes")
-            Text("RAM mínima observada: " + info.optLong("minFreeHeap") + " bytes")
+            Text("Flash: " + formatBytes(info.optLong("flashBytes")))
+            Text("RAM libre: " + formatBytes(info.optLong("freeHeap")))
+            Text("RAM mínima observada: " + formatBytes(info.optLong("minFreeHeap")))
             Text("Reinicio (código): " + info.optInt("resetReason"))
             Text("Wi-Fi RSSI: " + info.optInt("wifiRssi") + " dBm (0 = sin conexión)")
             Text("GPIO reservados: " + info.optInt("leasedPins"))
@@ -397,9 +405,9 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
         firmware?.let { data ->
             Text("Firmware: " + data.optString("firmwareVersion"))
             Text("Actual: " + data.optString("activePartition") +
-                " · " + data.optLong("activeSize") + " bytes")
+                " · " + formatBytes(data.optLong("activeSize")))
             Text("Siguiente: " + data.optString("nextPartition") +
-                " · " + data.optLong("nextSize") + " bytes")
+                " · " + formatBytes(data.optLong("nextSize")))
             Text("Partición candidata: " + if (data.optBoolean("otaSlotPresent")) "Sí" else "No")
             Text("Subir firmware OTA: DESHABILITADO", color = MaterialTheme.colorScheme.error)
             DataAgeStamp(firmwareAt)
@@ -484,7 +492,9 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
         Text("Leído del firmware por Wi-Fi de laboratorio cada 3 s. " +
             "No demuestra cableado ni mide voltaje.",
             style = MaterialTheme.typography.bodySmall)
-        if (gpioPolling) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        // Full-width spinner only until the first snapshot: toggling it every
+        // cycle made the section blink (audit B4). Afterwards a steady label.
+        if (gpioPolling && gpioSnapshot == null) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         gpioError?.let { CompiInlineMessage(it, isError = true) }
         gpioSnapshot?.optJSONArray("pins")?.let { pins ->
             val occupied = (0 until pins.length()).mapNotNull { pins.optJSONObject(it) }
@@ -794,13 +804,30 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
                             projectName = project.name
                             message = "Proyecto cargado para editar o ejecutar."
                         }, enabled = debug && !busy) { Text("Abrir") }
-                        TextButton(onClick = { action {
-                            preferences.deleteExperimentProject(project.name)
-                            message = "Proyecto eliminado del teléfono."
-                        } }, enabled = debug && !busy) { Text("Eliminar") }
+                        TextButton(onClick = { projectToDelete = project.name },
+                            enabled = debug && !busy) { Text("Eliminar") }
                     }
                 }
             }
+        }
+        projectToDelete?.let { name ->
+            AlertDialog(
+                onDismissRequest = { projectToDelete = null },
+                title = { Text("Eliminar «$name»") },
+                text = { Text("Se borra del teléfono. El ESP32 no guarda proyectos; esta acción no se puede deshacer.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        projectToDelete = null
+                        action {
+                            preferences.deleteExperimentProject(name)
+                            message = "Proyecto eliminado del teléfono."
+                        }
+                    }) { Text("Eliminar") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { projectToDelete = null }) { Text("Cancelar") }
+                }
+            )
         }
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(value = steps, onValueChange = { steps = it.take(120) },
@@ -817,6 +844,31 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
         // RGB Wi-Fi controls live in the LED module. Laboratory stays focused on GPIO, network and sensors.
         Spacer(Modifier.height(30.dp))
     }
+    }
+}
+
+/** Human-readable byte size instead of raw "66520 B" (audit B4). */
+private fun formatBytes(bytes: Long): String {
+    if (bytes < 0L) return "desconocido"
+    val kib = 1024.0
+    return when {
+        bytes < 1024L -> "$bytes B"
+        bytes < 1024L * 1024L -> String.format(java.util.Locale.ROOT, "%.1f KiB", bytes / kib)
+        else -> String.format(java.util.Locale.ROOT, "%.2f MiB", bytes / (kib * kib))
+    }
+}
+
+/** Human-readable uptime instead of raw milliseconds (audit B4). */
+private fun formatUptime(ms: Long): String {
+    if (ms < 0L) return "desconocido"
+    val totalSeconds = ms / 1000L
+    val days = totalSeconds / 86400L
+    val hours = (totalSeconds % 86400L) / 3600L
+    val minutes = (totalSeconds % 3600L) / 60L
+    return when {
+        days > 0 -> "$days d $hours h"
+        hours > 0 -> "$hours h $minutes min"
+        else -> "$minutes min"
     }
 }
 

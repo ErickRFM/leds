@@ -36,6 +36,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -102,10 +104,13 @@ fun CompiMascot(
         }
 
         // Mascot Canvas Character
+        // The drawing is decorative; its state must still be announced to
+        // screen readers as a single meaningful description (audit B1).
         Box(
             modifier = Modifier
                 .size(size)
-                .graphicsLayer { translationY = floatY },
+                .graphicsLayer { translationY = floatY }
+                .semantics { contentDescription = mascotStateDescription(state) },
             contentAlignment = Alignment.Center
         ) {
             Canvas(modifier = Modifier.size(size)) {
@@ -199,7 +204,9 @@ fun CompiMascot(
                     CompiMascotState.ALERT -> Color(0xFFFFB84D)
                     CompiMascotState.PLAYING, CompiMascotState.LISTENING -> Color(0xFFA88BFF)
                     CompiMascotState.SLEEPY -> Color(0xFF8899B8)
-                    CompiMascotState.OFFLINE -> Color(0xFF4A5568)
+                    // OFFLINE eyes must stay readable on the dark screen glass
+                    // (0xFF0D121D); the old 0xFF4A5568 was near-invisible (B1).
+                    CompiMascotState.OFFLINE -> Color(0xFF8899B8)
                 }
 
                 val eyeRadius = screenWidth * 0.12f
@@ -259,3 +266,16 @@ fun CompiMascot(
 }
 
 private fun String?.isNullXorBlank(): Boolean = this.isNullOrBlank()
+
+/** TalkBack description for the drawn mascot state (audit B1). */
+private fun mascotStateDescription(state: CompiMascotState): String = when (state) {
+    CompiMascotState.HAPPY -> "Mascota Compi: contenta"
+    CompiMascotState.COMFORTABLE -> "Mascota Compi: clima cómodo"
+    CompiMascotState.COLD -> "Mascota Compi: ambiente frío"
+    CompiMascotState.HOT -> "Mascota Compi: ambiente caluroso"
+    CompiMascotState.SLEEPY -> "Mascota Compi: inactiva"
+    CompiMascotState.ALERT -> "Mascota Compi: alerta"
+    CompiMascotState.LISTENING -> "Mascota Compi: escuchando"
+    CompiMascotState.PLAYING -> "Mascota Compi: reproduciendo música"
+    CompiMascotState.OFFLINE -> "Mascota Compi: dispositivo sin conexión"
+}

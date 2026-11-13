@@ -178,7 +178,7 @@ fun MainAppNavHost(
                     TopAppBar(
                         title = { Text(when (route) {
                             Screen.Devices.route -> "Dispositivos"
-                            Screen.Connect.route -> "Conexiones"
+                            Screen.Connect.route -> "Conectar"
                             Screen.LabTools.route -> "Laboratorio avanzado"
                             "led" -> "Módulo LED RGB"
                             else -> "Ajustes"
@@ -195,11 +195,9 @@ fun MainAppNavHost(
                                 Icon(Icons.Default.ArrowBack, contentDescription = "Regresar")
                             }
                         },
-                        actions = {
-                            TextButton(onClick = { navController.navigateTopLevel(Screen.Home) }) {
-                                Text("Inicio")
-                            }
-                        }
+                        // "Inicio" duplicated the Home tab in the bottom bar; the
+                        // back arrow already provides an exit path (audit B2).
+                        actions = {}
                     )
                 }
             },
@@ -208,7 +206,9 @@ fun MainAppNavHost(
                     items.forEach { screen ->
                         NavigationBarItem(
                             modifier = Modifier.testTag("nav_${screen.route}"),
-                            icon = { Icon(screen.icon, contentDescription = screen.title) },
+                            // The label below already reads the screen title; a
+                            // contentDescription would make TalkBack say it twice.
+                            icon = { Icon(screen.icon, contentDescription = null) },
                             label = { Text(screen.title) },
                             alwaysShowLabel = true,
                             colors = NavigationBarItemDefaults.colors(

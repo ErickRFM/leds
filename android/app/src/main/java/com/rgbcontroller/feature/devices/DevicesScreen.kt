@@ -73,12 +73,12 @@ fun DevicesScreen(
     }
     val detail = when (val current = connection) {
         BleConnectionState.Disconnected -> "Listo para buscar."
-        BleConnectionState.Scanning -> "Escaneando BLE…"
-        BleConnectionState.Connecting -> "Conectando…"
-        BleConnectionState.Discovering -> "Verificando GATT…"
+        BleConnectionState.Scanning -> "Anuncios BLE cercanos; solo Compi es compatible."
+        BleConnectionState.Connecting -> "Estableciendo el enlace GATT con la placa."
+        BleConnectionState.Discovering -> "Leyendo identidad y seguridad del firmware."
         BleConnectionState.Ready -> if (authorized)
             "Propietario autorizado por firmware."
-        else "BLE conectado · ${ownerMessage}"
+        else ownerMessage
         is BleConnectionState.Error -> current.message
     }
 
@@ -256,6 +256,9 @@ fun DevicesScreen(
                         Text(
                             when {
                                 searching -> "Buscando dispositivos cercanos…"
+                                connection is BleConnectionState.Connecting ||
+                                    connection is BleConnectionState.Discovering ->
+                                    "Conectando al ESP32 seleccionado; la lista volverá al terminar."
                                 connection is BleConnectionState.Error ->
                                     "Revisa Bluetooth, permisos y arranque del ESP32."
                                 searched && scanStats.advertisements == 0 ->
@@ -282,6 +285,9 @@ fun DevicesScreen(
         }
         items(devices, key = { it.address }) { device ->
             Card(onClick = { if (!busy && !ready) bleManager.connect(device) },
+                // Disabled cards render and announce as unavailable instead of
+                // swallowing taps silently (audit B3).
+                enabled = !busy && !ready,
                 modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
                 Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Surface(color = MaterialTheme.colorScheme.primaryContainer,
