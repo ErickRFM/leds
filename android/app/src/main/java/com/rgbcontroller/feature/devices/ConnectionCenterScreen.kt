@@ -26,7 +26,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import com.rgbcontroller.core.ui.CompiSecretField
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rgbcontroller.core.ble.BleManager
@@ -229,7 +232,9 @@ fun ConnectionCenterScreen(
                         wifiScanError?.let {
                             Text(it, color = MaterialTheme.colorScheme.error,
                                 style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.testTag("wifi_scan_error"))
+                                modifier = Modifier
+                                    .testTag("wifi_scan_error")
+                                    .semantics { liveRegion = LiveRegionMode.Polite })
                         }
                         Text(
                             "Redes del último escaneo del teléfono, no dispositivos verificados. " +
@@ -242,13 +247,12 @@ fun ConnectionCenterScreen(
                 Text("3 · Verifica la identidad y autorización del firmware",
                     style = MaterialTheme.typography.titleSmall)
                 if (debug) {
-                    OutlinedTextField(
+                    CompiSecretField(
                         value = session.key,
                         onValueChange = { session.updateKey(it) },
-                        label = { Text("Clave de control (16 dígitos hexadecimales)") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("connect_wifi_key")
+                        label = "Clave de control (16 dígitos hexadecimales)",
+                        modifier = Modifier.fillMaxWidth(),
+                        testTag = "connect_wifi_key"
                     )
                     Button(
                         onClick = {
@@ -281,8 +285,11 @@ fun ConnectionCenterScreen(
                     }
                     if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 } else {
-                    Text("Wi-Fi de laboratorio disponible solo en APK debug.",
+                    Text("Wi-Fi de laboratorio está deshabilitado en APK release: el transporte HTTP local no usa TLS y solo se permite en builds de prueba.",
                         style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Alternativa en release: conecta por Bluetooth (pestaña Dispositivos) y autoriza tu teléfono como propietario con el código de 8 caracteres del monitor serie.",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Text(when (session.connectionState) {
@@ -291,7 +298,8 @@ fun ConnectionCenterScreen(
                     LabConnectionState.NETWORK_ERROR -> "Sin ruta o respuesta válida del ESP32."
                     else -> session.message
                 }, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 connectionError?.let {
                     Text(it, color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall)

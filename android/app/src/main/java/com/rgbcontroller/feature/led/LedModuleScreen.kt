@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.PasswordVisualTransformation
+import com.rgbcontroller.core.ui.CompiSecretField
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
 import com.rgbcontroller.core.ble.BleSecurityState
@@ -253,13 +253,11 @@ fun LedModuleScreen(
                     Modifier.fillMaxWidth().padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
-                    OutlinedTextField(
+                    CompiSecretField(
                         value = wifiSecret,
                         onValueChange = { labSession.updateKey(it) },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Clave local (monitor serie USB)") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        singleLine = true,
+                        label = "Clave local (monitor serie USB)",
                         enabled = !wifiBusy
                     )
                     Button(

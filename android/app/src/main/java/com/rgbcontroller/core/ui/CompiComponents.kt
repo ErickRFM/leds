@@ -13,23 +13,75 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 
 /** Small shared UI pieces. Existing Material3 controls stay the source of truth. */
+
+/**
+ * Secret-style field with an explicit show/hide toggle: pairing codes and
+ * device keys must be transcribable without guessing dots (audit M2). The
+ * reveal is per-field and resets with the screen; TalkBack announces the
+ * toggle state through its own content description.
+ */
+@Composable
+fun CompiSecretField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    isError: Boolean = false,
+    testTag: String? = null
+) {
+    var visible by rememberSaveable { mutableStateOf(false) }
+    var fieldModifier = modifier
+    if (testTag != null) fieldModifier = fieldModifier.testTag(testTag)
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        enabled = enabled,
+        isError = isError,
+        singleLine = true,
+        visualTransformation = if (visible) VisualTransformation.None
+        else PasswordVisualTransformation(),
+        trailingIcon = {
+            IconButton(onClick = { visible = !visible }) {
+                Icon(
+                    if (visible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                    contentDescription = if (visible) "Ocultar valor" else "Mostrar valor"
+                )
+            }
+        },
+        modifier = fieldModifier
+    )
+}
+
 @Composable
 fun CompiModuleCard(
     title: String,

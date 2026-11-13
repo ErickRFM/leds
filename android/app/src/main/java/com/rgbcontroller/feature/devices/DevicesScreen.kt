@@ -17,8 +17,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
+import com.rgbcontroller.core.ui.CompiSecretField
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.ble.BleConnectionState
 import com.rgbcontroller.core.ble.BleManager
@@ -161,20 +164,22 @@ fun DevicesScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = if (security == BleSecurityState.AuthorizationFailed)
                                 MaterialTheme.colorScheme.error
-                            else MaterialTheme.colorScheme.onSurfaceVariant
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.semantics {
+                                liveRegion = LiveRegionMode.Polite
+                            }
                         )
-                        OutlinedTextField(
+                        CompiSecretField(
                             value = physicalCode,
                             onValueChange = { next ->
                                 physicalCode = next.filter {
                                     it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F'
                                 }.take(8).uppercase()
                             },
-                            label = { Text("Código físico (8 caracteres hex)") },
+                            label = "Código físico (8 caracteres hex)",
                             isError = security == BleSecurityState.AuthorizationFailed,
-                            visualTransformation = PasswordVisualTransformation(),
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth().testTag("ble_pairing_code")
+                            modifier = Modifier.fillMaxWidth(),
+                            testTag = "ble_pairing_code"
                         )
                         Button(
                             onClick = {

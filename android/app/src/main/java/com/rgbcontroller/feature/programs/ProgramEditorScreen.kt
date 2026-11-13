@@ -10,6 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.*
 import com.rgbcontroller.core.ui.CompiInlineMessage
+import com.rgbcontroller.core.ui.CompiSecretField
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -17,8 +18,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.input.PasswordVisualTransformation
+
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CardDefaults
@@ -406,6 +410,15 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            // One shared key field for both engines: two masked inputs for the
+            // same value read as two different passwords (audit M3).
+            CompiSecretField(
+                value = controlKey,
+                onValueChange = { labSession.updateKey(it) },
+                label = "Clave de control del ESP32 (16 caracteres)",
+                enabled = debug && !experimentBusy,
+                isError = controlKey.isNotEmpty() && !LocalLabClient.validKey(controlKey)
+            )
         }
         OutlinedTextField(
             value = source,
@@ -504,16 +517,8 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                         } else "Validación: " + (compiled?.exceptionOrNull()?.message ?: "Escribe un script GPIO."),
                         style = MaterialTheme.typography.bodySmall,
                         color = if (gpioPlan != null) MaterialTheme.colorScheme.onSurfaceVariant
-                            else MaterialTheme.colorScheme.error
-                    )
-                    OutlinedTextField(
-                        value = controlKey,
-                        onValueChange = { labSession.updateKey(it) },
-                        label = { Text("Clave de control del ESP32 (16 caracteres)") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = debug && !experimentBusy
+                            else MaterialTheme.colorScheme.error,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
                     )
                     Text(
                         if (debug) "Solo APK debug: conecta a ESP32-Control-Lab. " +
@@ -614,15 +619,8 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                     }) { Text("Cargar ejemplo RGB") }
                     Text(rgbCheck.message, style = MaterialTheme.typography.bodySmall,
                         color = if (rgbCheck.accepted) MaterialTheme.colorScheme.onSurfaceVariant
-                            else MaterialTheme.colorScheme.error)
-                    OutlinedTextField(
-                        value = controlKey,
-                        onValueChange = { labSession.updateKey(it) },
-                        label = { Text("Clave de control del ESP32 (16 caracteres)") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth(), singleLine = true,
-                        enabled = debug && !experimentBusy
-                    )
+                            else MaterialTheme.colorScheme.error,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                     Text("APK debug únicamente · Wi-Fi ESP32-Control-Lab sin Internet. " +
                         "La clave queda en memoria, no se guarda. API HTTP sin TLS.",
                         style = MaterialTheme.typography.labelSmall,

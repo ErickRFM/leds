@@ -19,7 +19,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.input.PasswordVisualTransformation
+import com.rgbcontroller.core.ui.CompiSecretField
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.data.PreferencesRepository
 import com.rgbcontroller.core.lab.LabExperimentLibrary
@@ -229,6 +229,14 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         CompiInlineMessage(message, isError = messageIsError)
+        if (!debug) {
+            CompiInlineMessage(
+                "Las herramientas de laboratorio operan el transporte Wi-Fi del ESP32 " +
+                    "(HTTP local sin TLS) y solo están disponibles en APK debug. " +
+                    "En release controla el LED por Bluetooth: pestaña Dispositivos → " +
+                    "autorizar propietario con el código del monitor serie USB (115200)."
+            )
+        }
         if (section != LabSection.CONNECTION && !LocalLabClient.validKey(secret)) {
             CompiInlineMessage("Configura primero la clave local del ESP32 en Conexión. " +
                 "Puedes explorar estas herramientas sin conectarte.")
@@ -254,10 +262,13 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
                 }) { Text("Abrir ajustes Wi-Fi") }
                 Text("SoftAP · 192.168.4.1", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(10.dp))
-                OutlinedTextField(value = secret, onValueChange = { labSession.updateKey(it) },
-                    label = { Text("Clave de control del dispositivo") },
-                    singleLine = true, visualTransformation = PasswordVisualTransformation(),
-                    enabled = debug, modifier = Modifier.fillMaxWidth())
+                CompiSecretField(
+                    value = secret,
+                    onValueChange = { labSession.updateKey(it) },
+                    label = "Clave de control del dispositivo",
+                    enabled = debug,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Spacer(Modifier.height(10.dp))
                 Button(onClick = {
                     action {
@@ -421,10 +432,12 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
         OutlinedTextField(value = ssid, onValueChange = { ssid = it.take(32) },
             label = { Text("SSID") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         Spacer(Modifier.height(6.dp))
-        OutlinedTextField(value = wifiPassword, onValueChange = { wifiPassword = it.take(63) },
-            label = { Text("Contraseña de la red") },
-            visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(),
-            singleLine = true)
+        CompiSecretField(
+            value = wifiPassword,
+            onValueChange = { wifiPassword = it.take(63) },
+            label = "Contraseña de la red",
+            modifier = Modifier.fillMaxWidth()
+        )
         Spacer(Modifier.height(8.dp))
         Button(enabled = debug && !busy && LocalLabClient.validKey(secret) &&
             LocalLabClient.validSsid(ssid) && LocalLabClient.validPassword(wifiPassword),
