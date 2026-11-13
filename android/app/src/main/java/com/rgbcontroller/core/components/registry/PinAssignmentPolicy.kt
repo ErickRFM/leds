@@ -34,6 +34,10 @@ object PinAssignmentPolicy {
     val adc1Inputs = setOf(32, 34, 35, 36, 39)
     val freeAdc1Inputs = setOf(34, 35, 36, 39)
     val digitalInputs = generalOutputs + setOf(34, 35, 36, 39)
+    // Joystick pads include the OLED I²C pads: on boards whose headers do
+    // not expose GPIO36/39 they are the only remaining readable contacts.
+    // The wizard refuses them whenever the firmware reports an active OLED.
+    val joystickInputs = digitalInputs + setOf(21, 22)
 
     private fun signal(name: String, pins: Set<Int>, default: Int) =
         ModuleSignal(name, pins, default)
@@ -56,16 +60,19 @@ object PinAssignmentPolicy {
         ModuleWiringProfile("digital_sensor", listOf(signal("Entrada digital", labOutputs + setOf(34, 35, 36, 39), 18))),
         ModuleWiringProfile("actuator_relay", listOf(signal("Control de relé", labOutputs, 19))),
         // robotics_crane: two servo PWM outputs plus five digital joystick
-        // directions (pressed = LOW; external pull-ups required on the
-        // input-only pads 34/35/36/39). GPIO25/26/27 stay with led.rgb.
+        // directions (pressed = LOW; external pull-ups required on every
+        // contact). GPIO25/26/27 stay with led.rgb. Pads 21/22 (OLED I²C)
+        // are offered for boards that cannot reach GPIO36/39: they are only
+        // viable while no OLED lease is reported, which validate() enforces
+        // from live firmware status. Firmware remains the final authority.
         ModuleWiringProfile("robotics_crane", listOf(
             signal("Servo base", generalOutputs, 18),
             signal("Servo brazo", generalOutputs, 19),
-            signal("Joystick arriba", digitalInputs, 34),
-            signal("Joystick abajo", digitalInputs, 35),
-            signal("Joystick izquierda", digitalInputs, 36),
-            signal("Joystick derecha", digitalInputs, 39),
-            signal("Joystick centro · MID", digitalInputs, 17)
+            signal("Joystick arriba", joystickInputs, 34),
+            signal("Joystick abajo", joystickInputs, 35),
+            signal("Joystick izquierda", joystickInputs, 36),
+            signal("Joystick derecha", joystickInputs, 39),
+            signal("Joystick centro · MID", joystickInputs, 17)
         ))
     )
 
