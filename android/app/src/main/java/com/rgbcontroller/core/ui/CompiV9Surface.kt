@@ -47,7 +47,7 @@ fun CompiV9SectionTitle(title: String, modifier: Modifier = Modifier) {
     Text(
         title,
         modifier = modifier,
-        color = CompiV9.title,
+        color = MaterialTheme.colorScheme.onSurface,
         style = MaterialTheme.typography.titleLarge
     )
 }

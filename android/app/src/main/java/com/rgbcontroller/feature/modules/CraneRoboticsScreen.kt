@@ -1,5 +1,6 @@
 package com.rgbcontroller.feature.modules
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -38,7 +39,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -64,10 +64,10 @@ private const val MIN_SPEED = 10f
 private const val MAX_SPEED = 120f
 private const val CONFIRM_TIMEOUT_MS = 2500L
 
-private val MutedText = Color(0xFF94A3B8)
-private val StrongText = Color(0xFFE8ECF8)
-private val SliderLabel = Color(0xFFC7D2FE)
-private val DisabledText = Color(0xFF8A94A8)
+// All colors resolve from MaterialTheme.colorScheme so the screen stays
+// legible in every theme (DARK, DEEP_BLACK, LIGHT, SYSTEM). The dark
+// palette maps these roles to the original audited values, so DARK is
+// pixel-equivalent to the previous hardcoded palette.
 
 @Composable
 fun CraneRoboticsScreen(
@@ -279,7 +279,7 @@ fun CraneRoboticsScreen(
                 "Los grados son objetivos ordenados; el SG90 no incorpora encoder. " +
                     "El joystick físico recupera el control si el ESP32 no recibe latidos.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MutedText
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
@@ -307,7 +307,7 @@ private fun CraneStatusHeader(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = CompiTokens.Colors.SurfaceCard)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -317,12 +317,12 @@ private fun CraneStatusHeader(
                 "Compi Robotics",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                color = StrongText
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 "Grúa de dos ejes · 2 × SG90 · joystick digital",
                 style = MaterialTheme.typography.bodySmall,
-                color = MutedText
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -361,7 +361,8 @@ private fun AccessBanner(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = CompiTokens.Colors.WarningAmberContainer)
+        border = BorderStroke(1.dp, CompiTokens.Colors.WarningAmber.copy(alpha = 0.55f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -371,12 +372,12 @@ private fun AccessBanner(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
-                color = Color(0xFFFFE3B3)
+                color = CompiTokens.Colors.WarningAmber
             )
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFFFFD79A)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             if (!authorized && onOpenConnect != null) {
                 OutlinedButton(onClick = onOpenConnect) {
@@ -401,7 +402,7 @@ private fun AxesCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = CompiTokens.Colors.SurfaceCard)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -411,7 +412,7 @@ private fun AxesCard(
                 "Ejes · ángulo ordenado",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = StrongText
+                color = MaterialTheme.colorScheme.onSurface
             )
             AxisSlider(
                 label = "Base",
@@ -432,7 +433,7 @@ private fun AxesCard(
             Text(
                 "Velocidad · ${speed.toInt()}°/s",
                 style = MaterialTheme.typography.labelLarge,
-                color = SliderLabel
+                color = MaterialTheme.colorScheme.primary
             )
             Slider(
                 value = speed,
@@ -453,6 +454,7 @@ private fun AxesCard(
                         selected = speed.toInt() == preset,
                         onClick = { onSpeedChange(preset.toFloat()) },
                         enabled = enabled,
+                        modifier = Modifier.heightIn(min = 48.dp),
                         label = { Text("$preset°/s", fontSize = 12.sp) },
                         colors = craneChipColors()
                     )
@@ -463,7 +465,7 @@ private fun AxesCard(
                 enabled = enabled,
                 colors = ButtonDefaults.buttonColors(
                     disabledContainerColor = CompiTokens.Colors.SurfaceVariant,
-                    disabledContentColor = DisabledText
+                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -487,7 +489,7 @@ private fun AxisSlider(
         Text(
             "$label · ${value.toInt()}°",
             style = MaterialTheme.typography.labelLarge,
-            color = SliderLabel
+            color = MaterialTheme.colorScheme.primary
         )
         Slider(
             value = value,
@@ -514,7 +516,7 @@ private fun PresetsCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = CompiTokens.Colors.SurfaceCard)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -524,12 +526,12 @@ private fun PresetsCard(
                 "Posiciones seguras",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = StrongText
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 "Aplica el mismo ángulo a base y brazo.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MutedText
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             CraneChipRow {
                 listOf(10, 45, 90, 135, 170).forEach { angle ->
@@ -537,6 +539,7 @@ private fun PresetsCard(
                         selected = false,
                         onClick = { onAngle(angle.toFloat()) },
                         enabled = enabled,
+                        modifier = Modifier.heightIn(min = 48.dp),
                         label = { Text("$angle°") },
                         colors = craneChipColors()
                     )
@@ -546,7 +549,7 @@ private fun PresetsCard(
                 onClick = onHome,
                 enabled = enabled,
                 colors = ButtonDefaults.outlinedButtonColors(
-                    disabledContentColor = DisabledText
+                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -566,7 +569,7 @@ private fun JoystickCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = CompiTokens.Colors.SurfaceCard)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -576,12 +579,12 @@ private fun JoystickCard(
                 "Joystick virtual",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = StrongText
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 "Pasos de 5° por pulsación.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MutedText
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             NudgeButton(
                 label = "↑ Brazo +5°",
@@ -621,7 +624,7 @@ private fun JoystickCard(
                 onClick = onCenter,
                 enabled = enabled,
                 colors = ButtonDefaults.outlinedButtonColors(
-                    disabledContentColor = DisabledText
+                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -645,7 +648,7 @@ private fun NudgeButton(
         onClick = onClick,
         enabled = enabled,
         colors = ButtonDefaults.outlinedButtonColors(
-            disabledContentColor = DisabledText
+            disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
         ),
         modifier = modifier
             .heightIn(min = 48.dp)
@@ -701,7 +704,8 @@ private fun CommandFeedbackCard(
             .fillMaxWidth()
             .semantics { liveRegion = LiveRegionMode.Polite },
         shape = RoundedCornerShape(18.dp),
-        color = if (isError) CompiTokens.Colors.ErrorRedContainer else CompiTokens.Colors.SurfaceVariant
+        color = if (isError) MaterialTheme.colorScheme.errorContainer
+        else MaterialTheme.colorScheme.surfaceVariant
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -711,12 +715,14 @@ private fun CommandFeedbackCard(
                 title,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
-                color = if (isError) Color(0xFFFFD1D1) else StrongText
+                color = if (isError) MaterialTheme.colorScheme.onErrorContainer
+                else MaterialTheme.colorScheme.onSurface
             )
             Text(
                 detail,
                 style = MaterialTheme.typography.bodySmall,
-                color = if (isError) Color(0xFFFFA8A8) else MutedText
+                color = if (isError) MaterialTheme.colorScheme.onErrorContainer
+                else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -744,7 +750,7 @@ private fun CommandBar(
                 onClick = onLocal,
                 enabled = enabled && remoteControl,
                 colors = ButtonDefaults.outlinedButtonColors(
-                    disabledContentColor = DisabledText
+                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                 ),
                 modifier = Modifier
                     .weight(1f)
@@ -755,10 +761,10 @@ private fun CommandBar(
                 onClick = onStop,
                 enabled = enabled,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = CompiTokens.Colors.ErrorRed,
-                    contentColor = Color.White,
-                    disabledContainerColor = CompiTokens.Colors.ErrorRed.copy(alpha = 0.25f),
-                    disabledContentColor = Color.White.copy(alpha = 0.7f)
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError,
+                    disabledContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.25f),
+                    disabledContentColor = MaterialTheme.colorScheme.onError.copy(alpha = 0.55f)
                 ),
                 modifier = Modifier
                     .weight(1.2f)
@@ -784,7 +790,7 @@ private fun CraneChipRow(content: @Composable () -> Unit) {
 
 @Composable
 private fun craneChipColors() = FilterChipDefaults.filterChipColors(
-    disabledLabelColor = DisabledText
+    disabledLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
 )
 
 private fun formatAngle(value: Float?): String =

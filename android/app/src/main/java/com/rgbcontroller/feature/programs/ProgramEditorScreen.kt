@@ -357,9 +357,11 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
         ) {
             FilterChip(selected = language == ProgramLanguage.LAB_SCRIPT,
                 onClick = { chooseLanguage(ProgramLanguage.LAB_SCRIPT) },
+                modifier = Modifier.heightIn(min = 48.dp),
                 label = { Text("Laboratorio") })
             FilterChip(selected = language == ProgramLanguage.ARDUINO_CPP,
                 onClick = { chooseLanguage(ProgramLanguage.ARDUINO_CPP) },
+                modifier = Modifier.heightIn(min = 48.dp),
                 label = { Text("Arduino C++") })
         }
 
@@ -372,13 +374,17 @@ fun ProgramEditorScreen(labSession: CompiLabSession, bleManager: BleManager? = n
                 FilterChip(
                     selected = laboratoryMode == "GPIO",
                     onClick = { chooseEngine("GPIO") },
-                    modifier = Modifier.testTag("studio_engine_gpio"),
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .testTag("studio_engine_gpio"),
                     label = { Text("GPIO") }
                 )
                 FilterChip(
                     selected = laboratoryMode == "RGB",
                     onClick = { chooseEngine("RGB") },
-                    modifier = Modifier.testTag("studio_engine_rgb"),
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .testTag("studio_engine_rgb"),
                     label = { Text("LED RGB") }
                 )
             }

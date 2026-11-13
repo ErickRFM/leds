@@ -423,6 +423,7 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 rowPins.forEach { pin ->
                     FilterChip(selected = selectedPin == pin, onClick = { selectedPin = pin },
+                        modifier = Modifier.heightIn(min = 48.dp),
                         label = { Text("GPIO " + pin) })
                 }
             }
@@ -554,9 +555,11 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = automationStartOn,
-                    onClick = { automationStartOn = true }, label = { Text("ON primero") })
+                    onClick = { automationStartOn = true },
+                    modifier = Modifier.heightIn(min = 48.dp), label = { Text("ON primero") })
                 FilterChip(selected = !automationStartOn,
-                    onClick = { automationStartOn = false }, label = { Text("OFF primero") })
+                    onClick = { automationStartOn = false },
+                    modifier = Modifier.heightIn(min = 48.dp), label = { Text("OFF primero") })
             }
             val seconds = automationInterval.toIntOrNull() ?: 0
             val cycles = automationCycles.toIntOrNull() ?: 0
@@ -698,8 +701,10 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
             style = MaterialTheme.typography.bodySmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = nextHigh, onClick = { nextHigh = true },
+                modifier = Modifier.heightIn(min = 48.dp),
                 label = { Text("HIGH") }, enabled = debug && !busy)
             FilterChip(selected = !nextHigh, onClick = { nextHigh = false },
+                modifier = Modifier.heightIn(min = 48.dp),
                 label = { Text("LOW") }, enabled = debug && !busy)
         }
         OutlinedTextField(value = nextDuration,
