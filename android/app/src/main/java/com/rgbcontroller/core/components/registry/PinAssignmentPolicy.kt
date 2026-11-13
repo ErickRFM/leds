@@ -54,7 +54,19 @@ object PinAssignmentPolicy {
         )),
         ModuleWiringProfile("analog_sensor", listOf(signal("ADC1", freeAdc1Inputs, 35))),
         ModuleWiringProfile("digital_sensor", listOf(signal("Entrada digital", labOutputs + setOf(34, 35, 36, 39), 18))),
-        ModuleWiringProfile("actuator_relay", listOf(signal("Control de relé", labOutputs, 19)))
+        ModuleWiringProfile("actuator_relay", listOf(signal("Control de relé", labOutputs, 19))),
+        // robotics_crane: two servo PWM outputs plus five digital joystick
+        // directions (pressed = LOW; external pull-ups required on the
+        // input-only pads 34/35/36/39). GPIO25/26/27 stay with led.rgb.
+        ModuleWiringProfile("robotics_crane", listOf(
+            signal("Servo base", generalOutputs, 18),
+            signal("Servo brazo", generalOutputs, 19),
+            signal("Joystick arriba", digitalInputs, 34),
+            signal("Joystick abajo", digitalInputs, 35),
+            signal("Joystick izquierda", digitalInputs, 36),
+            signal("Joystick derecha", digitalInputs, 39),
+            signal("Joystick centro · MID", digitalInputs, 17)
+        ))
     )
 
     fun profile(id: String): ModuleWiringProfile? = profiles.firstOrNull { it.componentId == id }

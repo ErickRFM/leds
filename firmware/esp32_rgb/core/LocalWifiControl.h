@@ -44,11 +44,12 @@ class LocalWifiControl final {
   // status (resolved pins + lifecycle). The firmware is the final GPIO
   // authority; clients never infer pin ownership from their own config.
   using ComponentStatus = bool (*)(char* output, size_t capacity, void* context);
-  // Authorized, runtime-only rewire. Arguments include expected old pins to
-  // prevent overwriting a concurrent edit; callback must rollback on failure.
-  using ComponentApply = bool (*)(const char* id, uint8_t from1, uint8_t from2,
-                                   uint8_t to1, uint8_t to2, uint8_t from3,
-                                   uint8_t to3, void* context);
+  // Authorized, runtime-only rewire. `from`/`to` carry up to
+  // ComponentApplyReplayGuard::kComponentSignalCount signals (trailing pairs
+  // are zero). Arguments include expected old pins to prevent overwriting a
+  // concurrent edit; callback must rollback on failure.
+  using ComponentApply = bool (*)(const char* id, const uint8_t* from,
+                                  const uint8_t* to, void* context);
 
   using LdrCalibration = bool (*)(uint16_t darkRaw, uint16_t brightRaw, void* context);
 
@@ -402,30 +403,46 @@ class LocalWifiControl final {
       const String componentId = server_.arg("id");
       if (componentId != "dht11" && componentId != "dht22" && componentId != "soil_moisture" &&
           componentId != "ssd1306_oled" && componentId != "ldr_light" &&
-          componentId != "led_rgb") {
+          componentId != "led_rgb" && componentId != "robotics_crane") {
         jsonError(400, "unsupported_component"); return;
       }
-      int from1 = -1, from2 = -1, to1 = -1, to2 = -1;
-      if (!parseInt("from1", 0, 39, from1) ||
-          !parseInt("to1", 0, 39, to1) ||
-          !parseInt("from2", 0, 39, from2) ||
-          !parseInt("to2", 0, 39, to2)) {
-        jsonError(400, "invalid_gpio_assignment"); return;
-      }
+      constexpr size_t kSignals = ComponentApplyReplayGuard::kComponentSignalCount;
       const bool rgb = componentId == "led_rgb";
-      int from3 = 0, to3 = 0;
-      if ((rgb && (!parseInt("from3", 0, 39, from3) ||
-                   !parseInt("to3", 0, 39, to3))) ||
-          (!rgb && (!server_.arg("from3").isEmpty() ||
-                    !server_.arg("to3").isEmpty()))) {
-        jsonError(400, "invalid_gpio_assignment"); return;
+      const bool oled = componentId == "ssd1306_oled";
+      const bool crane = componentId == "robotics_crane";
+      // Signal pairs each component declares: legacy single-signal components
+      // still transmit an explicit zero from2/to2 pair; the crane wires all
+      // seven signals (2 servo PWM + 5 joystick inputs) in one transaction.
+      const int required = crane ? 7 : (rgb ? 3 : 2);
+      const char* const fromNames[kSignals] = {
+          "from1", "from2", "from3", "from4", "from5", "from6", "from7"};
+      const char* const toNames[kSignals] = {
+          "to1", "to2", "to3", "to4", "to5", "to6", "to7"};
+      int from[kSignals] = {}, to[kSignals] = {};
+      for (int index = 0; index < required; ++index) {
+        if (!parseInt(fromNames[index], 0, 39, from[index]) ||
+            !parseInt(toNames[index], 0, 39, to[index])) {
+          jsonError(400, "invalid_gpio_assignment"); return;
+        }
+      }
+      // A client that transmits more signals than the component declares is
+      // misconstructed; silently dropping them would hide wiring mistakes.
+      for (int index = required; index < static_cast<int>(kSignals); ++index) {
+        if (!server_.arg(fromNames[index]).isEmpty() ||
+            !server_.arg(toNames[index]).isEmpty()) {
+          jsonError(400, "invalid_gpio_assignment"); return;
+        }
       }
       const String requestId = server_.arg("requestId");
       const ComponentApplyReplayGuard::Request request = {
           requestId.c_str(), componentId.c_str(),
-          static_cast<uint8_t>(from1), static_cast<uint8_t>(from2),
-          static_cast<uint8_t>(to1), static_cast<uint8_t>(to2),
-          static_cast<uint8_t>(from3), static_cast<uint8_t>(to3)};
+          static_cast<uint8_t>(from[0]), static_cast<uint8_t>(from[1]),
+          static_cast<uint8_t>(to[0]), static_cast<uint8_t>(to[1]),
+          static_cast<uint8_t>(from[2]), static_cast<uint8_t>(to[2]),
+          static_cast<uint8_t>(from[3]), static_cast<uint8_t>(to[3]),
+          static_cast<uint8_t>(from[4]), static_cast<uint8_t>(to[4]),
+          static_cast<uint8_t>(from[5]), static_cast<uint8_t>(to[5]),
+          static_cast<uint8_t>(from[6]), static_cast<uint8_t>(to[6])};
       const auto replayVerdict = replayGuard_.inspect(request);
       if (replayVerdict == ComponentApplyReplayGuard::Verdict::Invalid) {
         jsonError(400, "invalid_gpio_request_id"); return;
@@ -441,21 +458,56 @@ class LocalWifiControl final {
             "\"replayed\":true,\"requestId\":\"" + requestId + "\"}");
         return;
       }
-      const bool oled = componentId == "ssd1306_oled";
-      if ((rgb && (to1 == to2 || to1 == to3 || to2 == to3 ||
-                   !PinManager::outputCapable(to1) ||
-                   !PinManager::outputCapable(to2) ||
-                   !PinManager::outputCapable(to3))) ||
-          (!rgb && ((!oled && (from2 != 0 || to2 != 0)) ||
-           (oled && (from1 == from2 || to1 == to2)) ||
-           PinManager::reservedForRgb(static_cast<uint8_t>(to1)) ||
-           (oled && PinManager::reservedForRgb(static_cast<uint8_t>(to2)))))) {
+      const auto outputOk = [](int pin) {
+        return PinManager::outputCapable(static_cast<uint8_t>(pin));
+      };
+      const auto digitalInputOk = [](int pin) {
+        return PinManager::canUse(static_cast<uint8_t>(pin),
+                                  PinFunction::DigitalInput);
+      };
+      const auto rgbReserved = [](int pin) {
+        return PinManager::reservedForRgb(static_cast<uint8_t>(pin));
+      };
+      const auto allDistinct = [&to, required]() {
+        for (int i = 0; i < required; ++i) {
+          for (int j = i + 1; j < required; ++j) {
+            if (to[i] == to[j]) return false;
+          }
+        }
+        return true;
+      };
+      bool assignmentValid;
+      if (crane) {
+        assignmentValid = allDistinct() && outputOk(to[0]) && outputOk(to[1]) &&
+            digitalInputOk(to[2]) && digitalInputOk(to[3]) &&
+            digitalInputOk(to[4]) && digitalInputOk(to[5]) &&
+            digitalInputOk(to[6]) &&
+            !(rgbReserved(to[0]) || rgbReserved(to[1]) || rgbReserved(to[2]) ||
+              rgbReserved(to[3]) || rgbReserved(to[4]) || rgbReserved(to[5]) ||
+              rgbReserved(to[6]));
+      } else if (rgb) {
+        assignmentValid = allDistinct() && outputOk(to[0]) &&
+            outputOk(to[1]) && outputOk(to[2]);
+      } else {
+        assignmentValid = !((!oled && (from[1] != 0 || to[1] != 0)) ||
+            (oled && (from[0] == from[1] || to[0] == to[1])) ||
+            rgbReserved(to[0]) ||
+            (oled && rgbReserved(to[1])));
+      }
+      if (!assignmentValid) {
         jsonError(400, "invalid_gpio_assignment"); return;
       }
-      if (!apply_(componentId.c_str(), static_cast<uint8_t>(from1),
-                  static_cast<uint8_t>(from2), static_cast<uint8_t>(to1),
-                  static_cast<uint8_t>(to2), static_cast<uint8_t>(from3),
-                  static_cast<uint8_t>(to3), applyContext_)) {
+      const uint8_t fromSignals[kSignals] = {
+          static_cast<uint8_t>(from[0]), static_cast<uint8_t>(from[1]),
+          static_cast<uint8_t>(from[2]), static_cast<uint8_t>(from[3]),
+          static_cast<uint8_t>(from[4]), static_cast<uint8_t>(from[5]),
+          static_cast<uint8_t>(from[6])};
+      const uint8_t toSignals[kSignals] = {
+          static_cast<uint8_t>(to[0]), static_cast<uint8_t>(to[1]),
+          static_cast<uint8_t>(to[2]), static_cast<uint8_t>(to[3]),
+          static_cast<uint8_t>(to[4]), static_cast<uint8_t>(to[5]),
+          static_cast<uint8_t>(to[6])};
+      if (!apply_(componentId.c_str(), fromSignals, toSignals, applyContext_)) {
         jsonError(409, "component_apply_rejected_or_rolled_back"); return;
       }
       // Cache success only; a rejected request can be retried with the same ID.

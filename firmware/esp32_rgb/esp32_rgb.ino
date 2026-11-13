@@ -1071,13 +1071,9 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
     entry.id = craneRoboticsModule.id();
     entry.type = esp32core::ComponentType::Controller;
     entry.interfaceType = esp32core::HardwareInterface::Pwm;
-    entry.pins[0] = esp32core::crane::kServoBasePin;
-    entry.pins[1] = esp32core::crane::kServoArmPin;
-    entry.pins[2] = esp32core::crane::kJoystickUpPin;
-    entry.pins[3] = esp32core::crane::kJoystickDownPin;
-    entry.pins[4] = esp32core::crane::kJoystickLeftPin;
-    entry.pins[5] = esp32core::crane::kJoystickRightPin;
-    entry.pins[6] = esp32core::crane::kJoystickMidPin;
+    // Runtime pins as reassigned by an authorized owner; encodeComponentStatus
+    // only serializes them while the module is active.
+    for (size_t i = 0; i < 7; ++i) entry.pins[i] = craneRoboticsModule.pin(i);
     entry.active = craneRoboticsModule.ready();
     entry.pinCount = entry.active ? 7 : 0;
     entry.state = entry.active ? esp32core::ComponentState::Active :
@@ -1098,10 +1094,9 @@ bool collectComponentStatus(char* output, size_t capacity, void*) {
 // If begin() fails after a stopped module changes pins, restore the old lease.
 // Deliberately no NVS persistence: on reboot the audited compile-time profile
 // is authoritative again until an explicit owner-authorized rewire.
-bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
-                        uint8_t to1, uint8_t to2, uint8_t from3, uint8_t to3,
-                        void*) {
-  if (!catalogId) return false;
+bool applyComponentPins(const char* catalogId, const uint8_t* from,
+                        const uint8_t* to, void*) {
+  if (!catalogId || !from || !to) return false;
   const auto available = [](uint8_t pin, const char* owner) {
     const auto* lease = pinManager.lease(pin);
     const char* system = pinManager.systemOwner(pin);
@@ -1109,26 +1104,26 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
            (!system || std::strcmp(system, owner) == 0);
   };
   if (std::strcmp(catalogId, "led_rgb") == 0) {
-    if (!rgbModule.ready() || rgbModule.redPin() != from1 ||
-        rgbModule.greenPin() != from2 || rgbModule.bluePin() != from3 ||
-        to1 == to2 || to1 == to3 || to2 == to3 ||
-        !esp32core::PinManager::outputCapable(to1) ||
-        !esp32core::PinManager::outputCapable(to2) ||
-        !esp32core::PinManager::outputCapable(to3) ||
-        !available(to1, rgbModule.id()) || !available(to2, rgbModule.id()) ||
-        !available(to3, rgbModule.id())) return false;
-    if (from1 == to1 && from2 == to2 && from3 == to3) return true;
+    if (!rgbModule.ready() || rgbModule.redPin() != from[0] ||
+        rgbModule.greenPin() != from[1] || rgbModule.bluePin() != from[2] ||
+        to[0] == to[1] || to[0] == to[2] || to[1] == to[2] ||
+        !esp32core::PinManager::outputCapable(to[0]) ||
+        !esp32core::PinManager::outputCapable(to[1]) ||
+        !esp32core::PinManager::outputCapable(to[2]) ||
+        !available(to[0], rgbModule.id()) || !available(to[1], rgbModule.id()) ||
+        !available(to[2], rgbModule.id())) return false;
+    if (from[0] == to[0] && from[1] == to[1] && from[2] == to[2]) return true;
     // All RGB writes and command processing run in the Arduino loop, so
     // no BLE callback can mutate PWM while this transaction reattaches.
     rgbModule.stop(pinManager);
-    if (rgbModule.configurePins(to1, to2, to3)) {
-      liveRgbPins[0] = to1; liveRgbPins[1] = to2; liveRgbPins[2] = to3;
+    if (rgbModule.configurePins(to[0], to[1], to[2])) {
+      liveRgbPins[0] = to[0]; liveRgbPins[1] = to[1]; liveRgbPins[2] = to[2];
       if (rgbModule.begin(pinManager)) return true;
     }
     // Never acknowledge a failed pin reassignment. Restore the last verified
     // runtime mapping; if even rollback fails, report RGB inactive in status.
-    rgbModule.configurePins(from1, from2, from3);
-    liveRgbPins[0] = from1; liveRgbPins[1] = from2; liveRgbPins[2] = from3;
+    rgbModule.configurePins(from[0], from[1], from[2]);
+    liveRgbPins[0] = from[0]; liveRgbPins[1] = from[1]; liveRgbPins[2] = from[2];
     rgbModule.begin(pinManager);
     return false;
   }
@@ -1143,21 +1138,21 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
     uint8_t& activePin = is11 ? liveDht11Pin : liveDhtPin;
     const bool wasReady = target.ready(), otherReady = other.ready();
     const uint8_t oldPin = target.pin(), otherPin = other.pin();
-    if (from2 != 0 || to2 != 0 || from3 != 0 || to3 != 0 ||
-        esp32core::PinManager::reservedForRgb(to1) ||
-        !esp32core::PinManager::outputCapable(to1) ||
-        (wasReady ? from1 != oldPin : from1 != 0)) return false;
-    const auto* lease = pinManager.lease(to1);
+    if (from[1] != 0 || to[1] != 0 || from[2] != 0 || to[2] != 0 ||
+        esp32core::PinManager::reservedForRgb(to[0]) ||
+        !esp32core::PinManager::outputCapable(to[0]) ||
+        (wasReady ? from[0] != oldPin : from[0] != 0)) return false;
+    const auto* lease = pinManager.lease(to[0]);
     if (lease && std::strcmp(lease->owner, target.id()) != 0 &&
         std::strcmp(lease->owner, other.id()) != 0) return false;
-    const char* system = pinManager.systemOwner(to1);
+    const char* system = pinManager.systemOwner(to[0]);
     if (system && std::strcmp(system, target.id()) != 0 &&
         std::strcmp(system, other.id()) != 0) return false;
-    if (wasReady && oldPin == to1 && !otherReady) return true;
+    if (wasReady && oldPin == to[0] && !otherReady) return true;
     if (wasReady) target.stop(pinManager);
     if (otherReady) other.stop(pinManager);
-    if (target.configurePin(to1)) {
-      activePin = to1;
+    if (target.configurePin(to[0])) {
+      activePin = to[0];
       if (target.begin(pinManager)) return true;
     }
     // A failed transfer restores both the former pin and the owner lease.
@@ -1170,16 +1165,16 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
 #else
 #if COMPI_BUILD_DHT11
   if (std::strcmp(catalogId, "dht11") == 0) {
-    if (from2 != 0 || to2 != 0 || esp32core::PinManager::reservedForRgb(to1) ||
-        !esp32core::PinManager::outputCapable(to1) ||
-        !available(to1, dht11Module.id()) ||
-        (dht11Module.ready() ? from1 != dht11Module.pin() : from1 != 0)) return false;
-    if (dht11Module.ready() && from1 == to1) return true;
+    if (from[1] != 0 || to[1] != 0 || esp32core::PinManager::reservedForRgb(to[0]) ||
+        !esp32core::PinManager::outputCapable(to[0]) ||
+        !available(to[0], dht11Module.id()) ||
+        (dht11Module.ready() ? from[0] != dht11Module.pin() : from[0] != 0)) return false;
+    if (dht11Module.ready() && from[0] == to[0]) return true;
     const bool wasReady = dht11Module.ready();
     const uint8_t oldPin = dht11Module.pin();
     if (wasReady) dht11Module.stop(pinManager);
-    if (dht11Module.configurePin(to1)) {
-      liveDht11Pin = to1;
+    if (dht11Module.configurePin(to[0])) {
+      liveDht11Pin = to[0];
       if (dht11Module.begin(pinManager)) return true;
     }
     dht11Module.configurePin(oldPin);
@@ -1190,16 +1185,16 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
 #endif
 #if COMPI_BUILD_DHT22
   if (std::strcmp(catalogId, "dht22") == 0) {
-    if (from2 != 0 || to2 != 0 || esp32core::PinManager::reservedForRgb(to1) ||
-        !esp32core::PinManager::outputCapable(to1) ||
-        !available(to1, dht22Module.id()) ||
-        (dht22Module.ready() ? from1 != dht22Module.pin() : from1 != 0)) return false;
-    if (dht22Module.ready() && from1 == to1) return true;
+    if (from[1] != 0 || to[1] != 0 || esp32core::PinManager::reservedForRgb(to[0]) ||
+        !esp32core::PinManager::outputCapable(to[0]) ||
+        !available(to[0], dht22Module.id()) ||
+        (dht22Module.ready() ? from[0] != dht22Module.pin() : from[0] != 0)) return false;
+    if (dht22Module.ready() && from[0] == to[0]) return true;
     const bool wasReady = dht22Module.ready();
     const uint8_t oldPin = dht22Module.pin();
     if (wasReady) dht22Module.stop(pinManager);
-    if (dht22Module.configurePin(to1)) {
-      liveDhtPin = to1;
+    if (dht22Module.configurePin(to[0])) {
+      liveDhtPin = to[0];
       if (dht22Module.begin(pinManager)) return true;
     }
     dht22Module.configurePin(oldPin);
@@ -1211,38 +1206,38 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
 #endif
 #if COMPI_BUILD_SOIL
   if (std::strcmp(catalogId, "soil_moisture") == 0) {
-    if (from2 != 0 || to2 != 0 || esp32core::PinManager::reservedForRgb(to1) ||
-        !esp32core::PinManager::analogInputCapable(to1) || !available(to1, soilModule.id())) return false;
+    if (from[1] != 0 || to[1] != 0 || esp32core::PinManager::reservedForRgb(to[0]) ||
+        !esp32core::PinManager::analogInputCapable(to[0]) || !available(to[0], soilModule.id())) return false;
     if (!soilModule.ready()) {
-      if (from1 != 0) return false;
+      if (from[0] != 0) return false;
       const uint8_t original = soilModule.pin();
-      if (!soilModule.configurePin(to1)) return false;
+      if (!soilModule.configurePin(to[0])) return false;
       if (soilModule.begin(pinManager)) return true;
       soilModule.configurePin(original);
       return false;
     }
-    if (soilModule.pin() != from1) return false;
-    if (from1 == to1) return true;
+    if (soilModule.pin() != from[0]) return false;
+    if (from[0] == to[0]) return true;
     soilModule.stop(pinManager);
-    if (!soilModule.configurePin(to1)) return false;
+    if (!soilModule.configurePin(to[0])) return false;
     if (soilModule.begin(pinManager)) return true;
-    soilModule.configurePin(from1);
+    soilModule.configurePin(from[0]);
     soilModule.begin(pinManager);
     return false;
   }
 #endif
 #if COMPI_BUILD_LDR
   if (std::strcmp(catalogId, "ldr_light") == 0) {
-    if (from2 != 0 || to2 != 0 || from3 != 0 || to3 != 0 ||
-        esp32core::PinManager::reservedForRgb(to1) ||
-        !esp32core::PinManager::analogInputCapable(to1) ||
-        !available(to1, ldrModule.id())) return false;
+    if (from[1] != 0 || to[1] != 0 || from[2] != 0 || to[2] != 0 ||
+        esp32core::PinManager::reservedForRgb(to[0]) ||
+        !esp32core::PinManager::analogInputCapable(to[0]) ||
+        !available(to[0], ldrModule.id())) return false;
     const bool wasReady = ldrModule.ready();
     const uint8_t oldPin = ldrModule.pin();
-    if ((wasReady ? oldPin : 0) != from1) return false;
-    if (wasReady && from1 == to1) return true;
+    if ((wasReady ? oldPin : 0) != from[0]) return false;
+    if (wasReady && from[0] == to[0]) return true;
     if (wasReady) ldrModule.stop(pinManager);
-    if (ldrModule.configurePin(to1) && ldrModule.begin(pinManager)) return true;
+    if (ldrModule.configurePin(to[0]) && ldrModule.begin(pinManager)) return true;
     ldrModule.configurePin(oldPin);
     if (wasReady) ldrModule.begin(pinManager);
     return false;
@@ -1250,25 +1245,63 @@ bool applyComponentPins(const char* catalogId, uint8_t from1, uint8_t from2,
 #endif
 #if COMPI_BUILD_OLED && COMPI_OLED_LIBRARY
   if (std::strcmp(catalogId, "ssd1306_oled") == 0) {
-    if (to1 == to2 || esp32core::PinManager::reservedForRgb(to1) ||
-        esp32core::PinManager::reservedForRgb(to2) ||
-        !esp32core::PinManager::outputCapable(to1) || !esp32core::PinManager::outputCapable(to2) ||
-        !available(to1, oledModule.id()) || !available(to2, oledModule.id())) return false;
+    if (to[0] == to[1] || esp32core::PinManager::reservedForRgb(to[0]) ||
+        esp32core::PinManager::reservedForRgb(to[1]) ||
+        !esp32core::PinManager::outputCapable(to[0]) || !esp32core::PinManager::outputCapable(to[1]) ||
+        !available(to[0], oledModule.id()) || !available(to[1], oledModule.id())) return false;
     if (!oledModule.ready()) {
-      if (from1 != 0 || from2 != 0) return false;
+      if (from[0] != 0 || from[1] != 0) return false;
       const uint8_t originalSda = oledModule.sda(), originalScl = oledModule.scl();
-      if (!oledModule.configurePins(to1, to2)) return false;
+      if (!oledModule.configurePins(to[0], to[1])) return false;
       if (oledModule.begin(pinManager)) return true;
       oledModule.configurePins(originalSda, originalScl);
       return false;
     }
-    if (oledModule.sda() != from1 || oledModule.scl() != from2) return false;
-    if (from1 == to1 && from2 == to2) return true;
+    if (oledModule.sda() != from[0] || oledModule.scl() != from[1]) return false;
+    if (from[0] == to[0] && from[1] == to[1]) return true;
     oledModule.stop(pinManager);
-    if (!oledModule.configurePins(to1, to2)) return false;
+    if (!oledModule.configurePins(to[0], to[1])) return false;
     if (oledModule.begin(pinManager)) return true;
-    oledModule.configurePins(from1, from2);
+    oledModule.configurePins(from[0], from[1]);
     oledModule.begin(pinManager);
+    return false;
+  }
+#endif
+#if COMPI_BUILD_CRANE_ROBOTICS
+  if (std::strcmp(catalogId, "robotics_crane") == 0) {
+    // Seven signals: [0..1] servo PWM outputs, [2..6] joystick digital
+    // inputs pressed-to-LOW (external pull-ups required on input-only pads).
+    for (size_t i = 0; i < 2; ++i) {
+      if (esp32core::PinManager::reservedForRgb(to[i]) ||
+          !esp32core::PinManager::outputCapable(to[i]) ||
+          !available(to[i], craneRoboticsModule.id())) return false;
+    }
+    for (size_t i = 2; i < 7; ++i) {
+      if (esp32core::PinManager::reservedForRgb(to[i]) ||
+          !esp32core::PinManager::canUse(
+              to[i], esp32core::PinFunction::DigitalInput) ||
+          !available(to[i], craneRoboticsModule.id())) return false;
+    }
+    const bool wasReady = craneRoboticsModule.ready();
+    uint8_t oldPins[7];
+    for (size_t i = 0; i < 7; ++i) oldPins[i] = craneRoboticsModule.pin(i);
+    for (size_t i = 0; i < 7; ++i) {
+      if ((wasReady ? oldPins[i] : 0) != from[i]) return false;
+    }
+    if (wasReady) {
+      bool identical = true;
+      for (size_t i = 0; i < 7; ++i) {
+        if (oldPins[i] != to[i]) { identical = false; break; }
+      }
+      if (identical) return true;
+    }
+    if (wasReady) craneRoboticsModule.stop(pinManager);
+    if (craneRoboticsModule.configurePins(to)) {
+      if (craneRoboticsModule.begin(pinManager)) return true;
+    }
+    // Never acknowledge a failed rewire: restore the verified mapping.
+    craneRoboticsModule.configurePins(oldPins);
+    if (wasReady) craneRoboticsModule.begin(pinManager);
     return false;
   }
 #endif

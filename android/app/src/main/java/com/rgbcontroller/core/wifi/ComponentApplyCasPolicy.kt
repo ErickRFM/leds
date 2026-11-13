@@ -9,7 +9,7 @@ import org.json.JSONObject
  */
 internal object ComponentApplyCasPolicy {
     fun expected(prior: JSONObject, count: Int): List<Int> {
-        require(count in 1..3)
+        require(count in 1..7)
         val pins = prior.optJSONArray("pins") ?: error("El firmware no reporta GPIO.")
         val original = (0 until pins.length()).map { pins.optInt(it, -1) }
         val active = prior.optBoolean("active")

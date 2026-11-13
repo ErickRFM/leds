@@ -100,8 +100,8 @@ object ComponentCatalog {
             type = ComponentType.CONTROLLER,
             interfaces = setOf(HardwareInterface.PWM, HardwareInterface.DIGITAL, HardwareInterface.GPIO),
             capabilities = setOf("robotics", "servo", "dual_axis", "digital_joystick", "bluetooth_control"),
-            requiredPins = setOf(18, 19, 34, 35, 36, 39, 17),
-            description = "Dos servomotores SG90 y joystick digital de cinco direcciones; requiere fuente externa de 5 V y pull-ups externos en las entradas.",
+            requiredPins = emptySet(),
+            description = "Dos servomotores SG90 y joystick digital de cinco direcciones; pines asignables en la app (7 señales) con fuente externa de 5 V y pull-ups externos en las entradas.",
             category = "robotics"
         ),
         HardwareComponentDescriptor(

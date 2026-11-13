@@ -180,18 +180,25 @@ class LocalLabClient(private val context: Context) {
             "soil_moisture" to "sensor.soil_moisture",
             "ldr_light" to "sensor.ldr_light",
             "ssd1306_oled" to "display.ssd1306",
-            "led_rgb" to "led.rgb"
+            "led_rgb" to "led.rgb",
+            "robotics_crane" to "robotics.crane.2axis"
         )
         val firmwareId = names[id] ?: error("Este componente no admite reasignación en caliente.")
         val count = when (id) {
             "led_rgb" -> 3
             "ssd1306_oled" -> 2
+            "robotics_crane" -> 7
             else -> 1
         }
         require(target.size == count && target.all { it in 0..39 })
         if (id == "led_rgb") {
             require(target.distinct().size == 3 && target.all(::allowedOutput)) {
                 "El RGB necesita tres GPIO PWM de salida diferentes."
+            }
+        }
+        if (id == "robotics_crane") {
+            require(target.distinct().size == 7) {
+                "La grúa necesita siete GPIO diferentes para sus siete señales."
             }
         }
         val before = componentStatus(key)
@@ -208,7 +215,7 @@ class LocalLabClient(private val context: Context) {
             "El firmware no incluye este driver. Actualiza el ESP32."
         )
         val expected = ComponentApplyCasPolicy.expected(prior, count)
-        val next = target + List(maxOf(2, count) - count) { 0 }
+        val next = target + List(maxOf(0, 2 - count)) { 0 }
         // One nonce per user transaction. The firmware caches successful
         // receipts to avoid applying duplicate POST requests twice.
         val requestId = UUID.randomUUID().toString().replace("-", "").take(16)
@@ -223,6 +230,12 @@ class LocalLabClient(private val context: Context) {
         if (count == 3) {
             arguments["from3"] = expected[2].toString()
             arguments["to3"] = next[2].toString()
+        }
+        // Signals beyond the second pair travel individually (from3..fromN,
+        // to3..toN) for RGB and the seven-signal robotics crane.
+        for (index in 3 until count) {
+            arguments["from${index + 1}"] = expected[index].toString()
+            arguments["to${index + 1}"] = next[index].toString()
         }
         val response = try {
             request("POST", "/v2/components/apply", key, arguments)

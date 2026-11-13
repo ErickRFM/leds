@@ -12,13 +12,21 @@ namespace esp32core {
 class ComponentApplyReplayGuard final {
  public:
   static constexpr size_t kCapacity = 8;
+  // Maximum signals any component may reassign per transaction. Legacy
+  // components use fewer signals and leave the trailing pairs at zero.
+  static constexpr size_t kComponentSignalCount = 7;
   enum class Verdict : uint8_t { New, IdenticalRetry, ConflictingReuse, Invalid };
 
   struct Request {
     const char* requestId;  // Exactly 16 hexadecimal ASCII characters
     const char* componentId;
+    // Field order is a public contract: host tests aggregate-initialize the
+    // legacy prefix (from1..to3) and rely on zero-filled trailing pairs.
     uint8_t from1, from2, to1, to2;
     uint8_t from3 = 0, to3 = 0;  // RGB third PWM signal; legacy requests default to zero.
+    // robotics_crane: 2 servo PWM + 5 joystick digital signals.
+    uint8_t from4 = 0, to4 = 0, from5 = 0, to5 = 0;
+    uint8_t from6 = 0, to6 = 0, from7 = 0, to7 = 0;
   };
 
   static bool validRequestId(const char* requestId) {
@@ -58,6 +66,14 @@ class ComponentApplyReplayGuard final {
     record.to2 = input.to2;
     record.from3 = input.from3;
     record.to3 = input.to3;
+    record.from4 = input.from4;
+    record.to4 = input.to4;
+    record.from5 = input.from5;
+    record.to5 = input.to5;
+    record.from6 = input.from6;
+    record.to6 = input.to6;
+    record.from7 = input.from7;
+    record.to7 = input.to7;
     next_ = (next_ + 1) % kCapacity;
     return true;
   }
@@ -70,7 +86,8 @@ class ComponentApplyReplayGuard final {
     return id != nullptr &&
        (equal(id, "dht11") || equal(id, "dht22") ||
         equal(id, "ldr_light") || equal(id, "soil_moisture") ||
-        equal(id, "ssd1306_oled") || equal(id, "led_rgb"));
+        equal(id, "ssd1306_oled") || equal(id, "led_rgb") ||
+        equal(id, "robotics_crane"));
   }
   static constexpr bool equal(const char* a, const char* b) {
     if (!a || !b) return false;
@@ -86,12 +103,18 @@ class ComponentApplyReplayGuard final {
     char componentId[20] = {};
     uint8_t from1 = 0, from2 = 0, to1 = 0, to2 = 0;
     uint8_t from3 = 0, to3 = 0;
+    uint8_t from4 = 0, to4 = 0, from5 = 0, to5 = 0;
+    uint8_t from6 = 0, to6 = 0, from7 = 0, to7 = 0;
 
     bool sameAs(const Request& request) const {
       return std::strcmp(componentId, request.componentId) == 0 &&
              from1 == request.from1 && from2 == request.from2 &&
              to1 == request.to1 && to2 == request.to2 &&
-             from3 == request.from3 && to3 == request.to3;
+             from3 == request.from3 && to3 == request.to3 &&
+             from4 == request.from4 && to4 == request.to4 &&
+             from5 == request.from5 && to5 == request.to5 &&
+             from6 == request.from6 && to6 == request.to6 &&
+             from7 == request.from7 && to7 == request.to7;
     }
   };
   Record records_[kCapacity] = {};

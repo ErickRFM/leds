@@ -183,7 +183,7 @@ fun ModuleWorkspaceScreen(
                      else ComponentCatalog.get(id)?.name ?: id,
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.weight(1f))
-                if (id !in setOf("compi_dfplayer", "compi_station", "robotics_crane")) {
+                if (id !in setOf("compi_dfplayer", "compi_station")) {
                     TextButton(
                         onClick = { editingId = if (id == ModuleWorkspaceGrouping.ENVIRONMENT) environmentSensor else id },
                         modifier = Modifier.testTag("module_edit_pins")
@@ -924,7 +924,7 @@ fun ModuleWorkspaceScreen(
         ModulePinWizard(
             componentId = id,
             canApply = currentlyVerified && current != null && (
-                (wifiAuthorized && id in setOf("dht11", "dht22", "soil_moisture", "ldr_light", "ssd1306_oled", "led_rgb")) ||
+                (wifiAuthorized && id in setOf("dht11", "dht22", "soil_moisture", "ldr_light", "ssd1306_oled", "led_rgb", "robotics_crane")) ||
                 (bleAuthorized && id in setOf("dht11", "ldr_light"))),
             applying = applying,
             applyMessage = applyMessage,

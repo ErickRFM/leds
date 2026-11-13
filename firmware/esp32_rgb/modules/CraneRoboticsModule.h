@@ -18,20 +18,14 @@ class CraneRoboticsModule final : public IModule {
   bool begin(PinManager& manager) override {
     if (ready_) return false;
     PinManager* acquired = &manager;
-    const uint8_t outputs[] = {crane::kServoBasePin, crane::kServoArmPin};
-    const uint8_t inputs[] = {
-        crane::kJoystickUpPin, crane::kJoystickDownPin,
-        crane::kJoystickLeftPin, crane::kJoystickRightPin,
-        crane::kJoystickMidPin
-    };
-    for (uint8_t pin : outputs) {
-      if (!acquired->acquire(pin, id(), PinFunction::PwmOutput)) {
+    for (size_t i = 0; i < 2; ++i) {
+      if (!acquired->acquire(pins_[i], id(), PinFunction::PwmOutput)) {
         releaseClaims(*acquired);
         return false;
       }
     }
-    for (uint8_t pin : inputs) {
-      if (!acquired->acquire(pin, id(), PinFunction::DigitalInput)) {
+    for (size_t i = 2; i < 7; ++i) {
+      if (!acquired->acquire(pins_[i], id(), PinFunction::DigitalInput)) {
         releaseClaims(*acquired);
         return false;
       }
@@ -39,25 +33,24 @@ class CraneRoboticsModule final : public IModule {
 
     // GPIO34/35/36/39 have no internal pull-ups. All five contacts require
     // external pull-ups to 3.3 V and the joystick COM pin connected to GND.
-    for (uint8_t pin : inputs) pinMode(pin, INPUT);
+    for (size_t i = 2; i < 7; ++i) pinMode(pins_[i], INPUT);
 
-    if (!ledcAttach(outputs[0], kPwmFrequencyHz, kPwmResolutionBits)) {
+    if (!ledcAttach(pins_[0], kPwmFrequencyHz, kPwmResolutionBits)) {
       releaseClaims(*acquired);
       return false;
     }
     baseAttached_ = true;
-    if (!ledcAttach(outputs[1], kPwmFrequencyHz, kPwmResolutionBits)) {
-      ledcDetach(outputs[0]);
+    if (!ledcAttach(pins_[1], kPwmFrequencyHz, kPwmResolutionBits)) {
+      ledcDetach(pins_[0]);
       baseAttached_ = false;
-      pinMode(outputs[0], INPUT);
+      pinMode(pins_[0], INPUT);
       releaseClaims(*acquired);
       return false;
     }
     armAttached_ = true;
-    pins_ = acquired;
     motion_.tick(millis());
-    writeAxis(outputs[0], motion_.base().snapshot().commandedDeg);
-    writeAxis(outputs[1], motion_.arm().snapshot().commandedDeg);
+    writeAxis(pins_[0], motion_.base().snapshot().commandedDeg);
+    writeAxis(pins_[1], motion_.arm().snapshot().commandedDeg);
     lastBaseWritten_ = motion_.base().snapshot().commandedDeg;
     lastArmWritten_ = motion_.arm().snapshot().commandedDeg;
     lastRepeatAt_ = millis();
@@ -73,11 +66,11 @@ class CraneRoboticsModule final : public IModule {
       localRearmRequired_ = true;
     }
     const crane::JoystickRaw raw{
-        digitalRead(crane::kJoystickUpPin) == LOW,
-        digitalRead(crane::kJoystickDownPin) == LOW,
-        digitalRead(crane::kJoystickLeftPin) == LOW,
-        digitalRead(crane::kJoystickRightPin) == LOW,
-        digitalRead(crane::kJoystickMidPin) == LOW
+        digitalRead(pins_[2]) == LOW,
+        digitalRead(pins_[3]) == LOW,
+        digitalRead(pins_[4]) == LOW,
+        digitalRead(pins_[5]) == LOW,
+        digitalRead(pins_[6]) == LOW
     };
     const uint8_t buttons = joystick_.sample(raw, nowMs);
     const bool middle = (buttons & crane::JoystickMiddle) != 0;
@@ -110,11 +103,11 @@ class CraneRoboticsModule final : public IModule {
     const float baseNow = motion_.base().snapshot().commandedDeg;
     const float armNow = motion_.arm().snapshot().commandedDeg;
     if (baseNow != lastBaseWritten_) {
-      writeAxis(crane::kServoBasePin, baseNow);
+      writeAxis(pins_[0], baseNow);
       lastBaseWritten_ = baseNow;
     }
     if (armNow != lastArmWritten_) {
-      writeAxis(crane::kServoArmPin, armNow);
+      writeAxis(pins_[1], armNow);
       lastArmWritten_ = armNow;
     }
   }
@@ -122,14 +115,40 @@ class CraneRoboticsModule final : public IModule {
   void stop(PinManager& manager) override {
     if (!ready_) return;
     motion_.stop();
-    if (baseAttached_) ledcDetach(crane::kServoBasePin);
-    if (armAttached_) ledcDetach(crane::kServoArmPin);
+    if (baseAttached_) ledcDetach(pins_[0]);
+    if (armAttached_) ledcDetach(pins_[1]);
     baseAttached_ = armAttached_ = false;
-    pinMode(crane::kServoBasePin, INPUT);
-    pinMode(crane::kServoArmPin, INPUT);
+    pinMode(pins_[0], INPUT);
+    pinMode(pins_[1], INPUT);
     releaseClaims(manager);
-    pins_ = nullptr;
     ready_ = false;
+  }
+
+  // Rewires all seven signals. Only legal while the module is stopped:
+  // a running PWM axis or live joystick must never jump pads mid-flight.
+  // `pins` holds [base, arm, up, down, left, right, mid]. Fails closed on
+  // duplicates, unknown pads, RGB-reserved pads, output pads on input-only
+  // silicon, or input pads that cannot be read.
+  bool configurePins(const uint8_t* pins) {
+    if (ready_ || pins == nullptr) return false;
+    for (size_t i = 0; i < 7; ++i) {
+      if (pins[i] >= PinManager::kPinCount) return false;
+      for (size_t j = i + 1; j < 7; ++j) {
+        if (pins[i] == pins[j]) return false;
+      }
+      if (PinManager::reservedForRgb(pins[i])) return false;
+      if (i < 2) {
+        if (!PinManager::outputCapable(pins[i])) return false;
+      } else if (!PinManager::canUse(pins[i], PinFunction::DigitalInput)) {
+        return false;
+      }
+    }
+    for (size_t i = 0; i < 7; ++i) pins_[i] = pins[i];
+    return true;
+  }
+
+  uint8_t pin(size_t index) const {
+    return index < 7 ? pins_[index] : 0;
   }
 
   bool setRemoteMode(crane::ControlMode mode, uint32_t nowMs) {
@@ -210,16 +229,16 @@ class CraneRoboticsModule final : public IModule {
   }
 
   void releaseClaims(PinManager& manager) {
-    manager.release(crane::kServoBasePin, id());
-    manager.release(crane::kServoArmPin, id());
-    manager.release(crane::kJoystickUpPin, id());
-    manager.release(crane::kJoystickDownPin, id());
-    manager.release(crane::kJoystickLeftPin, id());
-    manager.release(crane::kJoystickRightPin, id());
-    manager.release(crane::kJoystickMidPin, id());
+    for (size_t i = 0; i < 7; ++i) manager.release(pins_[i], id());
   }
 
-  PinManager* pins_ = nullptr;
+  // Currently configured signals; the audited compile-time map until an
+  // authorized runtime rewire replaces them. Valid even while stopped.
+  uint8_t pins_[7] = {
+      crane::kServoBasePin, crane::kServoArmPin,
+      crane::kJoystickUpPin, crane::kJoystickDownPin,
+      crane::kJoystickLeftPin, crane::kJoystickRightPin,
+      crane::kJoystickMidPin};
   crane::CraneMotionController motion_{};
   crane::DigitalJoystickDebouncer joystick_{};
   float lastBaseWritten_ = -1.0f;

@@ -47,8 +47,17 @@ class ComponentApplyCasPolicyTest {
         }
         assertEquals(listOf(0, 0, 0),
             ComponentApplyCasPolicy.expected(status(false, emptyList()), 3))
-        assertThrows(IllegalArgumentException::class.java) {
+        // robotics_crane wires seven signals in one transaction.
+        assertEquals(listOf(0, 0, 0, 0, 0, 0, 0),
+            ComponentApplyCasPolicy.expected(status(false, emptyList()), 7))
+        assertEquals(listOf(18, 19, 34, 35, 36, 39, 17),
+            ComponentApplyCasPolicy.expected(
+                status(true, listOf(18, 19, 34, 35, 36, 39, 17)), 7))
+        assertThrows(IllegalStateException::class.java) {
             ComponentApplyCasPolicy.expected(status(true, listOf(21)), 4)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            ComponentApplyCasPolicy.expected(status(true, listOf(21)), 8)
         }
     }
 }

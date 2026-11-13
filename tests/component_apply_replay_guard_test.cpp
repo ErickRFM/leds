@@ -54,6 +54,22 @@ int main() {
   assert(guard.inspect({"0011223344556699", "ssd1306_oled", 0, 0, 21, 22}) == Verdict::New);
   assert(guard.inspect({"AABBCCDDEEFF1122", "soil_moisture", 0, 0, 34, 0}) == Verdict::New);
 
+  // robotics_crane commits all seven signals; changing only the fifth
+  // joystick contact on the same request ID is a conflicting replay.
+  Guard::Request crane{"00112233445566aa", "robotics_crane", 18, 19, 16, 17,
+                       34, 16, 35, 17, 36, 32, 39, 33, 17, 18};
+  assert(guard.inspect(crane) == Verdict::New);
+  assert(guard.commit(crane));
+  assert(guard.inspect(crane) == Verdict::IdenticalRetry);
+  Guard::Request craneRightMoved{"00112233445566aa", "robotics_crane", 18, 19, 16, 17,
+                                 34, 16, 35, 17, 36, 32, 39, 33, 17, 19};
+  assert(guard.inspect(craneRightMoved) == Verdict::ConflictingReuse);
+  // First-time activation of a stopped crane must carry zero predecessors.
+  Guard::Request craneFirstWire{"00112233445566bb", "robotics_crane", 0, 0, 18, 19,
+                                0, 16, 0, 17, 0, 32, 0, 33, 0, 18};
+  assert(guard.inspect(craneFirstWire) == Verdict::New);
+  assert(guard.commit(craneFirstWire));
+
   // Bounded ring behavior: every successful change consumes at most one entry.
   for (int i = 0; i < 8; ++i) {
     char token[17] = {};

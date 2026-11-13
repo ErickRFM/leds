@@ -6,11 +6,12 @@
 #include "../firmware/esp32_rgb/core/BleSensorPinControl.h"
 using namespace esp32core;
 struct Physical {uint8_t pin=16;int writes=0;};
-static bool apply(const char* component,uint8_t from,uint8_t from2,uint8_t to,uint8_t to2,uint8_t from3,uint8_t to3,void* context) {
+static bool apply(const char* component,const uint8_t* from,const uint8_t* to,void* context) {
   auto& physical=*static_cast<Physical*>(context);
-  assert(!std::strcmp(component,"dht11") && from2==0 && to2==0 && from3==0 && to3==0);
-  if(from!=physical.pin || to==0) return false;
-  physical.pin=to;++physical.writes;return true;
+  assert(!std::strcmp(component,"dht11") && from[1]==0 && to[1]==0 &&
+         from[2]==0 && to[2]==0 && from[6]==0 && to[6]==0);
+  if(from[0]!=physical.pin || to[0]==0) return false;
+  physical.pin=to[0];++physical.writes;return true;
 }
 int main() {
   BleSensorPinRequest request{};
