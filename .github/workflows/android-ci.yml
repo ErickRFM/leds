@@ -236,6 +236,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
+      - name: Color literal ratchet (palette files keep the only hard-coded tones)
+        run: python3 scripts/check-color-literals.py
       - name: Unit tests
         working-directory: android
         run: gradle testDebugUnitTest --stacktrace

@@ -78,6 +78,11 @@ object PinAssignmentPolicy {
 
     fun profile(id: String): ModuleWiringProfile? = profiles.firstOrNull { it.componentId == id }
 
+    /** Every GPIO any wiring profile may offer: the board's honest denominator. */
+    val offerablePins: Set<Int> = profiles
+        .flatMap { profile -> profile.signals.flatMap { it.allowedPins } }
+        .toSet()
+
     /**
      * Validate a LOCAL draft against known local reservations and ACTIVE,
      * firmware-reported leases. Never implies the firmware accepted the draft.

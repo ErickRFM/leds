@@ -52,6 +52,48 @@ class TelemetryHistoryTest {
         assertEquals(900L, result[0].recordedAtMs)
     }
 
+    /** A day of readings must survive; anything older than the window must not. */
+    @Test fun fullRetentionWindowKeepsYesterdayAndDropsTheDayBefore() {
+        val limits = TelemetryHistoryLimits()
+        val now = 10_000_000_000_000L
+        val yesterday = now - 20 * 60 * 60 * 1000L
+        val twoDaysAgo = now - 25 * 60 * 60 * 1000L
+        val result = TelemetryHistory.append(
+            existing = listOf(sample(recordedAtMs = twoDaysAgo)),
+            incoming = listOf(sample(recordedAtMs = yesterday), sample(recordedAtMs = now)),
+            limits = limits,
+            nowMs = now
+        )
+        assertEquals(listOf(yesterday, now), result.map { it.recordedAtMs })
+    }
+
+    /**
+     * A day of history is only honest if it still fits the single DataStore
+     * string it is written to. The ceiling is the measured worst case
+     * (420 027 bytes for 2 000 samples) plus headroom, not a guessed number:
+     * size is capped by maxTotalSamples, so widening retention cannot widen the
+     * document that every save rewrites.
+     */
+    @Test fun worstCaseHistoryFitsOneDataStoreString() {
+        val limits = TelemetryHistoryLimits()
+        val now = 10_000_000_000_000L
+        val worst = (0 until limits.maxTotalSamples).map { index ->
+            sample(
+                deviceId = "device-a",
+                componentId = "dht22",
+                type = "temperature",
+                value = 1234.5f,
+                recordedAtMs = now - index
+            )
+        }
+        val encoded = TelemetryHistoryCodec.encode(worst)
+        println("COMPI_SIZE bytes=${encoded.length} samples=${worst.size}")
+        assertTrue(
+            "history document grew to ${encoded.length} bytes",
+            encoded.length < 524_288
+        )
+    }
+
     @Test fun invalidMeasurementNeverBecomesPlottable() {
         val measurement = ComponentMeasurement("temperature", "invalid", false, Float.NaN, "C", 10L)
         val sample = TelemetryHistory.samplesFromMeasurements(

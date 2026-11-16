@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
@@ -36,11 +37,21 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import com.rgbcontroller.core.ui.CompiTokens
 
 /** Reuses the same firmware environmental state machine on BLE and Wi-Fi.
  * The UI NEVER treats a GATT write callback as environmental-mode acceptance.
@@ -98,20 +109,20 @@ fun EnvironmentalRgbControlCard(
                         val status = session.serialized { client.environmentalRgbStatus(key) }
                         if (authorized && session.revision == version && !busy) {
                             wifiEnabled = status.optBoolean("enabled")
-                            wifiState = status.optString("state", if (wifiEnabled == true) "ENABLED" else "DISABLED")
+                            wifiState = status.optString("state", "UNKNOWN")
                             wifiReason = status.optString("reason", "UNKNOWN")
                             wifiBand = status.optString("band", "Comfort")
                             wifiRed = status.optInt("red", 0)
                             wifiGreen = status.optInt("green", 0)
                             wifiBlue = status.optInt("blue", 0)
-                            wifiBrightness = status.optInt("brightness", 80)
+                            wifiBrightness = status.optInt("brightness", 0)
                             message = when (wifiState) {
                                 "RUNNING" -> "ESP32 confirmó RGB ambiental activo ($wifiBand: R:$wifiRed, G:$wifiGreen, B:$wifiBlue, brillo:$wifiBrightness)."
                                 "SUSPENDED" -> "Modo ambiental en espera: temperatura no disponible o desactualizada ($wifiReason)."
                                 "CONFLICT" -> "Modo ambiental suspendido por conflicto ($wifiReason)."
                                 "ERROR" -> "Error en módulo RGB del ESP32 ($wifiReason)."
                                 "DISABLED" -> "ESP32 confirmó el modo ambiental desactivado."
-                                "ENABLED" -> "Modo habilitado; falta confirmar aplicación del color."
+                                "UNKNOWN" -> "El ESP32 informó un estado que esta app no reconoce ($wifiReason)."
                                 else -> "Estado ambiental aún sin confirmar ($wifiReason)."
                             }
                         }
@@ -137,19 +148,7 @@ fun EnvironmentalRgbControlCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("RGB ambiental", style = MaterialTheme.typography.titleMedium)
-                val badgeColor = when (currentState) {
-                    "RUNNING" -> Color(0xFF36BA74)
-                    "SUSPENDED" -> Color(0xFFF6B83F)
-                    "CONFLICT" -> Color(0xFFFF7D14)
-                    "ERROR" -> Color(0xFFE62323)
-                    else -> Color.Gray
-                }
-                AssistChip(
-                    onClick = {},
-                    label = { Text(currentState, style = MaterialTheme.typography.labelSmall) },
-                    colors = AssistChipDefaults.assistChipColors(containerColor = badgeColor.copy(alpha = 0.2f), labelColor = badgeColor),
-                    modifier = Modifier.testTag("environmental_rgb_status_chip")
-                )
+                EnvironmentalStateBadge(currentState, Modifier.testTag("environmental_rgb_status_chip"))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 for (color in listOf(
@@ -183,9 +182,9 @@ fun EnvironmentalRgbControlCard(
             Text(
                 when (currentBand.lowercase()) {
                     "cold", "frio", "frío" -> "Frío · menos de 20 °C"
-                    "comfort", "confort" -> "Confort · 20–25 °C"
-                    "warm", "calido", "cálido" -> "Cálido · 26–29 °C"
-                    "hot", "calor" -> "Calor · 30–34 °C"
+                    "comfort", "confort" -> "Confort · 20 a 26 °C"
+                    "warm", "calido", "cálido" -> "Cálido · 26 a 30 °C"
+                    "hot", "calor" -> "Calor · 30 a 35 °C"
                     "extreme", "extremo" -> "Extremo · 35 °C o más"
                     else -> currentBand
                 },
@@ -193,10 +192,18 @@ fun EnvironmentalRgbControlCard(
             )
             if (currentState != "RUNNING") {
                 Text(
-                    if (!authorized) "Dispositivo desconectado"
-                    else if (currentState == "SUSPENDED") "Esperando temperatura válida"
-                    else if (currentState == "DISABLED") "Modo ambiental apagado"
-                    else "Estado: $currentState",
+                    when {
+                        !authorized -> "Dispositivo desconectado"
+                        currentState == "SUSPENDED" -> "Esperando una lectura de temperatura vigente"
+                        currentState == "DISABLED" -> "Modo ambiental apagado"
+                        currentState == "CONFLICT" ->
+                            "Otro control (manual, script, automatización o experimento) tiene el RGB; libéralo para activar el modo ambiental."
+                        currentState == "ERROR" ->
+                            "El ESP32 reportó un error en el módulo RGB (${currentReason}); revisa el cableado antes de reintentar."
+                        currentState == "UNKNOWN" ->
+                            "El firmware envió un estado que esta app no reconoce (${currentReason})."
+                        else -> "Esperando la confirmación del ESP32."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -245,3 +252,66 @@ fun EnvironmentalRgbControlCard(
         }
     }
 }
+
+/**
+ * Read-only firmware state: an interactive chip would let TalkBack announce a
+ * control that does nothing. The Spanish label and icon carry the meaning, so
+ * the colour is a reinforcement rather than the only signal, and every colour
+ * comes from the active scheme to stay legible in light and deep-black themes.
+ * Internal because the firmware only reports these states with a board
+ * attached, so an instrumented test composes each one directly instead of the
+ * app inventing telemetry.
+ */
+@Composable
+internal fun EnvironmentalStateBadge(state: String, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    val style = when (state) {
+        "RUNNING" -> BadgeStyle(scheme.tertiaryContainer, scheme.onTertiaryContainer,
+            Icons.Default.CheckCircle, "Activo")
+        "SUSPENDED" -> BadgeStyle(scheme.secondaryContainer, scheme.onSecondaryContainer,
+            Icons.Default.Sync, "En espera")
+        "CONFLICT" -> BadgeStyle(scheme.secondaryContainer, scheme.onSecondaryContainer,
+            Icons.Default.Shield, "En conflicto")
+        "ERROR" -> BadgeStyle(scheme.errorContainer, scheme.onErrorContainer,
+            Icons.Default.ErrorOutline, "Error")
+        "OFFLINE" -> BadgeStyle(scheme.errorContainer, scheme.onErrorContainer,
+            Icons.Default.CloudOff, "Sin conexión")
+        "DISABLED" -> BadgeStyle(scheme.surfaceVariant, scheme.onSurfaceVariant,
+            Icons.Default.Info, "Desactivado")
+        else -> BadgeStyle(scheme.surfaceVariant, scheme.onSurfaceVariant,
+            Icons.Default.Info, "Sin confirmar")
+    }
+    Surface(
+        color = style.container,
+        shape = CompiTokens.Shapes.Small,
+        modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite }
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                horizontal = CompiTokens.Spacing.xs, vertical = CompiTokens.Spacing.xxs
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(CompiTokens.Spacing.xxs)
+        ) {
+            Icon(
+                imageVector = style.icon,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = style.content
+            )
+            Text(
+                text = style.label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = style.content
+            )
+        }
+    }
+}
+
+private data class BadgeStyle(
+    val container: Color,
+    val content: Color,
+    val icon: ImageVector,
+    val label: String
+)

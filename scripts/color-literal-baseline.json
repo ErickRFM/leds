@@ -1,0 +1,14 @@
+{
+  "core/ui/CompiMascot.kt": 23,
+  "core/ui/CompiV9Surface.kt": 8,
+  "feature/control/ControlScreen.kt": 1,
+  "feature/home/DashboardScreen.kt": 10,
+  "feature/home/HomeActionCards.kt": 1,
+  "feature/led/EnvironmentalRgbControlCard.kt": 5,
+  "feature/led/LedModuleScreen.kt": 3,
+  "feature/modules/ModuleReadings.kt": 5,
+  "feature/modules/ModuleStatusCards.kt": 8,
+  "feature/modules/ModuleWiringDiagram.kt": 18,
+  "feature/modules/OledInteractiveModule.kt": 9,
+  "feature/modules/RgbLightingPanel.kt": 6
+}

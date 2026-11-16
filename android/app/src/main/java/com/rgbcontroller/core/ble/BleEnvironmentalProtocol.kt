@@ -6,8 +6,9 @@ object BleEnvironmentalProtocol {
         GET("ENV,GET"), START("ENV,START"), STOP("ENV,STOP")
     }
 
+    /** UNKNOWN keeps an unrecognized firmware state from looking like success. */
     enum class StateEnum {
-        ENABLED, RUNNING, SUSPENDED, CONFLICT, ERROR, DISABLED
+        RUNNING, SUSPENDED, CONFLICT, ERROR, DISABLED, UNKNOWN
     }
 
     data class EnvironmentalRgbSnapshot(
@@ -29,31 +30,26 @@ object BleEnvironmentalProtocol {
     }
 
     fun parseReply(frame: String): Reply? {
-        if (frame == "ENV,ON") {
-            return Reply.State(EnvironmentalRgbSnapshot(enabled = true, state = StateEnum.ENABLED, reason = "AWAITING_STATUS"))
-        }
-        if (frame == "ENV,OFF") {
-            return Reply.State(EnvironmentalRgbSnapshot(enabled = false, state = StateEnum.DISABLED, reason = "DISABLED"))
-        }
         if (frame == "ENV,BUSY") {
             return Reply.Busy
         }
         if (frame.startsWith("ENV,STATE,")) {
             val parts = frame.split(",")
-            if (parts.size >= 11) {
-                val enabled = parts[2] == "ON" || parts[2] == "ENABLED" || parts[2] == "1"
-                val stateStr = parts[3]
-                val state = runCatching { StateEnum.valueOf(stateStr) }.getOrDefault(
-                    if (enabled) StateEnum.ENABLED else StateEnum.DISABLED
-                )
+            // encodeBleEnvironmentalStatus always emits twelve fields. A shorter
+            // frame is a truncated notification, so guessing the missing fields
+            // would report a colour or a band the ESP32 never applied.
+            if (parts.size >= 12) {
+                val enabled = parts[2] == "ON"
+                val state = StateEnum.entries.firstOrNull { it.name == parts[3] }
+                    ?: StateEnum.UNKNOWN
                 val reason = parts[4]
                 val band = parts[5]
                 val red = parts[6].toIntOrNull() ?: 0
                 val green = parts[7].toIntOrNull() ?: 0
                 val blue = parts[8].toIntOrNull() ?: 0
-                val brightness = parts[9].toIntOrNull() ?: 80
-                val humidityUsed = parts[10] == "1" || parts[10].lowercase() == "true"
-                val lightUsed = parts.getOrNull(11)?.let { it == "1" || it.lowercase() == "true" } ?: false
+                val brightness = parts[9].toIntOrNull() ?: 0
+                val humidityUsed = parts[10] == "1"
+                val lightUsed = parts[11] == "1"
                 return Reply.State(
                     EnvironmentalRgbSnapshot(
                         enabled = enabled,

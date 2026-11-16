@@ -52,6 +52,15 @@ data class TelemetryChartGeometry(
  */
 object TelemetryChart {
     const val DEFAULT_WINDOW_MS = 30 * 60 * 1000L
+
+    /**
+     * Every range a chart may offer. Each one is inside the history retention
+     * window, so a chip never promises samples that retention already dropped.
+     */
+    val SUPPORTED_WINDOWS_MS = listOf(
+        5 * 60_000L, 15 * 60_000L, DEFAULT_WINDOW_MS,
+        6 * 60 * 60_000L, 24 * 60 * 60_000L
+    )
     const val DEFAULT_STALE_AFTER_MS = 5 * 60 * 1000L
 
     fun classify(sample: TelemetrySample, nowMs: Long, staleAfterMs: Long): SampleQuality = when {

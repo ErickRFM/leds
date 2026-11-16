@@ -156,12 +156,19 @@ fun ConnectionCenterScreen(
             )
         }
 
+        CapabilityMatrixSection(debugBuild = debug)
+
         when (tab) {
             ConnectTab.BLUETOOTH -> Column(Modifier.weight(1f)) {
                 Text("1 · Busca y selecciona tu ESP32  ·  2 · Vincula y autoriza el propietario",
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+                BleLinkHealthHeader(
+                    bleManager,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                Spacer(Modifier.height(8.dp))
                 Box(Modifier.weight(1f)) {
                     DevicesScreen(bleManager, preferencesRepository, onInspectSecurity = onHardware)
                 }

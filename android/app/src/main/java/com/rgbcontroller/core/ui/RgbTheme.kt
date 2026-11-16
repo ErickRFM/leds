@@ -53,6 +53,13 @@ private val CompiDeepBlackPalette = darkColorScheme(
     primaryContainer = Color(0xFF1E1538),
     onPrimaryContainer = Color(0xFFF2ECFF),
     secondary = CompiTokens.Colors.SecondaryAqua,
+    onSecondary = Color(0xFF042825),
+    secondaryContainer = CompiTokens.Colors.SecondaryAquaContainer,
+    onSecondaryContainer = Color(0xFFC7F9F2),
+    tertiary = CompiTokens.Colors.ActiveGreen,
+    onTertiary = Color(0xFF052B19),
+    tertiaryContainer = CompiTokens.Colors.ActiveGreenContainer,
+    onTertiaryContainer = Color(0xFFAEFAD8),
     background = Color(0xFF000000),
     onBackground = Color(0xFFFFFFFF),
     surface = Color(0xFF0D0D11),
@@ -64,7 +71,10 @@ private val CompiDeepBlackPalette = darkColorScheme(
     surfaceContainerLow = Color(0xFF000000),
     surfaceContainer = Color(0xFF0D0D11),
     surfaceContainerHigh = Color(0xFF18181B),
-    error = CompiTokens.Colors.ErrorRed
+    error = CompiTokens.Colors.ErrorRed,
+    onError = Color(0xFF380809),
+    errorContainer = CompiTokens.Colors.ErrorRedContainer,
+    onErrorContainer = Color(0xFFFFD1D1)
 )
 
 // Clean Light Palette
@@ -74,6 +84,13 @@ private val CompiLightPalette = lightColorScheme(
     primaryContainer = Color(0xFFEDE7FF),
     onPrimaryContainer = Color(0xFF230066),
     secondary = Color(0xFF006A60),
+    onSecondary = Color(0xFF003731),
+    secondaryContainer = Color(0xFFB6F2E7),
+    onSecondaryContainer = Color(0xFF00201C),
+    tertiary = Color(0xFF006D3B),
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFA7F7B0),
+    onTertiaryContainer = Color(0xFF00210C),
     background = CompiTokens.Colors.LightBackground,
     onBackground = Color(0xFF1E293B),
     surface = Color.White,
@@ -83,8 +100,12 @@ private val CompiLightPalette = lightColorScheme(
     outline = Color(0xFFCBD5E1),
     outlineVariant = Color(0xFFE2E8F0),
     surfaceContainerLow = Color(0xFFFFFFFF),
-    surfaceContainer = Color(0xFFF8FAFCE),
-    surfaceContainerHigh = Color(0xFFF1F5F9)
+    surfaceContainer = Color(0xFFF8FAFC),
+    surfaceContainerHigh = Color(0xFFF1F5F9),
+    error = Color(0xFFB3261E),
+    onError = Color.White,
+    errorContainer = Color(0xFFF9DEDC),
+    onErrorContainer = Color(0xFF410203)
 )
 
 /**

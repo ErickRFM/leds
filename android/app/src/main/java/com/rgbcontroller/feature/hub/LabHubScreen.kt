@@ -38,6 +38,7 @@ import com.rgbcontroller.core.ui.CompiV9Segment
 import com.rgbcontroller.core.ui.CompiInlineMessage
 import com.rgbcontroller.core.wifi.LocalLabClient
 import com.rgbcontroller.core.wifi.CompiLabSession
+import com.rgbcontroller.core.wifi.LabOperationPhase
 import com.rgbcontroller.core.ble.BleManager
 import com.rgbcontroller.core.ble.BleConnectionState
 import kotlinx.coroutines.launch
@@ -225,7 +226,15 @@ fun LabHubScreen(labSession: CompiLabSession, bleManager: BleManager? = null) {
         if (busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         if (labSession.operationStatus.name.isNotBlank()) {
             val progress = labSession.operationStatus
-            Text("${progress.name}: ${progress.phase.name.lowercase()}" +
+            val phase = when (progress.phase) {
+                LabOperationPhase.IDLE -> "en espera"
+                LabOperationPhase.QUEUED -> "en cola"
+                LabOperationPhase.RUNNING -> "en curso"
+                LabOperationPhase.CONFIRMED -> "confirmada por el ESP32"
+                LabOperationPhase.FAILED -> "fallida"
+                LabOperationPhase.CANCELLED -> "cancelada"
+            }
+            Text("${progress.name} · $phase" +
                 (if (progress.details.isBlank()) "" else " · ${progress.details}"),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)

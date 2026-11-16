@@ -57,6 +57,7 @@ class BleManager(private val context: Context) {
         val GPIO_STATUS_CHAR_UUID: UUID = UUID.fromString("4b9d0005-7a5e-4d4c-ae88-c8c70d3ab211")
         private val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
         const val WRITE_TIMEOUT_MS = 5000L
+        private const val RSSI_POLL_MS = 2500L
     }
 
     private val adapter: BluetoothAdapter? =
@@ -192,6 +193,23 @@ class BleManager(private val context: Context) {
     }
     private var scanning = false
     private var mtuReady = false
+    private val _linkHealth = MutableStateFlow(BleLinkHealth())
+    /** Radio metrics Android reports for the live GATT link; never a permission. */
+    val linkHealth: StateFlow<BleLinkHealth> = _linkHealth.asStateFlow()
+    private val rssiPoll = object : Runnable {
+        override fun run() {
+            val link = gatt ?: return
+            if (_connectionState.value != BleConnectionState.Ready) return
+            // A rejected read is recorded as a gap; the previous value stays visible
+            // with its age so the header never presents a stale number as current.
+            if (!link.readRemoteRssi()) {
+                _linkHealth.value = _linkHealth.value.copy(
+                    staleNotice = "Android no pudo consultar la señal del enlace."
+                )
+            }
+            handler.postDelayed(this, RSSI_POLL_MS)
+        }
+    }
     private val pending = ArrayDeque<String>()
     private var writeInFlight = false
     private val writeTimeout = Runnable {
@@ -428,9 +446,26 @@ class BleManager(private val context: Context) {
                 lostLink("No se pudo negociar MTU BLE suficiente (64 bytes)")
             } else {
                 mtuReady = true
+                _linkHealth.value = _linkHealth.value.copy(connected = true, mtu = mtu)
                 if (!remote.discoverServices()) {
                     lostLink("No se pudieron descubrir servicios")
                 }
+            }
+        }
+
+        override fun onReadRemoteRssi(remote: BluetoothGatt, rssi: Int, status: Int) {
+            if (remote !== gatt) return
+            if (status == BluetoothGatt.GATT_SUCCESS && rssi in -127..20) {
+                _linkHealth.value = _linkHealth.value.copy(
+                    connected = true,
+                    rssiDb = rssi,
+                    measuredAtMs = android.os.SystemClock.elapsedRealtime(),
+                    staleNotice = null
+                )
+            } else {
+                _linkHealth.value = _linkHealth.value.copy(
+                    staleNotice = "Android devolvió una lectura de señal no válida."
+                )
             }
         }
 
@@ -556,6 +591,8 @@ class BleManager(private val context: Context) {
         _connectionState.value = BleConnectionState.Ready
         handler.removeCallbacks(gpioPoll)
         handler.postDelayed(gpioPoll, 600)
+        handler.removeCallbacks(rssiPoll)
+        handler.postDelayed(rssiPoll, 900)
         startBondWatch()
         drainQueue()
     }
@@ -861,8 +898,8 @@ class BleManager(private val context: Context) {
                                 "ESP32 en conflicto ambiental (${snap.reason})."
                             BleEnvironmentalProtocol.StateEnum.ERROR ->
                                 "Error en módulo RGB del ESP32 (${snap.reason})."
-                            BleEnvironmentalProtocol.StateEnum.ENABLED ->
-                                "ESP32 confirmó modo ambiental habilitado."
+                            BleEnvironmentalProtocol.StateEnum.UNKNOWN ->
+                                "El ESP32 informó un estado ambiental que esta app no reconoce (${snap.reason})."
                             BleEnvironmentalProtocol.StateEnum.DISABLED ->
                                 "ESP32 confirmó modo ambiental detenido."
                         }
@@ -1262,6 +1299,10 @@ class BleManager(private val context: Context) {
         _environmentalRgbMessage.value = "Sin sesión BLE autenticada."
         _craneReply.value = null
         mtuReady = false
+        handler.removeCallbacks(rssiPoll)
+        // A closed link has no signal: the header must show nothing rather than the
+        // last number it happened to read.
+        _linkHealth.value = BleLinkHealth()
         _connectedAddress.value = null
         // Closing the link revokes authorization; the firmware does the same.
         _securityState.value = BleSecurityState.Disconnected

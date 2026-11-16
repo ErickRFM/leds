@@ -49,3 +49,23 @@ El ESP32 ejecuta efectos autónomamente, aunque Android salga de primer plano. N
 `PINS,18:F,19:H,21:F,22:F,23:F,25:R,26:R,27:R` en texto ASCII de menos de 96 bytes. Ocho pines con orden fijo; estados: F=libre en firmware, H/L=salida manual HIGH/LOW, E=experimento, R=RGB reservado, X=otro módulo. El firmware calcula el valor en su loop, evitando leer PinManager desde tareas BLE; Android solo realiza una lectura a la vez y da prioridad a escrituras RGB. No hay credenciales ni identificadores privados.
 
 Un estado **libre** no comprueba que el pin esté correctamente cableado. Sin característica V9, el RGB BLE anterior debe seguir funcionando. **Quedan expresamente prohibidas** escrituras GATT GPIO/ADC/Wi-Fi/OTA por BLE V1 no autenticado; exigir enrolamiento criptográfico de propietario, revocación y anti-replay antes de agregar control privilegiado.
+
+## RGB ambiental (V29 y posterior)
+
+Comandos admitidos en la característica de escritura, solo con sesión de propietario autorizada:
+`ENV,GET` · `ENV,START` · `ENV,STOP`.
+
+Respuestas en la misma característica STATE, en texto ASCII:
+
+- `ENV,STATE,<ON|OFF>,<ESTADO>,<MOTIVO>,<BANDA>,<R>,<G>,<B>,<BRILLO>,<HUMEDAD>,<LUZ>` — doce campos separados por coma, en este orden fijo (`BleEnvironmentalCommand.h::encodeBleEnvironmentalStatus`).
+- `ENV,BUSY` — otro motor (script, automatización, experimento o control manual) tiene el RGB, y `ENV,START` fue rechazado.
+
+`<ESTADO>` usa los nombres de `EnvironmentalRgbPolicy.h`: `DISABLED`, `RUNNING`, `SUSPENDED`, `CONFLICT`, `ERROR`. **No existe `ENABLED`**: un módulo habilitado que todavía no aplicó un color se reporta como `SUSPENDED` con su motivo. Android representa como `UNKNOWN` un estado que no reconoce y nunca lo traduce a éxito. Los fotogramas `ENV,ON` y `ENV,OFF` documentados en la auditoría V30 dejaron de emitirse en V31 y el cliente dejó de aceptarlos porque inventaban ese estado.
+
+`<MOTIVO>` observado: `OK`, `DISABLED`, `UNKNOWN`, `COMMAND_REJECTED`, `MANUAL_OVERRIDE`, `SCRIPT_ACTIVE`, `AUTOMATION_ACTIVE`, `EXPERIMENT_ACTIVE`, `MODULE_NOT_READY`, `STALE_TEMPERATURE`. Ninguno contiene comas, porque la coma es el separador del fotograma.
+
+`<BANDA>` es `Cold`, `Comfort`, `Warm`, `Hot` o `Extreme`, con las fronteras de la configuración por defecto: 20 · 26 · 30 · 35 °C y 0,5 °C de histéresis. La leyenda de la app debe citar exactamente esos valores; `scripts/check-contracts.py` la verifica contra `EnvironmentalRgbPolicy.h`.
+
+Equivalencia Wi-Fi: `GET /v2/environment/rgb/status` devuelve los mismos campos en JSON (`enabled`, `state`, `reason`, `band`, `red`, `green`, `blue`, `brightness`, `humidityUsed`, `lightUsed`) y `POST /v2/environment/rgb/start` / `POST /v2/environment/rgb/stop` ejecutan los cambios.
+
+Una respuesta `ENV,STATE` es una aceptación de software del firmware, no una lectura eléctrica del PWM: por sí sola no demuestra que el LED físico esté en ese color.

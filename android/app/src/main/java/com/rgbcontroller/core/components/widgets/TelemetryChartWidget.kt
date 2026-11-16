@@ -1,6 +1,8 @@
 package com.rgbcontroller.core.components.widgets
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -8,8 +10,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,6 +27,7 @@ import java.util.Locale
 import androidx.compose.ui.unit.dp
 import com.rgbcontroller.core.components.telemetry.SampleQuality
 import com.rgbcontroller.core.components.telemetry.TelemetryChartGeometry
+import com.rgbcontroller.core.ui.CompiTokens
 
 /**
  * Renders a [TelemetryChartGeometry]. A gap is never bridged with a straight
@@ -41,8 +45,15 @@ fun TelemetryChartCard(
     val invalidColor = MaterialTheme.colorScheme.error
     val staleColor = MaterialTheme.colorScheme.tertiary
 
-    Card(modifier = modifier.fillMaxWidth()) {
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = CompiTokens.Shapes.Large,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = CompiTokens.Elevations.flat)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(CompiTokens.Spacing.m),
+            verticalArrangement = Arrangement.spacedBy(CompiTokens.Spacing.xxs)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text(
                 when {
@@ -50,15 +61,19 @@ fun TelemetryChartCard(
                     live -> "● En vivo  ·  ${geometry.validCount} muestras"
                     else -> "Historial  ·  ${geometry.validCount} muestras"
                 },
-                style = MaterialTheme.typography.labelMedium,
+                style = CompiTokens.Typography.MetricCaption,
                 color = if (live && geometry.hasData) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant
             )
             if (geometry.hasData) {
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                    modifier = Modifier.padding(vertical = CompiTokens.Spacing.xxs)
+                )
                 Text(
-                    "↓ ${formatChartValue(geometry.minValue)} ${geometry.unit}    " +
-                    "↑ ${formatChartValue(geometry.maxValue)} ${geometry.unit}",
-                    style = MaterialTheme.typography.labelSmall,
+                    "mín ${formatChartValue(geometry.minValue)} ${geometry.unit}    " +
+                    "máx ${formatChartValue(geometry.maxValue)} ${geometry.unit}",
+                    style = CompiTokens.Typography.MetricCaption,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -128,14 +143,6 @@ fun TelemetryChartCard(
             }
         }
     }
-}
-
-private fun rangeLabel(geometry: TelemetryChartGeometry): String {
-    if (!geometry.hasData) return "sin rango"
-    val min = "%.2f".format(geometry.minValue)
-    val max = "%.2f".format(geometry.maxValue)
-    val unit = geometry.unit.ifBlank { "" }
-    return "$min..$max $unit".trim()
 }
 
 private fun formatChartValue(value: Float): String =

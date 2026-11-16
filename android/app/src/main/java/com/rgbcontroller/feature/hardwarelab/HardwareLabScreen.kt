@@ -41,6 +41,7 @@ import com.rgbcontroller.core.components.editors.LabConfigValidation
 import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
 import com.rgbcontroller.core.components.telemetry.TelemetryChart
 import com.rgbcontroller.core.components.widgets.TelemetryChartCard
+import com.rgbcontroller.core.components.widgets.TelemetryRangeChips
 import com.rgbcontroller.core.components.model.HardwareComponentDescriptor
 import com.rgbcontroller.core.components.registry.ComponentCatalog
 import com.rgbcontroller.core.components.registry.PinAssignmentPolicy
@@ -960,30 +961,42 @@ private fun statusLabel(status: AutomationEventStatus): String = when (status) {
 @Composable
 private fun TelemetryChartsSection(state: ComponentDashboardState) {
     val now = System.currentTimeMillis()
+    var windowMs by rememberSaveable { mutableLongStateOf(TelemetryChart.DEFAULT_WINDOW_MS) }
     val live = state.telemetryFreshness == ComponentStatusFreshness.LIVE
     val disconnected = !state.connected
     val dhtSensorId = if ("dht11" in state.confirmedCatalogIds) "dht11" else "dht22"
     val dhtLabel = dhtSensorId.uppercase()
+    fun geometry(componentId: String, type: String) = TelemetryChart.build(
+        componentId, type, state.series(componentId, type),
+        nowMs = now, windowMs = windowMs,
+        // A wider range must not turn yesterday into "stale": the whole window
+        // is history by definition, exactly as the module workspace treats it.
+        staleAfterMs = windowMs,
+        disconnected = disconnected)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        TelemetryRangeChips(
+            selectedMs = windowMs,
+            onSelect = { windowMs = it },
+            tagPrefix = "lab_window"
+        )
         TelemetryChartCard(
             title = "Temperatura ambiental ($dhtLabel)",
-            geometry = TelemetryChart.build(
-                dhtSensorId, "temperature", state.series(dhtSensorId, "temperature"),
-                nowMs = now, disconnected = disconnected),
+            geometry = geometry(dhtSensorId, "temperature"),
             live = live
         )
         TelemetryChartCard(
             title = "Humedad ambiental ($dhtLabel)",
-            geometry = TelemetryChart.build(
-                dhtSensorId, "humidity", state.series(dhtSensorId, "humidity"),
-                nowMs = now, disconnected = disconnected),
+            geometry = geometry(dhtSensorId, "humidity"),
+            live = live
+        )
+        TelemetryChartCard(
+            title = "Luz ambiental",
+            geometry = geometry("ldr_light", "ambient_light"),
             live = live
         )
         TelemetryChartCard(
             title = "Humedad del suelo",
-            geometry = TelemetryChart.build(
-                "soil_moisture", "soil_moisture", state.series("soil_moisture", "soil_moisture"),
-                nowMs = now, disconnected = disconnected),
+            geometry = geometry("soil_moisture", "soil_moisture"),
             live = live
         )
     }

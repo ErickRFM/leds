@@ -14,23 +14,32 @@ class BleEnvironmentalProtocolTest {
         assertEquals("ENV,STOP", BleEnvironmentalProtocol.Action.STOP.frame)
     }
 
-    @Test fun recognizesLegacyFirmwareConfirmedStates() {
-        assertEquals(
-            BleEnvironmentalProtocol.Reply.State(
-                BleEnvironmentalProtocol.EnvironmentalRgbSnapshot(enabled = true, state = BleEnvironmentalProtocol.StateEnum.ENABLED, reason = "AWAITING_STATUS")
-            ),
-            BleEnvironmentalProtocol.parseReply("ENV,ON")
-        )
-        assertEquals(
-            BleEnvironmentalProtocol.Reply.State(
-                BleEnvironmentalProtocol.EnvironmentalRgbSnapshot(enabled = false, state = BleEnvironmentalProtocol.StateEnum.DISABLED, reason = "DISABLED")
-            ),
-            BleEnvironmentalProtocol.parseReply("ENV,OFF")
-        )
+    @Test fun acceptsOnlyTheFramesTheFirmwareEmits() {
+        // encodeBleEnvironmentalStatus emits ENV,STATE plus ten fields, and the
+        // busy path is publishControlReply("ENV,BUSY"). ENV,ON and ENV,OFF came
+        // from a pre-V31 firmware and must not stay accepted: they fabricated an
+        // ENABLED state before the colour had been read back.
+        assertNull(BleEnvironmentalProtocol.parseReply("ENV,ON"))
+        assertNull(BleEnvironmentalProtocol.parseReply("ENV,OFF"))
         assertTrue(
             BleEnvironmentalProtocol.parseReply("ENV,BUSY")
                 is BleEnvironmentalProtocol.Reply.Busy
         )
+    }
+
+    @Test fun reportsUnrecognizedFirmwareStateAsUnknown() {
+        // A newer firmware state must never fall back to a success-looking state.
+        val frame = "ENV,STATE,ON,RECALIBRATING,OK,Comfort,0,0,0,0,0,0"
+        val snap = BleEnvironmentalProtocol.parseReply(frame)
+            as BleEnvironmentalProtocol.Reply.State
+        assertEquals(BleEnvironmentalProtocol.StateEnum.UNKNOWN, snap.snapshot.state)
+        assertTrue(snap.snapshot.enabled)
+        assertEquals("OK", snap.snapshot.reason)
+    }
+
+    @Test fun refusesTruncatedStateFrames() {
+        val truncated = "ENV,STATE,ON,RUNNING,OK,Comfort,54,186,116,80,0"
+        assertNull(BleEnvironmentalProtocol.parseReply(truncated))
     }
 
     @Test fun parsesFullFirmwareEnvironmentalStatusStateFrame() {

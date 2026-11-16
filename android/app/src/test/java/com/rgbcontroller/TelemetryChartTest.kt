@@ -2,8 +2,10 @@ package com.rgbcontroller
 
 import com.rgbcontroller.core.components.telemetry.SampleQuality
 import com.rgbcontroller.core.components.telemetry.TelemetryChart
+import com.rgbcontroller.core.components.telemetry.TelemetryHistoryLimits
 import com.rgbcontroller.core.components.telemetry.TelemetryProvenance
 import com.rgbcontroller.core.components.telemetry.TelemetrySample
+import com.rgbcontroller.core.components.widgets.rangeChipLabel
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -140,6 +142,46 @@ class TelemetryChartTest {
         assertEquals(2, chart.segments.size)
         assertEquals(1, chart.invalidCount)
         assertEquals(2, chart.validCount)
+    }
+
+    /**
+     * A chip may never advertise a range the stored history cannot cover; if
+     * retention shrinks below an offered window, that chip has to disappear
+     * with it instead of rendering an empty chart.
+     */
+    @Test fun everyOfferedWindowIsBackedByRetention() {
+        val retention = TelemetryHistoryLimits().retentionMs
+        TelemetryChart.SUPPORTED_WINDOWS_MS.forEach { windowMs ->
+            assertTrue("window $windowMs exceeds retention $retention", windowMs <= retention)
+        }
+    }
+
+    @Test fun dayRangePlotsSamplesTheHalfHourRangeCannotSee() {
+        val now = 10_000_000_000_000L
+        val morning = sample(value = 18.4f, recordedAtMs = now - 20 * 60 * 60 * 1000L)
+        val samples = listOf(morning, sample(recordedAtMs = now))
+        val narrow = TelemetryChart.build(
+            "dht22", "temperature", samples,
+            nowMs = now, windowMs = TelemetryChart.DEFAULT_WINDOW_MS,
+            staleAfterMs = TelemetryChart.DEFAULT_WINDOW_MS
+        )
+        // The narrow range can only ever see the newest reading: the morning
+        // point is outside its window, not marked invalid.
+        assertEquals(1, narrow.validCount)
+        assertEquals(0, narrow.invalidCount + narrow.staleCount)
+        val day = TelemetryChart.build(
+            "dht22", "temperature", samples,
+            nowMs = now, windowMs = 24 * 60 * 60 * 1000L, staleAfterMs = 24 * 60 * 60 * 1000L
+        )
+        assertTrue(day.hasData)
+        assertEquals(2, day.validCount)
+    }
+
+    @Test fun rangeChipLabelsSeparateMinutesFromHours() {
+        assertEquals("5 min", rangeChipLabel(5 * 60_000L))
+        assertEquals("30 min", rangeChipLabel(30 * 60_000L))
+        assertEquals("6 h", rangeChipLabel(6 * 60 * 60_000L))
+        assertEquals("24 h", rangeChipLabel(24 * 60 * 60_000L))
     }
 
 }

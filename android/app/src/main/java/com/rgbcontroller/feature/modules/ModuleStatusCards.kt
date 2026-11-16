@@ -85,7 +85,7 @@ internal fun ModuleRuntimeCard(
                     !runtime.active && runtime.state == "catalog" ->
                         "Driver disponible, pero sensor no activado ni detectado."
                     runtime.active && id in setOf("dht11", "dht22") && sensorResponding ->
-                        "Temperatura y humedad válidas recibidas del ESP32 por Wi-Fi."
+                        "Temperatura y humedad válidas recibidas del ESP32."
                     runtime.active && id in setOf("dht11", "dht22") ->
                         "Driver ${id.uppercase()} configurado; aún no se confirma una lectura física."
                     runtime.active && id == "led_rgb" ->

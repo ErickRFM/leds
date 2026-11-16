@@ -31,12 +31,20 @@ data class TelemetrySample(
     val isPlottable: Boolean get() = valid && value != null && value.isFinite()
 }
 
-/** Bounded per-series retention so the on-device history can never grow forever. */
+/**
+ * Bounded per-series retention so the on-device history can never grow forever.
+ *
+ * [retentionMs] spans a full day because sampling is event-driven, not periodic:
+ * a board that reports only when the lab screen is open needs to keep its
+ * morning readings until the evening. Size stays bounded by [maxSamplesPerSeries]
+ * and [maxTotalSamples] rather than by the time window, so widening retention
+ * cannot widen the persisted document.
+ */
 data class TelemetryHistoryLimits(
     val maxSamplesPerSeries: Int = 240,
     val maxSeries: Int = 12,
     val maxTotalSamples: Int = 2000,
-    val retentionMs: Long = 6 * 60 * 60 * 1000L
+    val retentionMs: Long = 24 * 60 * 60 * 1000L
 )
 
 /**

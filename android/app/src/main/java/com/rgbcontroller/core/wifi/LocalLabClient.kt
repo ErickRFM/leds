@@ -9,6 +9,7 @@ import com.rgbcontroller.core.lab.LabExperimentLibrary
 import com.rgbcontroller.core.model.RgbDeviceCommand
 import com.rgbcontroller.core.model.RgbDeviceState
 import com.rgbcontroller.core.ble.MediaControlProtocol
+import com.rgbcontroller.core.components.registry.ComponentCatalog
 import com.rgbcontroller.core.ble.AudioHardwareState
 import com.rgbcontroller.core.ble.OledHardwareState
 import com.rgbcontroller.core.model.RgbReadback
@@ -174,22 +175,10 @@ class LocalLabClient(private val context: Context) {
     suspend fun applyComponentPinsConfirmed(
         key: String, id: String, target: List<Int>
     ): JSONObject {
-        val names = mapOf(
-            "dht11" to "sensor.dht11",
-            "dht22" to "sensor.dht22",
-            "soil_moisture" to "sensor.soil_moisture",
-            "ldr_light" to "sensor.ldr_light",
-            "ssd1306_oled" to "display.ssd1306",
-            "led_rgb" to "led.rgb",
-            "robotics_crane" to "robotics.crane.2axis"
-        )
-        val firmwareId = names[id] ?: error("Este componente no admite reasignación en caliente.")
-        val count = when (id) {
-            "led_rgb" -> 3
-            "ssd1306_oled" -> 2
-            "robotics_crane" -> 7
-            else -> 1
-        }
+        val count = ComponentCatalog.rewireSignals[id]
+            ?: error("Este componente no admite reasignación en caliente.")
+        val firmwareId = ComponentCatalog.firmwareIdFor(id)
+            ?: error("El catálogo no conoce el módulo de firmware de este componente.")
         require(target.size == count && target.all { it in 0..39 })
         if (id == "led_rgb") {
             require(target.distinct().size == 3 && target.all(::allowedOutput)) {

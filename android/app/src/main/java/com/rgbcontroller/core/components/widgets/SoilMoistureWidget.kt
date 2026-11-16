@@ -1,10 +1,12 @@
 package com.rgbcontroller.core.components.widgets
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.rgbcontroller.core.ui.CompiTokens
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -30,9 +32,22 @@ fun SoilMoistureWidget(
     status: String? = null,
     modifier: Modifier = Modifier
 ) {
-    Card(modifier = modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Humedad del Suelo (ADC1)", style = MaterialTheme.typography.titleMedium)
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = CompiTokens.Shapes.Large,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = CompiTokens.Elevations.flat)
+    ) {
+        Column(Modifier.padding(CompiTokens.Spacing.m),
+            verticalArrangement = Arrangement.spacedBy(CompiTokens.Spacing.s)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Humedad del suelo · ADC1", style = MaterialTheme.typography.titleMedium)
+                Text(if (live && hasData) "● En vivo" else "Sin lectura en vivo",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (live && hasData) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             if (!hasData) {
                 Text(
                     "Sin datos - Sensor no detectado, desconectado o con lectura inválida",
@@ -40,42 +55,43 @@ fun SoilMoistureWidget(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
-                if (calibrated && moisturePercent != null) {
-                    Text(
-                        "Humedad: ${formatPercent(moisturePercent)} %",
-                        style = MaterialTheme.typography.bodyLarge
+                Row(Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(CompiTokens.Spacing.s)) {
+                    MetricReading(
+                        "Humedad",
+                        if (calibrated && moisturePercent?.isFinite() == true)
+                            formatPercent(moisturePercent) else "—",
+                        "%",
+                        Modifier.weight(1f)
                     )
-                } else {
-                    Text(
-                        "Sin calibrar - No hay porcentaje de humedad; solo lectura cruda del ADC1",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    MetricReading("ADC crudo", rawAdc?.toString() ?: "—", "/ 4095", Modifier.weight(1f))
                 }
-                rawAdc?.let { Text("ADC crudo: $it / $dryValue-$wetValue", style = MaterialTheme.typography.bodySmall) }
+                if (!calibrated) Text(
+                    "Sin calibrar - No hay porcentaje de humedad; solo lectura cruda del ADC1",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text("Referencias · seco $dryValue, húmedo $wetValue",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text("Estado: $stateLabel", style = MaterialTheme.typography.bodySmall)
             if (!live) {
                 Text(
                     "Último estado confirmado, no en vivo",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.tertiary
                 )
             }
-            if (status != null) {
-                Text(
-                    "Estado del sensor: $status",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            if (lastUpdate != null && lastUpdate > 0L) {
-                Text(
-                    "Lectura: ${formatTime(lastUpdate)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            // The uncalibrated sentence already states the state; repeating it
+            // here would be two labels for one fact.
+            val meta = listOfNotNull(
+                if (calibrated) "Estado: $stateLabel" else null,
+                status?.let { "Sensor: $it" },
+                lastUpdate?.takeIf { it > 0L }?.let { formatTime(it) }
+            )
+            if (meta.isNotEmpty()) Text(meta.joinToString(" · "),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

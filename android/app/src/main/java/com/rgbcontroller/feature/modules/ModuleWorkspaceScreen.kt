@@ -61,6 +61,7 @@ import com.rgbcontroller.core.components.widgets.TelemetryChartCard
 import com.rgbcontroller.core.components.telemetry.TelemetryChart
 import com.rgbcontroller.core.components.widgets.SoilMoistureWidget
 import com.rgbcontroller.core.data.PreferencesRepository
+import com.rgbcontroller.core.ui.CompiTokens
 import com.rgbcontroller.core.wifi.CompiLabSession
 import com.rgbcontroller.core.wifi.LocalLabClient
 import com.rgbcontroller.core.wifi.ComponentApplyUnconfirmedException
@@ -103,6 +104,7 @@ fun ModuleWorkspaceScreen(
     val wifiAuthorized = session.transport == LabTransport.WIFI_LAB &&
         session.connectionState == LabConnectionState.AUTHORIZED && session.wifiReady
     var showLibrary by rememberSaveable { mutableStateOf(false) }
+    var showPins by rememberSaveable { mutableStateOf(false) }
     var openedId by rememberSaveable { mutableStateOf<String?>(null) }
     var previousOpenedId by rememberSaveable { mutableStateOf<String?>(null) }
     var stationSection by rememberSaveable { mutableStateOf("Resumen") }
@@ -110,6 +112,11 @@ fun ModuleWorkspaceScreen(
     var applyMessage by remember { mutableStateOf<String?>(null) }
     var ldrCalibrationMessage by remember { mutableStateOf<String?>(null) }
     var applying by remember { mutableStateOf(false) }
+    // An assignment is optimistic until DataStore confirms it: keeping the
+    // pending choice is what stops a second module from taking the same GPIO
+    // inside the same frame.
+    var pendingPins by remember { mutableStateOf<Map<String, List<Int>>>(emptyMap()) }
+    var pinsMessage by remember { mutableStateOf<String?>(null) }
     // Physical Back should close a nested component editor/detail before leaving Modules.
     BackHandler(enabled = editingId != null || openedId != null) {
         if (editingId != null) editingId = null else {
@@ -146,22 +153,55 @@ fun ModuleWorkspaceScreen(
     val currentlyVerified = state.freshness == ComponentStatusFreshness.LIVE &&
         state.authorityError == null && state.connected
     val confirmed = (state.authoritative ?: state.persisted).orEmpty()
-    // Catalog-only entries mean the driver was compiled, not that a sensor
-    // is physically present. Never auto-create a user's module from them.
-    val names = confirmed.filter { it.active || it.state != "catalog" }
-        .map { ComponentCatalog.catalogIdForFirmwareId(it.id) }
-    // BLE component status is authoritative only after a complete owner-
-    // authenticated, sequence-bound snapshot. Bonding alone proves nothing.
-    val configured = ModuleWorkspaceGrouping.group(
-        (state.desiredConfig.components.map { it.id } + names +
-            (if (bleAuthorized) listOf("led_rgb") else emptyList())).distinct()
+    val board = rememberModuleWorkspaceBoard(
+        desired = state.desiredConfig.components,
+        authoritative = state.authoritative,
+        persisted = state.persisted,
+        bleAuthorized = bleAuthorized,
+        pending = pendingPins
     )
-    val environmentSensor = configured.firstOrNull {
-        it.id == ModuleWorkspaceGrouping.ENVIRONMENT
-    }?.components?.firstOrNull { it == "dht11" || it == "dht22" } ?: "dht11"
+    val configured = board.groups
+    val environmentSensor = board.environmentSensor
+    val pinBoard = board.pinBoard
     val runtime = { id: String -> confirmed.firstOrNull {
         ComponentCatalog.catalogIdForFirmwareId(it.id) == id
     } }
+    // An optimistic choice is only needed until the persisted draft agrees.
+    LaunchedEffect(pendingPins, state.desiredConfig.components) {
+        val unresolved = pendingPins.filterKeys { id ->
+            state.desiredConfig.components.firstOrNull { it.id == id }?.pins != pendingPins[id]
+        }
+        if (unresolved != pendingPins) pendingPins = unresolved
+    }
+
+    fun assignPin(componentId: String, signalIndex: Int, pin: Int) {
+        val descriptor = ComponentCatalog.get(componentId) ?: return
+        val row = pinBoard.row(componentId) ?: return
+        val next = row.pins.toMutableList()
+        if (signalIndex !in next.indices) return
+        next[signalIndex] = pin
+        pendingPins = pendingPins + (componentId to next)
+        pinsMessage = "Borrador local · ${descriptor.name} · GPIO ${next.joinToString()}"
+        scope.launch {
+            try {
+                vm.setLocalDesired(
+                    LocalDesiredConfig(
+                        state.desiredConfig.components.filterNot { it.id == componentId } +
+                            LocalDesiredComponent(
+                                componentId,
+                                descriptor.type.name.lowercase(),
+                                next
+                            )
+                    )
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                pendingPins = pendingPins - componentId
+                pinsMessage = "No se guardó la asignación: ${failure.message ?: "inténtalo de nuevo"}"
+            }
+        }
+    }
 
     if (openedId != null) {
         // Hardware DFPlayer and Music always share a single player route.
@@ -637,6 +677,30 @@ fun ModuleWorkspaceScreen(
                     }
                 }
             }
+            // The tabs come before anything else: switching to the GPIO board or
+            // the catalog must not require scrolling past the shortcut cards.
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = !showLibrary && !showPins,
+                        onClick = { showLibrary = false; showPins = false },
+                        label = { Text("Mis módulos") },
+                        modifier = Modifier.testTag("modules_tab_mine").heightIn(min = 48.dp)
+                    )
+                    FilterChip(
+                        selected = showPins,
+                        onClick = { showPins = true; showLibrary = false },
+                        label = { Text("Pines") },
+                        modifier = Modifier.testTag("modules_tab_pins").heightIn(min = 48.dp)
+                    )
+                    FilterChip(
+                        selected = showLibrary,
+                        onClick = { showLibrary = true; showPins = false },
+                        label = { Text("Biblioteca") },
+                        modifier = Modifier.testTag("modules_tab_catalog").heightIn(min = 48.dp)
+                    )
+                }
+            }
             item {
                 Card(onClick = onConnect,
                     modifier = Modifier.fillMaxWidth().testTag("modules_connection")) {
@@ -650,7 +714,8 @@ fun ModuleWorkspaceScreen(
                             Text(if (wifiAuthorized || bleAuthorized) "ESP32 conectado"
                                 else if (bleReady) "ESP32 · falta autorizar"
                                 else "Conectar ESP32",
-                                style = MaterialTheme.typography.titleSmall)
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface)
                             Text("Conexiones y permisos",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -674,8 +739,11 @@ fun ModuleWorkspaceScreen(
                         }
                         Column(Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            // A clickable Card inherits a secondary content color, so
+                            // the card title has to claim onSurface or it reads as body text.
                             Text("Estación Compi", style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold)
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface)
                             Text("Sensores · OLED · luces · automatización",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -733,7 +801,8 @@ fun ModuleWorkspaceScreen(
                         Column(Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text("Música y DFPlayer", style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold)
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface)
                             Text("Biblioteca local · módulo MP3 físico",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -745,21 +814,15 @@ fun ModuleWorkspaceScreen(
                     }
                 }
             }
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = !showLibrary, onClick = { showLibrary = false },
-                        label = { Text("Mis módulos") },
-                        modifier = Modifier.testTag("modules_tab_mine").heightIn(min = 48.dp)
-                    )
-                    FilterChip(
-                        selected = showLibrary, onClick = { showLibrary = true },
-                        label = { Text("Biblioteca") },
-                        modifier = Modifier.testTag("modules_tab_catalog").heightIn(min = 48.dp)
-                    )
-                }
-            }
-            if (showLibrary) {
+            if (showPins) {
+                modulePinsItems(
+                    report = pinBoard,
+                    statusMessage = pinsMessage,
+                    onAssign = { componentId, signalIndex, pin ->
+                        assignPin(componentId, signalIndex, pin)
+                    }
+                )
+            } else if (showLibrary) {
                 item {
                     Text("Elige qué conectaste",
                         style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -813,20 +876,35 @@ fun ModuleWorkspaceScreen(
                     val id = group.id
                     val descriptor = ComponentCatalog.get(id)
                     val physical = runtime(id)
-                    val local = state.desiredConfig.components.firstOrNull { it.id == id }
+                    val pinParts = group.components.mapNotNull { child ->
+                        val pins = runtime(child)?.pins?.takeIf { it.isNotEmpty() }
+                            ?: state.desiredConfig.components.firstOrNull { it.id == child }?.pins
+                        pins?.takeIf { it.isNotEmpty() }
+                            ?.let { "${moduleShortName(child)} · GPIO ${it.joinToString()}" }
+                    }
+                    val groupConflict = pinBoard.conflicts.firstOrNull { conflict ->
+                        group.components.any { it in conflict.componentIds }
+                    }
+                    val glance = ModuleGlanceSource.forModule(
+                        id, state,
+                        climateModel = if (id == ModuleWorkspaceGrouping.ENVIRONMENT)
+                            environmentSensor else null
+                    )
                     Card(
                         onClick = { openedId = id },
                         modifier = Modifier.fillMaxWidth().testTag("module_card_$id"),
-                        shape = RoundedCornerShape(20.dp)
+                        shape = CompiTokens.Shapes.Medium
                     ) {
-                        Row(Modifier.fillMaxWidth().padding(16.dp),
+                        Row(Modifier.fillMaxWidth().padding(CompiTokens.Spacing.m),
                             verticalAlignment = Alignment.CenterVertically) {
                             ModuleVisualIcon(id)
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Spacer(Modifier.width(CompiTokens.Spacing.s))
+                            Column(Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(CompiTokens.Spacing.xs)) {
                                 Text(if (id == ModuleWorkspaceGrouping.ENVIRONMENT)
                                         "Sensor ambiental" else descriptor?.name ?: id,
                                     fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     style = MaterialTheme.typography.titleMedium)
                                 Text(
                                     when {
@@ -849,11 +927,18 @@ fun ModuleWorkspaceScreen(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                if (glance != null) {
+                                    ModuleGlanceRow(glance, Modifier.testTag("module_glance_$id"))
+                                }
                                 Text(
-                                    if (id == ModuleWorkspaceGrouping.ENVIRONMENT)
-                                        "${environmentSensor.uppercase()} y ADC1 · conexiones independientes"
-                                    else "GPIO ${(physical?.pins ?: local?.pins).orEmpty().joinToString().ifBlank { "sin asignar" }}",
-                                    style = MaterialTheme.typography.labelMedium
+                                    if (groupConflict != null)
+                                        "${pinParts.joinToString(", ").ifBlank { "GPIO sin asignar" }} · " +
+                                            "GPIO ${groupConflict.pin} en disputa"
+                                    else pinParts.joinToString(", ").ifBlank { "GPIO sin asignar" },
+                                    style = CompiTokens.Typography.MetricCaption,
+                                    color = if (groupConflict != null) MaterialTheme.colorScheme.error
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.testTag("module_pins_line_$id")
                                 )
                                 val climateModel = id == "dht11" || id == "dht22" ||
                                     id == ModuleWorkspaceGrouping.ENVIRONMENT
@@ -883,15 +968,19 @@ fun ModuleWorkspaceScreen(
                                 }
                                 Surface(
                                     color = if (sensorConfirmed && currentlyVerified)
-                                        Color(0xFF225440) else MaterialTheme.colorScheme.surfaceVariant,
-                                    shape = RoundedCornerShape(8.dp)
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (sensorConfirmed && currentlyVerified)
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    shape = CompiTokens.Shapes.Small
                                 ) {
                                     Text(evidenceLabel,
-                                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (sensorConfirmed && currentlyVerified)
-                                            Color(0xFFA6F1D2)
-                                        else MaterialTheme.colorScheme.onSurfaceVariant)
+                                        modifier = Modifier.padding(
+                                            horizontal = CompiTokens.Spacing.xs,
+                                            vertical = CompiTokens.Spacing.xxs
+                                        ),
+                                        style = CompiTokens.Typography.BadgeLabel)
                                 }
                             }
                             IconButton(onClick = {
@@ -990,6 +1079,7 @@ fun ModuleWorkspaceScreen(
                 editingId = null
                 applyMessage = null
                 showLibrary = false
+                showPins = false
             },
             onRemove = if (draft == null) null else {
                 {

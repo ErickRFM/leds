@@ -116,6 +116,21 @@ object CompiTokens {
             fontSize = 28.sp,
             lineHeight = 34.sp
         )
+        /** Micro caption above a metric: small, wide-tracked, never the focus. */
+        val MetricCaption = TextStyle(
+            fontFamily = FontFamily.Default,
+            fontWeight = FontWeight.Medium,
+            fontSize = 11.sp,
+            lineHeight = 14.sp,
+            letterSpacing = 0.7.sp
+        )
+        /** Unit or secondary value: reads as part of the number, not as text. */
+        val MetricUnit = TextStyle(
+            fontFamily = FontFamily.Default,
+            fontWeight = FontWeight.Medium,
+            fontSize = 13.sp,
+            lineHeight = 18.sp
+        )
         val BodyClean = TextStyle(
             fontFamily = FontFamily.Default,
             fontWeight = FontWeight.Normal,

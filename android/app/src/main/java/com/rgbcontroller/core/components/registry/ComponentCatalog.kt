@@ -119,21 +119,49 @@ object ComponentCatalog {
     fun get(id: String): HardwareComponentDescriptor? = components.find { it.id == id }
 
     /**
+     * The only app-side table of firmware module ids. The ESP32 reports these
+     * dotted ids in `/v2/components/status` and in the BLE snapshot, while the
+     * HTTP and BLE rewire endpoints accept this catalog's underscore ids.
+     * `scripts/check-contracts.py` refuses any entry the firmware allow-list
+     * does not accept, so the two sides cannot drift again.
+     */
+    private val firmwareIds: Map<String, String> = mapOf(
+        "dht11" to "sensor.dht11",
+        "dht22" to "sensor.dht22",
+        "soil_moisture" to "sensor.soil_moisture",
+        "ldr_light" to "sensor.ldr_light",
+        "led_rgb" to "led.rgb",
+        "ssd1306_oled" to "display.ssd1306",
+        "dfplayer_mp3" to "audio.dfplayer",
+        "robotics_crane" to "robotics.crane.2axis"
+    )
+
+    /** Firmware id for a catalog id, or null when the ESP32 has no such driver. */
+    fun firmwareIdFor(catalogId: String): String? = firmwareIds[catalogId]
+
+    /**
      * Translates a firmware component id (what `GET /v2/components/status`
      * reports, e.g. `sensor.soil_moisture` or `led.rgb`) into this catalog's id
      * (`soil_moisture`, `led_rgb`). Without this, an enabled firmware module
      * would still be listed as an undetected template. Unknown ids are returned
      * unchanged so a new firmware module is never silently hidden.
      */
-    fun catalogIdForFirmwareId(firmwareId: String): String = when (firmwareId) {
-        "sensor.dht11" -> "dht11"
-        "sensor.dht22" -> "dht22"
-        "sensor.soil_moisture" -> "soil_moisture"
-        "sensor.ldr_light" -> "ldr_light"
-        "led.rgb" -> "led_rgb"
-        "display.ssd1306" -> "ssd1306_oled"
-        "audio.dfplayer" -> "dfplayer_mp3"
-        "robotics.crane.2axis" -> "robotics_crane"
-        else -> firmwareId
-    }
+    fun catalogIdForFirmwareId(firmwareId: String): String =
+        firmwareIds.entries.firstOrNull { it.value == firmwareId }?.key ?: firmwareId
+
+    /**
+     * Components the firmware `/v2/components/apply` can rewire, with the GPIO
+     * signals each transaction must carry. This is deliberately narrower than
+     * `firmwareIds`: the DFPlayer reports status but has no runtime rewiring
+     * driver, and offering it would only ever produce a firmware rejection.
+     */
+    val rewireSignals: Map<String, Int> = mapOf(
+        "dht11" to 1,
+        "dht22" to 1,
+        "soil_moisture" to 1,
+        "ldr_light" to 1,
+        "led_rgb" to 3,
+        "ssd1306_oled" to 2,
+        "robotics_crane" to 7
+    )
 }

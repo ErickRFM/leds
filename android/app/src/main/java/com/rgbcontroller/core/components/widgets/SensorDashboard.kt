@@ -1,7 +1,7 @@
 package com.rgbcontroller.core.components.widgets
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -13,6 +13,7 @@ import com.rgbcontroller.core.components.model.ComponentTelemetryCodec
 import com.rgbcontroller.core.components.status.ComponentDashboardState
 import com.rgbcontroller.core.components.status.ModuleEvidence
 import com.rgbcontroller.core.components.telemetry.TelemetryChart
+import com.rgbcontroller.core.ui.CompiTokens
 import java.util.Locale
 
 /**
@@ -28,7 +29,9 @@ fun SensorDashboard(
     live: Boolean,
     onRefresh: () -> Unit
 ) {
-    var minutes by rememberSaveable(id) { mutableIntStateOf(30) }
+    var windowMs by rememberSaveable(id) {
+        mutableLongStateOf(TelemetryChart.DEFAULT_WINDOW_MS)
+    }
     var showDiagnostics by rememberSaveable(id) { mutableStateOf(false) }
     val readings = if (live) state.authoritativeTelemetry else state.persistedTelemetry
     val physicalReading = active && live && state.connected &&
@@ -55,18 +58,18 @@ fun SensorDashboard(
     val diagnostic = (if (live) state.authoritative else state.persisted)
         .orEmpty().firstOrNull { it.id == "sensor.$id" }
     val fault = diagnostic?.diagnostic
-    val windowMs = minutes * 60_000L
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(CompiTokens.Spacing.s)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Sensor ${id.uppercase(Locale.ROOT)}",
                 style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text(
-                if (physicalReading) "En vivo" else if (!live) "No en vivo" else "Sin lectura",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                if (physicalReading) "● En vivo" else if (!live) "No en vivo" else "Sin lectura",
+                color = if (physicalReading) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelMedium
             )
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(CompiTokens.Spacing.s)) {
             SensorMetric("Temperatura", temperature.first, "°C", temperature.second,
                 Modifier.weight(1f).testTag("sensor_temperature_$id"))
             SensorMetric("Humedad relativa", humidity.first, "%", humidity.second,
@@ -74,13 +77,11 @@ fun SensorDashboard(
         }
         Text("Tendencias · datos registrados", style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (window in listOf(5, 15, 30)) {
-                FilterChip(selected = minutes == window, onClick = { minutes = window },
-                    label = { Text("$window min") },
-                    modifier = Modifier.testTag("sensor_window_${window}_$id"))
-            }
-        }
+        TelemetryRangeChips(
+            selectedMs = windowMs,
+            onSelect = { windowMs = it },
+            tagPrefix = "sensor_window_$id"
+        )
         for ((type, title) in listOf(
             "temperature" to "Temperatura · °C",
             "humidity" to "Humedad relativa · %"
@@ -98,9 +99,12 @@ fun SensorDashboard(
             modifier = Modifier.testTag("sensor_diagnostics_toggle_$id")) {
             Text(if (showDiagnostics) "Ocultar diagnóstico" else "Detalles y diagnóstico")
         }
-        if (showDiagnostics) Card(shape = RoundedCornerShape(20.dp)) {
-            Column(Modifier.fillMaxWidth().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (showDiagnostics) Card(shape = CompiTokens.Shapes.Large,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = CompiTokens.Elevations.flat)) {
+            Column(Modifier.fillMaxWidth().padding(CompiTokens.Spacing.m),
+                verticalArrangement = Arrangement.spacedBy(CompiTokens.Spacing.xs)) {
                 Text("Diagnóstico de la lectura", style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold)
                 Text(
@@ -159,25 +163,38 @@ fun SensorDashboard(
     }
 }
 
+/**
+ * A reading card: the shared [MetricReading] above a hairline divider and the
+ * provenance line. The border carries the card edge in every palette, so the
+ * card never depends on a shadow to be legible.
+ */
 @Composable
 private fun SensorMetric(
     title: String, value: Float?, unit: String,
     statusLabel: String, modifier: Modifier
 ) {
-    Card(modifier = modifier, shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )) {
-        Column(Modifier.fillMaxWidth().padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value?.let { String.format(Locale.getDefault(), "%.1f %s", it, unit) }
-                ?: "-- $unit", style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold)
-            Text(statusLabel,
+    Card(
+        modifier = modifier,
+        shape = CompiTokens.Shapes.Large,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = CompiTokens.Elevations.flat)
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(CompiTokens.Spacing.m),
+            verticalArrangement = Arrangement.spacedBy(CompiTokens.Spacing.xxs)
+        ) {
+            MetricReading(
+                title,
+                value?.let { String.format(Locale.getDefault(), "%.1f", it) } ?: "—",
+                unit
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Text(
+                statusLabel,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

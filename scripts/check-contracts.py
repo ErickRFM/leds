@@ -134,4 +134,149 @@ assert 'applyRgbCommandInternal(cmd, true)' in firmware, "Manual commands must r
 assert 'rgbRuntime_' in lab, "Keep runtime and manual callbacks separate"
 print("PASS V12: automation bounded, authenticated and cancelled only by valid manual RGB commands")
 
+# V36: the environmental screens and the component dashboard must speak exactly
+# the frames, states, bands and ids the firmware produces today.
+env_codec = (root / "firmware/esp32_rgb/core/BleEnvironmentalCommand.h").read_text(encoding="utf-8")
+env_policy = (root / "firmware/esp32_rgb/core/EnvironmentalRgbPolicy.h").read_text(encoding="utf-8")
+env_protocol = (root / "android/app/src/main/java/com/rgbcontroller/core/ble/BleEnvironmentalProtocol.kt").read_text(encoding="utf-8")
+env_card = (root / "android/app/src/main/java/com/rgbcontroller/feature/led/EnvironmentalRgbControlCard.kt").read_text(encoding="utf-8")
+
+# Every ENV literal the Android protocol relies on has to be a frame the ESP32
+# either emits or parses; a reply nobody sends is dead code that fakes a state.
+for frame in sorted(set(re.findall(r'"(ENV,[A-Z,]*)"', env_protocol))):
+    assert frame in env_codec or frame in firmware, f"Android uses {frame}, which the firmware neither sends nor accepts"
+
+firmware_states = set(re.findall(
+    r'return "([A-Z_]+)";', env_policy.split("environmentalRgbStateName", 1)[1].split("}", 1)[0]))
+android_states = set(re.split(r'[,\s]+', env_protocol.split("enum class StateEnum", 1)[1]
+                              .split("}", 1)[0].strip())) - {""}
+assert firmware_states <= android_states, (
+    f"Firmware states Android cannot represent: {sorted(firmware_states - android_states)}"
+)
+assert "UNKNOWN" in android_states, "Android must keep an explicit UNKNOWN state, not a guessed one"
+assert "ENABLED" not in android_states, "ENABLED is not a firmware environmental state"
+
+thresholds = [float(value) for value in re.findall(
+    r'float (?:coldMaxC|comfortMaxC|warmMaxC|hotMaxC) = ([0-9.]+)f', env_policy)]
+assert len(thresholds) == 4, f"Expected four thermal thresholds, found {thresholds}"
+cold, comfort, warm, hot = (f"{value:g}" for value in thresholds)
+for label in (f"Frío · menos de {cold} °C", f"Confort · {cold} a {comfort} °C",
+              f"Cálido · {comfort} a {warm} °C", f"Calor · {warm} a {hot} °C",
+              f"Extremo · {hot} °C o más"):
+    assert label in env_card, f"Android band legend contradicts the firmware policy: {label}"
+for band in re.findall(r'case EnvironmentalRgbBand::([A-Za-z]+):', env_policy):
+    assert f'"{band.lower()}"' in env_card, f"Android cannot label the {band} band"
+
+# The protocol document is the contract integrators read; a firmware change
+# that leaves it behind reproduces the ENV,ON documentation defect.
+assert "ENV,STATE,<ON|OFF>,<ESTADO>" in protocol, "PROTOCOLO_BLE.md lost the environmental reply frame"
+for state in sorted(firmware_states):
+    assert state in protocol, f"PROTOCOLO_BLE.md no longer documents the firmware state {state}"
+assert f"{cold} · {comfort} · {warm} · {hot} °C" in protocol, (
+    "PROTOCOLO_BLE.md band thresholds no longer match EnvironmentalRgbPolicy.h"
+)
+
+# One Android id table, matching the firmware module ids and the HTTP rewire
+# allow-list; a missing entry makes a reassignable component unapplicable.
+catalog = (root / "android/app/src/main/java/com/rgbcontroller/core/components/registry/ComponentCatalog.kt").read_text(encoding="utf-8")
+firmware_ids = dict(re.findall(
+    r'"([a-z_0-9]+)" to "((?:sensor|led|display|audio|robotics)\.[a-z0-9_.]+)"', catalog))
+assert firmware_ids, "ComponentCatalog lost its firmware id table"
+# Module ids live in modules/*.h (id()) and in the sketch (constructor args),
+# so the whole firmware tree is the authority, not only the .ino.
+firmware_tree = "\n".join(
+    path.read_text(encoding="utf-8")
+    for path in sorted((root / "firmware/esp32_rgb").rglob("*"))
+    if path.is_file() and path.suffix in (".h", ".cpp", ".ino")
+)
+for catalog_id, dotted in firmware_ids.items():
+    assert f'"{dotted}"' in firmware_tree, f"Firmware has no module id {dotted} for {catalog_id}"
+assert "sensor.dht11\" ->" not in catalog, "ComponentCatalog kept a second arrow-mapped id table"
+rewire_block = catalog.split("val rewireSignals", 1)[1].split("\n    )", 1)[0]
+rewire_counts = dict((key, int(count)) for key, count in
+                     re.findall(r'"([a-z_0-9]+)" to (\d)', rewire_block))
+firmware_allow_list = set(re.findall(r'componentId != "([a-z_0-9]+)"', lab))
+assert set(rewire_counts) == firmware_allow_list, (
+    f"Android rewires {sorted(set(rewire_counts) - firmware_allow_list)} that firmware rejects, "
+    f"and misses {sorted(firmware_allow_list - set(rewire_counts))}"
+)
+# Multi-signal components must carry the exact count the firmware demands;
+# single-signal ones are padded to the legacy two-slot frame by the client.
+for catalog_id, signals in (("robotics_crane", 7), ("led_rgb", 3), ("ssd1306_oled", 2)):
+    assert rewire_counts[catalog_id] == signals, f"{catalog_id} signal count drifted"
+assert "crane ? 7" in lab and "rgb ? 3" in lab, "Firmware required-signal rule changed; rewireSignals must follow"
+assert "ComponentCatalog.rewireSignals[id]" in (root / "android/app/src/main/java/com/rgbcontroller/core/wifi/LocalLabClient.kt").read_text(encoding="utf-8"), (
+    "LocalLabClient must read signal counts from ComponentCatalog"
+)
+
+print("PASS V36: environmental frames, states, thermal bands and component ids match the firmware")
+
+# V37: the connection hub shows one capability matrix per transport. Every cell
+# has to name a frame the ESP32 accepts over GATT or a route the SoftAP serves,
+# otherwise the UI is advertising a capability the firmware never exposed.
+matrix_src = (root / "android/app/src/main/java/com/rgbcontroller/core/model/TransportCapabilityMatrix.kt").read_text(encoding="utf-8")
+# Android builds GATT frames in core/ble (transport) and core/model (codecs), so
+# the implementation check spans both; a frame only named in the UI is not sent.
+ble_sources = "\n".join(
+    path.read_text(encoding="utf-8")
+    for path in sorted((root / "android/app/src/main/java/com/rgbcontroller/core").rglob("*.kt"))
+)
+pin_control = (root / "firmware/esp32_rgb/core/BleSensorPinControl.h").read_text(encoding="utf-8")
+
+def matrix_field(body, name):
+    found = re.search(r'\b' + name + r' = "([^"]+)"', body)
+    return found.group(1) if found else None
+
+matrix_rows = {}
+for chunk in matrix_src.split("CapabilityRow(")[1:]:
+    body = chunk.split("\n        )", 1)[0]
+    row_id = matrix_field(body, "id")
+    if row_id:
+        matrix_rows[row_id] = {
+            "support": dict(re.findall(r'\b(ble|wifi) = CapabilitySupport\.(\w+)', body)),
+            "ble": matrix_field(body, "bleProof"),
+            "wifi": matrix_field(body, "wifiProof"),
+            "note": matrix_field(body, "note"),
+        }
+
+assert len(matrix_rows) >= 15, f"El tablero de capacidades perdió filas: {len(matrix_rows)}"
+assert set(matrix_rows) == {"rgb_color", "rgb_effects", "environmental", "sensor_telemetry",
+    "component_status", "pin_rewire", "ldr_calibration", "gpio_read", "gpio_write", "adc_raw",
+    "crane_motion", "audio", "oled", "automation", "script", "lab_checks", "wifi_config",
+    "identity", "ota"}, f"Filas inesperadas en la matriz: {sorted(matrix_rows)}"
+
+for row_id, cells in matrix_rows.items():
+    assert set(cells["support"]) == {"ble", "wifi"}, f"{row_id}: falta una columna de transporte"
+    for transport, proof in (("ble", cells["ble"]), ("wifi", cells["wifi"])):
+        claim = cells["support"][transport]
+        if claim == "UNAVAILABLE":
+            assert proof is None, f"{row_id}: {transport} bloqueado no puede citar prueba"
+            continue
+        assert proof, f"{row_id}: {transport} promete {claim} sin marco ni endpoint"
+        if transport == "ble":
+            assert proof in firmware_tree, f"{row_id}: el firmware no conoce el marco {proof}"
+            assert proof in ble_sources, f"{row_id}: Android no implementa {proof}"
+        else:
+            assert proof in lab, f"{row_id}: el SoftAP del firmware no sirve {proof}"
+            assert proof in android_lab, f"{row_id}: LocalLabClient no llama a {proof}"
+
+# Grúa: movimiento solo por Bluetooth; por Wi-Fi únicamente reasigna pines.
+assert matrix_rows["crane_motion"]["support"]["wifi"] == "UNAVAILABLE"
+assert "/v2/crane" not in lab, "El firmware publicó una ruta HTTP de grúa; la matriz miente"
+
+# El lista de componentes reasignables por Bluetooth es la del firmware, no la de Wi-Fi.
+ble_rewire = set(re.findall(r'std::strcmp\(component,"([a-z_0-9]+)"\)', pin_control))
+assert ble_rewire == {"robotics_crane", "dht11", "ldr_light"}, f"Whitelist BLE cambió: {sorted(ble_rewire)}"
+assert matrix_rows["pin_rewire"]["support"]["ble"] == "LIMITED"
+for component_id in ble_rewire:
+    assert component_id in (matrix_rows["pin_rewire"]["note"] or ""), (
+        f"La matriz no declara que BLE solo reasigna {component_id}")
+assert "dht22" not in matrix_rows["pin_rewire"]["note"], "BLE no reasigna dht22; la matriz lo afirma"
+
+# OTA sigue bloqueado en ambos transportes.
+assert matrix_rows["ota"]["support"] == {"ble": "UNAVAILABLE", "wifi": "UNAVAILABLE"}
+# Identificar el equipo no es autorización.
+assert "autoriz" in matrix_rows["identity"]["note"], "La matriz debe separar identidad de autorización"
+print("PASS V37: la matriz de capacidades cita marcos GATT y rutas HTTP que el firmware realmente ofrece")
+
 print("PASS: RGB V1 compatibility, core leases, local SoftAP endpoint and lab limits.")
