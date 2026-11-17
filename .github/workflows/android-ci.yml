@@ -55,6 +55,12 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/crane_protocol_test.cpp -o /tmp/crane_protocol_test
           /tmp/crane_protocol_test
+      - name: Compi Robotics runtime GPIO rewiring host regressions
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic -I tests/stubs tests/crane_pin_reassign_test.cpp -o /tmp/crane_pin_reassign_test
+          /tmp/crane_pin_reassign_test
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/ble_component_pin_test.cpp -o /tmp/ble_component_pin_test
+          /tmp/ble_component_pin_test
       - name: Host unit tests (no ESP32 required)
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/firmware_core_test.cpp -o /tmp/firmware_core_test
