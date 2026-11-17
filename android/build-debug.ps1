@@ -1,6 +1,7 @@
 # RGB Controller - Bootstrap Gradle 8.7 and build Android debug APK on Windows.
 # Requires JDK 17 and Android SDK 34 installed (e.g. Android Studio).
-param([switch]$SkipTests)
+# -Edition full builds the lab app; -Edition crane builds the two-axis crane console only.
+param([switch]$SkipTests, [ValidateSet("full", "crane")][string]$Edition = "full")
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $tools = Join-Path $root ".tools"
@@ -35,11 +36,13 @@ if (-not (Test-Path $gradle)) {
 if (-not (Test-Path $gradle)) { throw "Gradle executable not found at $gradle" }
 Push-Location $root
 try {
-    $tasks = if ($SkipTests) { @("assembleDebug") }
-             else { @("testDebugUnitTest", "lintDebug", "assembleDebug") }
+    # Gradle capitalizes the flavor in the variant task name (assembleFullDebug).
+    $flavor = $Edition.Substring(0, 1).ToUpperInvariant() + $Edition.Substring(1)
+    $tasks = if ($SkipTests) { @("assemble${flavor}Debug") }
+             else { @("test${flavor}DebugUnitTest", "lint${flavor}Debug", "assemble${flavor}Debug") }
     & $gradle @tasks --stacktrace
     if ($LASTEXITCODE -ne 0) { throw "Gradle build failed (exit $LASTEXITCODE)" }
-    $apk = Join-Path $root "app\build\outputs\apk\debug\app-debug.apk"
+    $apk = Join-Path $root "app\build\outputs\apk\${Edition}\debug\app-${Edition}-debug.apk"
     if (-not (Test-Path $apk)) { throw "Build finished but APK was not found" }
     Write-Host "APK generated: $apk"
     Write-Host "SHA256: $((Get-FileHash $apk -Algorithm SHA256).Hash)"

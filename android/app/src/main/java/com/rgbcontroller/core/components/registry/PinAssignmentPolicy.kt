@@ -23,6 +23,9 @@ data class ModuleWiringProfile(
  * as general-purpose outputs. These are suggestions, NOT firmware authority.
  */
 object PinAssignmentPolicy {
+    /** A released signal in a local draft. GPIO 0 is never offered, so it cannot collide. */
+    const val UNASSIGNED = 0
+
     // Matches the ESP32 PinManager output policy. GPIO 25/26/27 are reserved
     // for led.rgb by firmware at boot, even when its current lease is inactive.
     val rgbReserved = setOf(25, 26, 27)
@@ -99,9 +102,15 @@ object PinAssignmentPolicy {
             problems += "Se necesitan ${profile.signals.size} señales; se asignaron ${pins.size}."
             return problems
         }
-        if (pins.distinct().size != pins.size) problems += "Un GPIO no puede asignarse a dos señales."
+        // Released slots are not a GPIO held twice; only real pins can collide.
+        val held = pins.filterNot { it == UNASSIGNED }
+        if (held.distinct().size != held.size) problems += "Un GPIO no puede asignarse a dos señales."
         for ((index, pin) in pins.withIndex()) {
-            if (pin !in profile.signals[index].allowedPins) {
+            if (pin == UNASSIGNED) {
+                problems += "${profile.signals[index].label}: señal liberada en la app. " +
+                    "El ESP32 recibe las ${profile.signals.size} señales juntas, así que " +
+                    "no puedes aplicar hasta volver a asignarla."
+            } else if (pin !in profile.signals[index].allowedPins) {
                 problems += "${profile.signals[index].label}: GPIO ${pin} no está permitido en este perfil."
             }
         }

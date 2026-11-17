@@ -29,6 +29,20 @@ android {
             )
         }
     }
+
+    // "full" is the lab application with every module; "crane" ships only the
+    // two-axis crane console, so its launcher never reaches the other screens.
+    flavorDimensions += "edition"
+    productFlavors {
+        create("full") {
+            dimension = "edition"
+        }
+        create("crane") {
+            dimension = "edition"
+            applicationIdSuffix = ".crane"
+            versionNameSuffix = "-crane"
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

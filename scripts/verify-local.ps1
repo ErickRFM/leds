@@ -4,6 +4,7 @@
 param(
     [string]$Board = "",
     [string]$Port = "",
+    [ValidateSet("full", "crane")][string]$Edition = "full",
     [switch]$UploadFirmware,
     [switch]$SkipAndroid,
     [switch]$ValidateProfileOnly,
@@ -98,12 +99,12 @@ New-Item -ItemType Directory -Force -Path $reports | Out-Null
 
 if (-not $SkipAndroid) {
     Write-Host "[1/3] Android: tests, lint and debug APK"
-    & (Join-Path $repo "android\build-debug.ps1")
+    & (Join-Path $repo "android\build-debug.ps1") -Edition $Edition
     if ($LASTEXITCODE -ne 0) { throw "Android build script failed" }
-    $apk = Join-Path $repo "android\app\build\outputs\apk\debug\app-debug.apk"
+    $apk = Join-Path $repo "android\app\build\outputs\apk\${Edition}\debug\app-${Edition}-debug.apk"
     if (-not (Test-Path $apk)) { throw "APK missing after build" }
     $apkHash = (Get-FileHash -Path $apk -Algorithm SHA256).Hash
-    "$apkHash  app-debug.apk" | Set-Content -Path (Join-Path $reports "apk-sha256.txt")
+    "$apkHash  app-${Edition}-debug.apk" | Set-Content -Path (Join-Path $reports "apk-sha256.txt")
     Write-Host "Android APK: $apk"
     Write-Host "Android SHA256: $apkHash"
 }

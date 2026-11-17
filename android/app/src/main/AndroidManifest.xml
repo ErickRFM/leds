@@ -16,11 +16,7 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.RGBController">
-        <activity android:name=".MainActivity" android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+        <!-- Each edition declares its own launcher: src/full has the lab
+             MainActivity, src/crane the single-purpose CraneMainActivity. -->
     </application>
 </manifest>

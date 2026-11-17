@@ -49,7 +49,12 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-boot-timeout: 600
-          script: cd android && gradle connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.rgbcontroller.HardwareDashboardScrollTest,com.rgbcontroller.ModuleWiringRegressionTest,com.rgbcontroller.HomeNavigationTest,com.rgbcontroller.MediaControlsTest,com.rgbcontroller.CraneRoboticsScreenUxTest,com.rgbcontroller.EnvironmentalStateBadgeTest,com.rgbcontroller.SensorCardGrammarTest,com.rgbcontroller.ModulePinsBoardTest,com.rgbcontroller.ModuleWorkspaceBoardMemoTest,com.rgbcontroller.CapabilityMatrixSectionTest,com.rgbcontroller.BleLinkHealthHeaderTest' --stacktrace
+          # One boot, two editions: the crane APK has its own launcher, so full's
+          # tests cannot exercise it and crane's cannot launch MainActivity.
+          script: |
+            cd android
+            gradle connectedFullDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.rgbcontroller.HardwareDashboardScrollTest,com.rgbcontroller.ModuleWiringRegressionTest,com.rgbcontroller.HomeNavigationTest,com.rgbcontroller.MediaControlsTest,com.rgbcontroller.CraneRoboticsScreenUxTest,com.rgbcontroller.EnvironmentalStateBadgeTest,com.rgbcontroller.SensorCardGrammarTest,com.rgbcontroller.ModulePinsBoardTest,com.rgbcontroller.ModuleWorkspaceBoardMemoTest,com.rgbcontroller.CapabilityMatrixSectionTest,com.rgbcontroller.BleLinkHealthHeaderTest' --stacktrace
+            gradle connectedCraneDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.rgbcontroller.crane.CraneWiringSectionTest,com.rgbcontroller.crane.CraneConsoleUiTest' --stacktrace
       - name: Upload emulator instrumentation evidence
         if: always()
         uses: actions/upload-artifact@v4

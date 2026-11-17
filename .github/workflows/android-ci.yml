@@ -240,31 +240,44 @@ jobs:
         run: python3 scripts/check-color-literals.py
       - name: Unit tests
         working-directory: android
-        run: gradle testDebugUnitTest --stacktrace
+        run: gradle testFullDebugUnitTest --stacktrace
       - name: Compile navigation UI tests (no emulator required)
         working-directory: android
-        run: gradle assembleDebugAndroidTest --stacktrace
+        run: gradle assembleFullDebugAndroidTest assembleCraneDebugAndroidTest --stacktrace
       - name: Android lint
         working-directory: android
-        run: gradle lintDebug --stacktrace
+        run: gradle lintFullDebug lintCraneDebug --stacktrace
       - name: Build debug APK
         working-directory: android
-        run: gradle assembleDebug --stacktrace
+        run: gradle assembleFullDebug assembleCraneDebug --stacktrace
       - name: Prepare APK test manifest
         run: |
-          cd android/app/build/outputs/apk/debug
-          sha256sum app-debug.apk > SHA256SUMS.txt
+          cd android/app/build/outputs/apk/full/debug
+          sha256sum app-full-debug.apk > SHA256SUMS.txt
           echo "Git commit: $GITHUB_SHA" > build-info.txt
           echo "DEBUG LAB ONLY — not authorized for public release" >> build-info.txt
+      - name: Prepare crane APK checksum
+        run: |
+          cd android/app/build/outputs/apk/crane/debug
+          sha256sum app-crane-debug.apk > SHA256SUMS.txt
+          echo "Git commit: $GITHUB_SHA" >> SHA256SUMS.txt
       - name: Upload APK and checksums
         uses: actions/upload-artifact@v4
         with:
           name: rgb-controller-debug
           if-no-files-found: error
           path: |
-            android/app/build/outputs/apk/debug/app-debug.apk
-            android/app/build/outputs/apk/debug/SHA256SUMS.txt
-            android/app/build/outputs/apk/debug/build-info.txt
+            android/app/build/outputs/apk/full/debug/app-full-debug.apk
+            android/app/build/outputs/apk/full/debug/SHA256SUMS.txt
+            android/app/build/outputs/apk/full/debug/build-info.txt
+      - name: Upload crane APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: crane-console-debug
+          if-no-files-found: error
+          path: |
+            android/app/build/outputs/apk/crane/debug/app-crane-debug.apk
+            android/app/build/outputs/apk/crane/debug/SHA256SUMS.txt
 
   firmware:
     runs-on: ubuntu-latest

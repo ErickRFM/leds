@@ -19,9 +19,9 @@ cd leds
 powershell -ExecutionPolicy Bypass -File .\android\build-debug.ps1
 ```
 
-El script descarga Gradle 8.7 desde el sitio oficial y compara su SHA-256 publicado, ejecuta tests/lint y compila el APK en `android/app/build/outputs/apk/debug/app-debug.apk`. Utiliza `-SkipTests` para compilación rápida de depuración (no equivale a tests aprobados).
+El script descarga Gradle 8.7 desde el sitio oficial y compara su SHA-256 publicado, ejecuta tests/lint y compila el APK en `android/app/build/outputs/apk/full/debug/app-full-debug.apk`. Con `-Edition crane` se compila solo la consola de la grúa de dos ejes, que queda en `.../apk/crane/debug/app-crane-debug.apk` como aplicación independiente (`com.rgbcontroller.crane`, launcher propio). Utiliza `-SkipTests` para compilación rápida de depuración (no equivale a tests aprobados).
 
-Alternativamente, con Gradle 8.7 instalado: `cd android; gradle testDebugUnitTest lintDebug assembleDebug`.
+Alternativamente, con Gradle 8.7 instalado: `cd android; gradle testFullDebugUnitTest lintFullDebug assembleFullDebug`, o `Crane` en lugar de `Full` para la edición de grúa. Al existir dos flavors ya no hay tareas `assembleDebug`/`lintDebug` sin dimensión.
 
 **Nota del Wrapper:** el repositorio incluye `android/gradlew` y `android/gradlew.bat`, pero el JAR binario oficial no estaba disponible para incorporarlo mediante el conector actual. Por eso el script recomendado no depende del Wrapper; no invoques `gradlew` hasta incorporar `gradle-wrapper.jar` oficial.
 

@@ -67,6 +67,7 @@ class PinBoardReport internal constructor(
         val signal = row.profile.signals.getOrNull(signalIndex) ?: return emptyList()
         val usedByOtherSignalsOfSameRow = row.pins
             .filterIndexed { index, _ -> index != signalIndex }
+            .filterNot { it == PinAssignmentPolicy.UNASSIGNED }
             .toSet()
         return signal.allowedPins.sorted().map { pin ->
             val owners = ownersOtherThan(componentId, pin) +
@@ -125,8 +126,11 @@ object PinBoardMap {
         }
 
         val claims = rows.filter { it.assigned }.flatMap { row ->
-            row.pins.mapIndexed { index, pin ->
-                PinClaim(row.componentId, index, pin, row.source)
+            row.pins.mapIndexedNotNull { index, pin ->
+                // A released slot holds no GPIO, so it must never join the
+                // ledger: two released signals would invent a conflict on 0.
+                if (pin == PinAssignmentPolicy.UNASSIGNED) null
+                else PinClaim(row.componentId, index, pin, row.source)
             }
         }
 
